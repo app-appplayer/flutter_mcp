@@ -1,0 +1,64 @@
+name: flutter_mcp
+description: Flutter plugin that integrates MCP server, client, and LLM into a unified agent system. Provides background execution, notification, system tray, lifecycle management, secure data storage, and scheduling for cross-platform agent apps.
+version: 0.0.1
+homepage: https://github.com/app-appplayer/flutter_mcp
+repository: https://github.com/app-appplayer/flutter_mcp
+issue_tracker: https://github.com/app-appplayer/flutter_mcp/issues
+
+environment:
+  sdk: ^3.7.2
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  web: ^1.0.0
+  plugin_platform_interface: ^2.0.2
+
+  # MCP Core libraries
+  mcp_client:
+    path: ../mcp_client
+  mcp_server:
+    path: ../mcp_server
+  mcp_llm:
+    path: ../mcp_llm
+
+  # Platform service libraries
+  flutter_foreground_task: ^8.17.0  # For Android background services
+  flutter_local_notifications: ^19.0.0  # For notifications
+  tray_manager: ^0.4.0  # For system tray on desktop
+  flutter_secure_storage: ^9.2.4  # For secure storage
+  path_provider: ^2.1.5  # For file system access
+
+  # Utility libraries
+  meta: ^1.16.0
+  uuid: ^4.5.1
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  mockito: ^5.4.2
+  build_runner: ^2.4.6
+
+flutter:
+
+  plugin:
+    platforms:
+      android:
+        package: com.example.flutter_mcp
+        pluginClass: FlutterMcpPlugin
+      ios:
+        pluginClass: FlutterMcpPlugin
+      linux:
+        pluginClass: FlutterMcpPlugin
+      macos:
+        pluginClass: FlutterMcpPlugin
+      windows:
+        pluginClass: FlutterMcpPluginCApi
+      web:
+        pluginClass: FlutterMcpWeb
+        fileName: flutter_mcp_web.dart

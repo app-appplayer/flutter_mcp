@@ -2,8 +2,9 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:mcp_client/mcp_client.dart';
+import 'package:mcp_client/mcp_client.dart' hide LogLevel;
 import 'package:mcp_llm/mcp_llm.dart' hide LogLevel;
+import 'package:yaml/yaml.dart';
 
 import 'mcp_config.dart';
 import 'background_config.dart';

@@ -83,7 +83,7 @@ class MCPLlmManager {
     return {
       'total': _llms.length,
       'llms': _llms.map((key, value) => MapEntry(key, {
-        'provider': value.client.providerName,
+        'provider': value.client.llmProvider.runtimeType.toString(),
         'connectedClients': value.connectedClientIds.length,
       })),
     };

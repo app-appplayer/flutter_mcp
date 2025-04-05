@@ -17,7 +17,7 @@ class MCPLocalization {
   final Map<String, Map<String, String>> _translations = {};
 
   // Fallback locale
-  final Locale _fallbackLocale;
+  late final Locale _fallbackLocale;
 
   // Singleton instance
   static final MCPLocalization _instance = MCPLocalization._internal(

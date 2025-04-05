@@ -1,10 +1,12 @@
 import 'package:tray_manager/tray_manager.dart' as native_tray;
 import '../../config/tray_config.dart';
+import '../../flutter_mcp.dart';
 import '../../utils/logger.dart';
+import '../utils/logger.dart';
 import 'tray_manager.dart';
 
 /// Linux tray manager implementation
-class LinuxTrayManager implements TrayManager {
+class LinuxTrayManager implements native_tray.TrayManager {
   final MCPLogger _logger = MCPLogger('mcp.linux_tray');
 
   @override

@@ -19,68 +19,69 @@ import 'src/platform/platform_services.dart';
 import 'src/utils/logger.dart';
 import 'src/utils/exceptions.dart';
 
-/// Flutter MCP - 통합 MCP 관리 시스템
-/// 
-/// MCP(Model Context Protocol) 관련 구성 요소(`mcp_client`, `mcp_server`, `mcp_llm`)를
-/// 통합하고 Flutter 환경에서의 다양한 플랫폼 기능(백그라운드 실행, 알림, 트레이 등)을 추가하는 패키지
+/// Flutter MCP - Integrated MCP Management System
+///
+/// A package that integrates MCP components (mcp_client, mcp_server, mcp_llm)
+/// and adds various platform features (background execution, notifications, system tray)
+/// for Flutter environments.
 class FlutterMCP {
-  // 싱글톤 인스턴스
+  // Singleton instance
   static final FlutterMCP _instance = FlutterMCP._();
 
-  /// 싱글톤 인스턴스 접근자
+  /// Singleton instance accessor
   static FlutterMCP get instance => _instance;
 
-  // Private 생성자
+  // Private constructor
   FlutterMCP._();
 
-  // MCP 핵심 매니저
+  // MCP core managers
   final MCPClientManager _clientManager = MCPClientManager();
   final MCPServerManager _serverManager = MCPServerManager();
   final MCPLlmManager _llmManager = MCPLlmManager();
 
-  // 플랫폼 서비스
+  // Platform services
   final PlatformServices _platformServices = PlatformServices();
 
-  // 작업 스케줄러
+  // Task scheduler
   final MCPScheduler _scheduler = MCPScheduler();
 
-  // 플러그인 상태
+  // Plugin state
   bool _initialized = false;
   MCPConfig? _config;
 
-  // 통합 로거
+  // Integrated logger
   static final MCPLogger _logger = MCPLogger('flutter_mcp');
 
-  /// 플러그인이 초기화되었는지 여부
+  /// Whether the plugin is initialized
   bool get initialized => _initialized;
 
-  /// 플러그인 초기화
-  /// 
-  /// [config]에 지정된 설정에 따라 필요한 구성 요소를 초기화합니다.
+  /// Initialize the plugin
+  ///
+  /// [config] specifies the configuration for necessary components.
   Future<void> init(MCPConfig config) async {
     if (_initialized) {
-      _logger.warning('Flutter MCP가 이미 초기화되었습니다');
+      _logger.warning('Flutter MCP is already initialized');
       return;
     }
 
     _config = config;
 
-    // 초기화 로깅 설정
+    // Initialize logging setup
     if (config.loggingLevel != null) {
       MCPLogger.setDefaultLevel(config.loggingLevel!);
     }
 
-    _logger.info('Flutter MCP 초기화 시작');
+    _logger.info('Flutter MCP initialization started');
 
-    // 플랫폼 서비스 초기화
+    // Initialize platform services
     await _platformServices.initialize(config);
 
-    // 매니저 초기화
+    // Initialize managers
     await _clientManager.initialize();
     await _serverManager.initialize();
     await _llmManager.initialize();
 
-    // 스케줄러 초기화
+    // Initialize scheduler
     if (config.schedule != null && config.schedule!.isNotEmpty) {
       _scheduler.initialize();
       for (final job in config.schedule!) {
@@ -89,125 +90,135 @@ class FlutterMCP {
       _scheduler.start();
     }
 
-    // 자동 시작 설정
+    // Auto-start configuration
     if (config.autoStart) {
-      _logger.info('자동 시작 설정에 따라 서비스 시작');
+      _logger.info('Starting services based on auto-start configuration');
       await startServices();
     }
 
     _initialized = true;
-    _logger.info('Flutter MCP 초기화 완료');
+    _logger.info('Flutter MCP initialization completed');
   }
 
-  /// 서비스 시작
+  /// Start services
   Future<void> startServices() async {
     if (!_initialized) {
-      throw MCPException('Flutter MCP가 초기화되지 않았습니다');
+      throw MCPException('Flutter MCP is not initialized');
     }
 
-    // 백그라운드 서비스 시작
+    // Start background service
     if (_config!.useBackgroundService) {
       await _platformServices.startBackgroundService();
     }
 
-    // 알림 표시
+    // Show notification
     if (_config!.useNotification) {
       await _platformServices.showNotification(
-        title: '${_config!.appName} 실행 중',
-        body: 'MCP 서비스가 실행 중입니다',
+        title: '${_config!.appName} Running',
+        body: 'MCP service is running',
       );
     }
 
-    // 자동 시작 구성 요소 실행
+    // Start configured components
     await _startConfiguredComponents();
   }
 
-  /// 설정에 따른 구성 요소 시작
+  /// Start configured components
   Future<void> _startConfiguredComponents() async {
     final config = _config!;
 
-    // 자동 시작 서버
+    // Start auto-start servers
     if (config.autoStartServer != null && config.autoStartServer!.isNotEmpty) {
       for (final serverConfig in config.autoStartServer!) {
-        final serverId = await createServer(
-          name: serverConfig.name,
-          version: serverConfig.version,
-          capabilities: serverConfig.capabilities,
-          useStdioTransport: serverConfig.useStdioTransport,
-          ssePort: serverConfig.ssePort,
-        );
+        try {
+          final serverId = await createServer(
+            name: serverConfig.name,
+            version: serverConfig.version,
+            capabilities: serverConfig.capabilities,
+            useStdioTransport: serverConfig.useStdioTransport,
+            ssePort: serverConfig.ssePort,
+          );
 
-        // 서버를 LLM과 통합 (필요한 경우)
-        if (serverConfig.integrateLlm != null) {
-          String llmId;
+          // Integrate with LLM if configured
+          if (serverConfig.integrateLlm != null) {
+            String llmId;
 
-          if (serverConfig.integrateLlm!.existingLlmId != null) {
-            llmId = serverConfig.integrateLlm!.existingLlmId!;
-          } else {
-            llmId = await createLlm(
-              providerName: serverConfig.integrateLlm!.providerName!,
-              config: serverConfig.integrateLlm!.config!,
+            if (serverConfig.integrateLlm!.existingLlmId != null) {
+              llmId = serverConfig.integrateLlm!.existingLlmId!;
+            } else {
+              llmId = await createLlm(
+                providerName: serverConfig.integrateLlm!.providerName!,
+                config: serverConfig.integrateLlm!.config!,
+              );
+            }
+
+            await integrateServerWithLlm(
+              serverId: serverId,
+              llmId: llmId,
             );
           }
 
-          await integrateServerWithLlm(
-            serverId: serverId,
-            llmId: llmId,
-          );
+          // Connect server
+          connectServer(serverId);
+        } catch (e) {
+          _logger.error('Failed to start server: ${serverConfig.name}', e);
+          // Continue with other servers even if one fails
         }
-
-        // 서버 시작
-        connectServer(serverId);
       }
     }
 
-    // 자동 시작 클라이언트
+    // Start auto-start clients
     if (config.autoStartClient != null && config.autoStartClient!.isNotEmpty) {
       for (final clientConfig in config.autoStartClient!) {
-        final clientId = await createClient(
-          name: clientConfig.name,
-          version: clientConfig.version,
-          capabilities: clientConfig.capabilities,
-          transportCommand: clientConfig.transportCommand,
-          transportArgs: clientConfig.transportArgs,
-          serverUrl: clientConfig.serverUrl,
-        );
+        try {
+          final clientId = await createClient(
+            name: clientConfig.name,
+            version: clientConfig.version,
+            capabilities: clientConfig.capabilities,
+            transportCommand: clientConfig.transportCommand,
+            transportArgs: clientConfig.transportArgs,
+            serverUrl: clientConfig.serverUrl,
+          );
 
-        // 클라이언트를 LLM과 통합 (필요한 경우)
-        if (clientConfig.integrateLlm != null) {
-          String llmId;
+          // Integrate with LLM if configured
+          if (clientConfig.integrateLlm != null) {
+            String llmId;
 
-          if (clientConfig.integrateLlm!.existingLlmId != null) {
-            llmId = clientConfig.integrateLlm!.existingLlmId!;
-          } else {
-            llmId = await createLlm(
-              providerName: clientConfig.integrateLlm!.providerName!,
-              config: clientConfig.integrateLlm!.config!,
+            if (clientConfig.integrateLlm!.existingLlmId != null) {
+              llmId = clientConfig.integrateLlm!.existingLlmId!;
+            } else {
+              llmId = await createLlm(
+                providerName: clientConfig.integrateLlm!.providerName!,
+                config: clientConfig.integrateLlm!.config!,
+              );
+            }
+
+            await integrateClientWithLlm(
+              clientId: clientId,
+              llmId: llmId,
             );
           }
 
-          await integrateClientWithLlm(
-            clientId: clientId,
-            llmId: llmId,
-          );
+          // Connect client
+          await connectClient(clientId);
+        } catch (e) {
+          _logger.error('Failed to start client: ${clientConfig.name}', e);
+          // Continue with other clients even if one fails
         }
-
-        // 클라이언트 연결
-        await connectClient(clientId);
       }
     }
   }
 
-  /// MCP 클라이언트 생성
-  /// 
-  /// [name]: 클라이언트 이름
-  /// [version]: 클라이언트 버전
-  /// [capabilities]: 클라이언트 기능
-  /// [transportCommand]: stdio 트랜스포트 명령어
-  /// [transportArgs]: stdio 트랜스포트 인수
-  /// [serverUrl]: SSE 트랜스포트 URL
-  /// 
-  /// 생성된 클라이언트의 ID를 반환합니다.
+  /// Create MCP client
+  ///
+  /// [name]: Client name
+  /// [version]: Client version
+  /// [capabilities]: Client capabilities
+  /// [transportCommand]: Command for stdio transport
+  /// [transportArgs]: Arguments for stdio transport
+  /// [serverUrl]: URL for SSE transport
+  ///
+  /// Returns ID of the created client
   Future<String> createClient({
     required String name,
     required String version,
@@ -216,11 +227,13 @@ class FlutterMCP {
     List<String>? transportArgs,
     String? serverUrl,
   }) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    _logger.info('MCP 클라이언트 생성: $name');
+    _logger.info('Creating MCP client: $name');
 
-    // 클라이언트 생성
+    // Create client
     final clientId = _clientManager.generateId();
     final client = McpClient.createClient(
       name: name,
@@ -228,7 +241,7 @@ class FlutterMCP {
       capabilities: capabilities ?? ClientCapabilities(),
     );
 
-    // 트랜스포트 생성 (명령어 또는 URL에 따라)
+    // Create transport
     ClientTransport? transport;
     if (transportCommand != null) {
       transport = await McpClient.createStdioTransport(
@@ -241,21 +254,21 @@ class FlutterMCP {
       );
     }
 
-    // 클라이언트 등록
+    // Register client
     await _clientManager.registerClient(clientId, client, transport);
 
     return clientId;
   }
 
-  /// MCP 서버 생성
-  /// 
-  /// [name]: 서버 이름
-  /// [version]: 서버 버전
-  /// [capabilities]: 서버 기능
-  /// [useStdioTransport]: stdio 트랜스포트 사용 여부
-  /// [ssePort]: SSE 트랜스포트 포트
-  /// 
-  /// 생성된 서버의 ID를 반환합니다.
+  /// Create MCP server
+  ///
+  /// [name]: Server name
+  /// [version]: Server version
+  /// [capabilities]: Server capabilities
+  /// [useStdioTransport]: Whether to use stdio transport
+  /// [ssePort]: Port for SSE transport
+  ///
+  /// Returns ID of the created server
   Future<String> createServer({
     required String name,
     required String version,
@@ -263,11 +276,13 @@ class FlutterMCP {
     bool useStdioTransport = true,
     int? ssePort,
   }) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    _logger.info('MCP 서버 생성: $name');
+    _logger.info('Creating MCP server: $name');
 
-    // 서버 생성
+    // Create server
     final serverId = _serverManager.generateId();
     final server = McpServer.createServer(
       name: name,
@@ -275,7 +290,7 @@ class FlutterMCP {
       capabilities: capabilities ?? ServerCapabilities(),
     );
 
-    // 트랜스포트 생성
+    // Create transport
     ServerTransport? transport;
     if (useStdioTransport) {
       transport = McpServer.createStdioTransport();
@@ -287,182 +302,196 @@ class FlutterMCP {
       );
     }
 
-    // 서버 등록
+    // Register server
     _serverManager.registerServer(serverId, server, transport);
 
     return serverId;
   }
 
-  /// MCP LLM 생성
-  /// 
-  /// [providerName]: LLM 공급자 이름
-  /// [config]: LLM 설정
-  /// 
-  /// 생성된 LLM의 ID를 반환합니다.
+  /// Create MCP LLM
+  ///
+  /// [providerName]: LLM provider name
+  /// [config]: LLM configuration
+  ///
+  /// Returns ID of the created LLM
   Future<String> createLlm({
     required String providerName,
     required LlmConfiguration config,
   }) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    _logger.info('MCP LLM 생성: $providerName');
+    _logger.info('Creating MCP LLM: $providerName');
 
-    // LLM 인스턴스 가져오기
+    // Get LLM instance
     final mcpLlm = MCPLlm.instance;
 
-    // LLM 클라이언트 생성
+    // Create LLM client
     final llmClient = await mcpLlm.createClient(
       providerName: providerName,
       config: config,
     );
 
-    // LLM ID 생성 및 등록
+    // Generate and register LLM ID
     final llmId = _llmManager.generateId();
     _llmManager.registerLlm(llmId, mcpLlm, llmClient);
 
     return llmId;
   }
 
-  /// LLM 서버 통합
-  /// 
-  /// [serverId]: 서버 ID
+  /// Integrate server with LLM
+  ///
+  /// [serverId]: Server ID
   /// [llmId]: LLM ID
   Future<void> integrateServerWithLlm({
     required String serverId,
     required String llmId,
   }) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    _logger.info('서버와 LLM 통합: $serverId + $llmId');
+    _logger.info('Integrating server with LLM: $serverId + $llmId');
 
     final server = _serverManager.getServer(serverId);
     if (server == null) {
-      throw MCPException('서버를 찾을 수 없음: $serverId');
+      throw MCPException('Server not found: $serverId');
     }
 
     final llmInfo = _llmManager.getLlmInfo(llmId);
     if (llmInfo == null) {
-      throw MCPException('LLM을 찾을 수 없음: $llmId');
+      throw MCPException('LLM not found: $llmId');
     }
 
-    // LLM 서버 생성
+    // Create LLM server
     final llmServer = LlmServer(
       llmProvider: llmInfo.client.getLlmProvider(),
       mcpServer: server,
     );
 
-    // LLM 도구 등록
+    // Register LLM tools
     await llmServer.registerLlmTools();
 
-    // 서버 매니저에 LLM 서버 등록
+    // Register LLM server
     _serverManager.setLlmServer(serverId, llmServer);
   }
 
-  /// LLM 클라이언트 통합
-  /// 
-  /// [clientId]: 클라이언트 ID
+  /// Integrate client with LLM
+  ///
+  /// [clientId]: Client ID
   /// [llmId]: LLM ID
   Future<void> integrateClientWithLlm({
     required String clientId,
     required String llmId,
   }) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    _logger.info('클라이언트와 LLM 통합: $clientId + $llmId');
+    _logger.info('Integrating client with LLM: $clientId + $llmId');
 
     final client = _clientManager.getClient(clientId);
     if (client == null) {
-      throw MCPException('클라이언트를 찾을 수 없음: $clientId');
+      throw MCPException('Client not found: $clientId');
     }
 
     final llmInfo = _llmManager.getLlmInfo(llmId);
     if (llmInfo == null) {
-      throw MCPException('LLM을 찾을 수 없음: $llmId');
+      throw MCPException('LLM not found: $llmId');
     }
 
-    // LLM에 클라이언트 등록
+    // Register client with LLM
     await _llmManager.addClientToLlm(llmId, client);
   }
 
-  /// 클라이언트 연결
-  /// 
-  /// [clientId]: 클라이언트 ID
+  /// Connect client
+  ///
+  /// [clientId]: Client ID
   Future<void> connectClient(String clientId) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    _logger.info('클라이언트 연결: $clientId');
+    _logger.info('Connecting client: $clientId');
 
     final clientInfo = _clientManager.getClientInfo(clientId);
     if (clientInfo == null) {
-      throw MCPException('클라이언트를 찾을 수 없음: $clientId');
+      throw MCPException('Client not found: $clientId');
     }
 
     if (clientInfo.transport == null) {
-      throw MCPException('클라이언트에 트랜스포트가 구성되지 않음: $clientId');
+      throw MCPException('Client has no transport configured: $clientId');
     }
 
     await clientInfo.client.connect(clientInfo.transport!);
     clientInfo.connected = true;
   }
 
-  /// 서버 연결
-  /// 
-  /// [serverId]: 서버 ID
+  /// Connect server
+  ///
+  /// [serverId]: Server ID
   void connectServer(String serverId) {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    _logger.info('서버 연결: $serverId');
+    _logger.info('Connecting server: $serverId');
 
     final serverInfo = _serverManager.getServerInfo(serverId);
     if (serverInfo == null) {
-      throw MCPException('서버를 찾을 수 없음: $serverId');
+      throw MCPException('Server not found: $serverId');
     }
 
     if (serverInfo.transport == null) {
-      throw MCPException('서버에 트랜스포트가 구성되지 않음: $serverId');
+      throw MCPException('Server has no transport configured: $serverId');
     }
 
     serverInfo.server.connect(serverInfo.transport!);
     serverInfo.running = true;
   }
 
-  /// 클라이언트로 도구 호출
-  /// 
-  /// [clientId]: 클라이언트 ID
-  /// [toolName]: 도구 이름
-  /// [arguments]: 도구 인수
+  /// Call tool with client
+  ///
+  /// [clientId]: Client ID
+  /// [toolName]: Tool name
+  /// [arguments]: Tool arguments
   Future<CallToolResult> callTool(
       String clientId,
       String toolName,
       Map<String, dynamic> arguments,
       ) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
     final clientInfo = _clientManager.getClientInfo(clientId);
     if (clientInfo == null) {
-      throw MCPException('클라이언트를 찾을 수 없음: $clientId');
+      throw MCPException('Client not found: $clientId');
     }
 
     return await clientInfo.client.callTool(toolName, arguments);
   }
 
-  /// LLM으로 채팅
-  /// 
+  /// Chat with LLM
+  ///
   /// [llmId]: LLM ID
-  /// [message]: 메시지 내용
-  /// [enableTools]: 도구 사용 가능 여부
-  /// [parameters]: 추가 매개변수
+  /// [message]: Message content
+  /// [enableTools]: Whether to enable tools
+  /// [parameters]: Additional parameters
   Future<LlmResponse> chat(
       String llmId,
       String message, {
         bool enableTools = false,
         Map<String, dynamic>? parameters,
       }) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
     final llmInfo = _llmManager.getLlmInfo(llmId);
     if (llmInfo == null) {
-      throw MCPException('LLM을 찾을 수 없음: $llmId');
+      throw MCPException('LLM not found: $llmId');
     }
 
     return await llmInfo.client.chat(
@@ -472,80 +501,87 @@ class FlutterMCP {
     );
   }
 
-  /// 작업 스케줄링 추가
-  /// 
-  /// [job]: 추가할 작업
-  /// 
-  /// 생성된 작업의 ID를 반환합니다.
+  /// Add scheduled job
+  ///
+  /// [job]: Job to add
+  ///
+  /// Returns ID of the created job
   String addScheduledJob(MCPJob job) {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
-    final jobId = _scheduler.addJob(job);
-    return jobId;
+    return _scheduler.addJob(job);
   }
 
-  /// 작업 스케줄링 제거
-  /// 
-  /// [jobId]: 제거할 작업 ID
+  /// Remove scheduled job
+  ///
+  /// [jobId]: Job ID to remove
   void removeScheduledJob(String jobId) {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
     _scheduler.removeJob(jobId);
   }
 
-  /// 보안 저장소에 저장
-  /// 
-  /// [key]: 저장할 키
-  /// [value]: 저장할 값
+  /// Store value securely
+  ///
+  /// [key]: Key to store value under
+  /// [value]: Value to store
   Future<void> secureStore(String key, String value) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
     await _platformServices.secureStore(key, value);
   }
 
-  /// 보안 저장소에서 읽기
-  /// 
-  /// [key]: 읽을 키
+  /// Read value from secure storage
+  ///
+  /// [key]: Key to read
   Future<String?> secureRead(String key) async {
-    _verifyInitialized();
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
 
     return await _platformServices.secureRead(key);
   }
 
-  /// 모든 서비스 종료
+  /// Shutdown all services
   Future<void> shutdown() async {
     if (!_initialized) return;
 
-    _logger.info('Flutter MCP 종료 시작');
+    _logger.info('Flutter MCP shutdown started');
 
-    // 스케줄러 종료
+    // Stop scheduler
     _scheduler.stop();
 
-    // 매니저 종료
+    // Close managers
     await Future.wait([
       _clientManager.closeAll(),
       _serverManager.closeAll(),
       _llmManager.closeAll(),
     ]);
 
-    // 플랫폼 서비스 종료
+    // Shutdown platform services
     await _platformServices.shutdown();
 
     _initialized = false;
-    _logger.info('Flutter MCP 종료 완료');
+    _logger.info('Flutter MCP shutdown completed');
   }
 
-  /// ID 접근 메서드들
+  /// ID access methods
   List<String> get allClientIds => _clientManager.getAllClientIds();
   List<String> get allServerIds => _serverManager.getAllServerIds();
   List<String> get allLlmIds => _llmManager.getAllLlmIds();
 
-  /// 객체 접근 메서드들
+  /// Object access methods
   Client? getClient(String clientId) => _clientManager.getClient(clientId);
   Server? getServer(String serverId) => _serverManager.getServer(serverId);
   LlmClient? getLlm(String llmId) => _llmManager.getLlm(llmId);
 
-  /// 상태 조회
+  /// Get system status
   Map<String, dynamic> getSystemStatus() {
     return {
       'initialized': _initialized,
@@ -558,12 +594,5 @@ class FlutterMCP {
       'serversStatus': _serverManager.getStatus(),
       'llmsStatus': _llmManager.getStatus(),
     };
-  }
-
-  // 초기화 확인 헬퍼 메서드
-  void _verifyInitialized() {
-    if (!_initialized) {
-      throw MCPException('Flutter MCP가 초기화되지 않았습니다');
-    }
   }
 }

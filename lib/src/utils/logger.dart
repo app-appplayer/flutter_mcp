@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:path/path.dart' as path;
 
-/// 로그 레벨
+/// Log level
 enum LogLevel {
   trace,
   debug,
@@ -10,76 +12,148 @@ enum LogLevel {
   none,
 }
 
-/// MCP 로거
+/// Log format
+enum LogFormat {
+  text,
+  json,
+}
+
+/// MCP logger
 class MCPLogger {
-  /// 로거 이름
+  /// Logger name
   final String name;
 
-  /// 로그 레벨
+  /// Log level
   LogLevel _level = LogLevel.info;
 
-  /// 기본 로그 레벨
+  /// Default log level
   static LogLevel _defaultLevel = LogLevel.info;
 
-  /// 로그 파일 경로
+  /// Log file path
   static String? _logFilePath;
 
-  /// 파일에 로그 기록 여부
+  /// Log directory path
+  static String? _logDirPath;
+
+  /// Whether to log to file
   static bool _logToFile = false;
 
-  /// 시간 포함 여부
+  /// Whether to include timestamp
   static bool _includeTimestamp = true;
 
-  /// 색상 사용 여부
+  /// Whether to use color
   static bool _useColor = true;
 
-  /// 로그 파일 싱크
+  /// Log file sink
   static IOSink? _logFileSink;
 
-  /// 로거 인스턴스 맵
+  /// Maximum log file size in bytes
+  static int _maxLogFileSize = 10 * 1024 * 1024; // 10 MB default
+
+  /// Maximum number of log files to keep
+  static int _maxLogFiles = 5;
+
+  /// Current log file size
+  static int _currentLogFileSize = 0;
+
+  /// Log format
+  static LogFormat _logFormat = LogFormat.text;
+
+  /// Logger instances map
   static final Map<String, MCPLogger> _loggers = {};
 
-  /// 기본 로그 레벨 설정
+  /// Set default log level
   static void setDefaultLevel(LogLevel level) {
     _defaultLevel = level;
-    // 기존 로거 업데이트
+    // Update existing loggers
     for (final logger in _loggers.values) {
       logger._level = level;
     }
   }
 
-  /// 로그 파일 설정
-  static Future<void> setLogFile(String path) async {
+  /// Configure log file rotation
+  static void configureLogRotation({
+    required String directory,
+    String prefix = 'mcp',
+    int maxSizeBytes = 10 * 1024 * 1024, // 10 MB
+    int maxFiles = 5,
+    LogFormat format = LogFormat.text,
+  }) async {
+    _maxLogFileSize = maxSizeBytes;
+    _maxLogFiles = maxFiles;
+    _logFormat = format;
+    _logDirPath = directory;
+
+    // Create directory if it doesn't exist
+    final dir = Directory(directory);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    // Initialize log file
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+    _logFilePath = path.join(directory, '${prefix}_$timestamp.log');
+
+    // Enable file logging
+    await enableFileLogging(true);
+
+    // Check if we need to perform rotation
+    await _checkAndRotateLogs();
+  }
+
+  /// Set log file
+  static Future<void> setLogFile(String filePath) async {
     if (_logFileSink != null) {
       await _logFileSink!.close();
     }
 
-    _logFilePath = path;
+    _logFilePath = filePath;
+    _currentLogFileSize = 0;
+
+    // Create directory if it doesn't exist
+    final dir = Directory(path.dirname(filePath));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
     if (_logToFile) {
-      final file = File(path);
+      final file = File(filePath);
+
+      // Initialize current size
+      if (await file.exists()) {
+        _currentLogFileSize = await file.length();
+      }
+
       _logFileSink = file.openWrite(mode: FileMode.append);
     }
   }
 
-  /// 파일 로깅 활성화/비활성화
-  static void enableFileLogging(bool enable) {
+  /// Enable/disable file logging
+  static Future<void> enableFileLogging(bool enable) async {
     _logToFile = enable;
     if (enable && _logFilePath != null) {
       final file = File(_logFilePath!);
+
+      // Initialize current size
+      if (await file.exists()) {
+        _currentLogFileSize = await file.length();
+      }
+
       _logFileSink = file.openWrite(mode: FileMode.append);
     } else if (!enable && _logFileSink != null) {
-      _logFileSink!.close();
+      await _logFileSink!.close();
       _logFileSink = null;
     }
   }
 
-  /// 로거 설정
+  /// Configure logger
   static void configure({
     LogLevel? level,
     bool? includeTimestamp,
     bool? useColor,
     String? logFilePath,
     bool? logToFile,
+    LogFormat? logFormat,
   }) {
     if (level != null) {
       setDefaultLevel(level);
@@ -93,6 +167,10 @@ class MCPLogger {
       _useColor = useColor;
     }
 
+    if (logFormat != null) {
+      _logFormat = logFormat;
+    }
+
     if (logFilePath != null) {
       setLogFile(logFilePath);
     }
@@ -102,7 +180,68 @@ class MCPLogger {
     }
   }
 
-  /// 로거 인스턴스 가져오기
+  /// Check and rotate logs if necessary
+  static Future<void> _checkAndRotateLogs() async {
+    if (!_logToFile || _logFilePath == null || _logDirPath == null) {
+      return;
+    }
+
+    final currentFile = File(_logFilePath!);
+
+    // Check if current log file size exceeds limit
+    if (await currentFile.exists() && await currentFile.length() > _maxLogFileSize) {
+      // Close current log file
+      if (_logFileSink != null) {
+        await _logFileSink!.close();
+        _logFileSink = null;
+      }
+
+      // Create new log file
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+      final prefix = path.basenameWithoutExtension(_logFilePath!).split('_').first;
+      final newLogFilePath = path.join(_logDirPath!, '${prefix}_$timestamp.log');
+
+      // Set new log file
+      await setLogFile(newLogFilePath);
+
+      // Delete old log files if we have too many
+      await _cleanOldLogFiles();
+    }
+  }
+
+  /// Clean old log files to stay under the maximum number
+  static Future<void> _cleanOldLogFiles() async {
+    if (_logDirPath == null) return;
+
+    final dir = Directory(_logDirPath!);
+    if (!await dir.exists()) return;
+
+    // Get all log files
+    final prefix = path.basenameWithoutExtension(_logFilePath!).split('_').first;
+    final logFiles = await dir.list()
+        .where((entity) =>
+    entity is File &&
+        path.basename(entity.path).startsWith('${prefix}_') &&
+        path.basename(entity.path).endsWith('.log'))
+        .toList();
+
+    // If we have too many log files, delete the oldest ones
+    if (logFiles.length > _maxLogFiles) {
+      // Sort files by last modified timestamp (oldest first)
+      logFiles.sort((a, b) =>
+          a.statSync().modified.compareTo(b.statSync().modified));
+
+      // Delete oldest files to stay under the limit
+      final filesToDelete = logFiles.length - _maxLogFiles;
+      for (var i = 0; i < filesToDelete; i++) {
+        if (logFiles[i] is File) {
+          await (logFiles[i] as File).delete();
+        }
+      }
+    }
+  }
+
+  /// Get a logger instance
   factory MCPLogger(String name) {
     if (_loggers.containsKey(name)) {
       return _loggers[name]!;
@@ -117,105 +256,223 @@ class MCPLogger {
     _level = _defaultLevel;
   }
 
-  /// 로그 레벨 설정
+  /// Set log level
   void setLevel(LogLevel level) {
     _level = level;
   }
 
-  /// 트레이스 로그
+  /// Trace log
   void trace(String message, [Object? error, StackTrace? stackTrace]) {
     _log(LogLevel.trace, message, error, stackTrace);
   }
 
-  /// 디버그 로그
+  /// Debug log
   void debug(String message, [Object? error, StackTrace? stackTrace]) {
     _log(LogLevel.debug, message, error, stackTrace);
   }
 
-  /// 정보 로그
+  /// Info log
   void info(String message, [Object? error, StackTrace? stackTrace]) {
     _log(LogLevel.info, message, error, stackTrace);
   }
 
-  /// 경고 로그
+  /// Warning log
   void warning(String message, [Object? error, StackTrace? stackTrace]) {
     _log(LogLevel.warning, message, error, stackTrace);
   }
 
-  /// 오류 로그
+  /// Error log
   void error(String message, [Object? error, StackTrace? stackTrace]) {
     _log(LogLevel.error, message, error, stackTrace);
   }
 
-  /// 로그 기록
-  void _log(LogLevel level, String message, [Object? error, StackTrace? stackTrace]) {
+  /// Log record
+  void _log(LogLevel level, String message, [Object? error, StackTrace? stackTrace]) async {
     if (level.index < _level.index) {
       return;
     }
 
-    final timestamp = _includeTimestamp ? '[${DateTime.now().toIso8601String()}] ' : '';
-    final loggerName = '[$name] ';
-    final levelStr = _getLevelString(level);
+    final now = DateTime.now();
+    final timestamp = _includeTimestamp ? now.toIso8601String() : null;
+    final levelStr = level.toString().split('.').last.toUpperCase();
 
-    final fullMessage = '$timestamp$loggerName$levelStr $message';
+    // Console output with optional color
+    final consoleMessage = _buildConsoleMessage(timestamp, levelStr, message, error, stackTrace);
+    print(consoleMessage);
 
-    // 콘솔에 로그 출력
-    print(fullMessage);
-
-    // 에러가 있는 경우 출력
-    if (error != null) {
-      print('  Error: $error');
-    }
-
-    // 스택 트레이스가 있는 경우 출력
-    if (stackTrace != null) {
-      print('  StackTrace: $stackTrace');
-    }
-
-    // 파일에 로그 기록
+    // File logging with rotation check
     if (_logToFile && _logFileSink != null) {
-      _logFileSink!.writeln(fullMessage);
+      final fileContent = _logFormat == LogFormat.json
+          ? _buildJsonLogEntry(timestamp, levelStr, message, error, stackTrace)
+          : _buildTextLogEntry(timestamp, levelStr, message, error, stackTrace);
 
-      if (error != null) {
-        _logFileSink!.writeln('  Error: $error');
-      }
+      _logFileSink!.writeln(fileContent);
+      _currentLogFileSize += fileContent.length + 1; // +1 for newline
 
-      if (stackTrace != null) {
-        _logFileSink!.writeln('  StackTrace: $stackTrace');
+      // Check if we need to rotate logs
+      if (_currentLogFileSize > _maxLogFileSize) {
+        await _checkAndRotateLogs();
       }
     }
   }
 
-  /// 로그 레벨 문자열 가져오기
-  String _getLevelString(LogLevel level) {
-    if (!_useColor) {
-      return '[${level.toString().split('.').last.toUpperCase()}]';
+  /// Build console message with optional coloring
+  String _buildConsoleMessage(
+      String? timestamp,
+      String levelStr,
+      String message,
+      Object? error,
+      StackTrace? stackTrace
+      ) {
+    final buffer = StringBuffer();
+
+    // Add timestamp
+    if (timestamp != null) {
+      buffer.write('[$timestamp] ');
     }
 
-    // 컬러 코드
-    const String resetColor = '\x1B[0m';
+    // Add logger name
+    buffer.write('[$name] ');
 
-    final String color;
+    // Add level with optional coloring
+    if (_useColor) {
+      final color = _getLevelColor(levelStr);
+      final resetColor = '\x1B[0m';
+      buffer.write('$color[$levelStr]$resetColor ');
+    } else {
+      buffer.write('[$levelStr] ');
+    }
+
+    // Add message
+    buffer.write(message);
+
+    // Add error details
+    if (error != null) {
+      buffer.write('\n  Error: $error');
+    }
+
+    // Add stack trace
+    if (stackTrace != null) {
+      buffer.write('\n  StackTrace: $stackTrace');
+    }
+
+    return buffer.toString();
+  }
+
+  /// Build text log entry for file
+  String _buildTextLogEntry(
+      String? timestamp,
+      String levelStr,
+      String message,
+      Object? error,
+      StackTrace? stackTrace
+      ) {
+    final buffer = StringBuffer();
+
+    // Add timestamp
+    if (timestamp != null) {
+      buffer.write('[$timestamp] ');
+    }
+
+    // Add logger name and level
+    buffer.write('[$name] [$levelStr] ');
+
+    // Add message
+    buffer.write(message);
+
+    // Add error details
+    if (error != null) {
+      buffer.write('\n  Error: $error');
+    }
+
+    // Add stack trace
+    if (stackTrace != null) {
+      buffer.write('\n  StackTrace: $stackTrace');
+    }
+
+    return buffer.toString();
+  }
+
+  /// Build JSON log entry
+  String _buildJsonLogEntry(
+      String? timestamp,
+      String levelStr,
+      String message,
+      Object? error,
+      StackTrace? stackTrace
+      ) {
+    final Map<String, dynamic> entry = {
+      'logger': name,
+      'level': levelStr,
+      'message': message,
+    };
+
+    if (timestamp != null) {
+      entry['timestamp'] = timestamp;
+    }
+
+    if (error != null) {
+      entry['error'] = error.toString();
+    }
+
+    if (stackTrace != null) {
+      entry['stackTrace'] = stackTrace.toString();
+    }
+
+    return json.encode(entry);
+  }
+
+  /// Get color code for log level
+  String _getLevelColor(String level) {
     switch (level) {
-      case LogLevel.trace:
-        color = '\x1B[37m'; // 흰색
-        break;
-      case LogLevel.debug:
-        color = '\x1B[36m'; // 청록색
-        break;
-      case LogLevel.info:
-        color = '\x1B[32m'; // 녹색
-        break;
-      case LogLevel.warning:
-        color = '\x1B[33m'; // 노란색
-        break;
-      case LogLevel.error:
-        color = '\x1B[31m'; // 빨간색
-        break;
+      case 'TRACE':
+        return '\x1B[37m'; // white
+      case 'DEBUG':
+        return '\x1B[36m'; // cyan
+      case 'INFO':
+        return '\x1B[32m'; // green
+      case 'WARNING':
+        return '\x1B[33m'; // yellow
+      case 'ERROR':
+        return '\x1B[31m'; // red
       default:
-        color = resetColor;
+        return '\x1B[0m';  // reset
     }
+  }
 
-    return '$color[${level.toString().split('.').last.toUpperCase()}]$resetColor';
+  /// Flush log buffer to file
+  static Future<void> flush() async {
+    if (_logFileSink != null) {
+      await _logFileSink!.flush();
+    }
+  }
+
+  /// Close all logging resources
+  static Future<void> closeAll() async {
+    if (_logFileSink != null) {
+      await _logFileSink!.close();
+      _logFileSink = null;
+    }
+  }
+
+  /// Set log level for all loggers matching a pattern
+  static void setLevelByPattern(String pattern, LogLevel level) {
+    for (final entry in _loggers.entries) {
+      if (entry.key.contains(pattern)) {
+        entry.value.setLevel(level);
+      }
+    }
+  }
+
+  /// Set log level for all loggers
+  static void setAllLevels(LogLevel level) {
+    for (final logger in _loggers.values) {
+      logger.setLevel(level);
+    }
+  }
+
+  /// Get all logger names
+  static List<String> getAllLoggerNames() {
+    return _loggers.keys.toList();
   }
 }

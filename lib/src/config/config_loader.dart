@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:yaml/yaml.dart';
-import 'package:path/path.dart' as path;
+import 'package:mcp_client/mcp_client.dart';
+import 'package:mcp_llm/mcp_llm.dart' hide LogLevel;
 
 import 'mcp_config.dart';
 import 'background_config.dart';
@@ -355,9 +355,11 @@ class ConfigLoader {
               baseUrl: configJson['baseUrl'] as String?,
               retryOnFailure: configJson['retryOnFailure'] as bool? ?? true,
               maxRetries: configJson['maxRetries'] as int? ?? 3,
-              timeout: configJson.containsKey('timeoutMs')
-                  ? Duration(milliseconds: configJson['timeoutMs'] as int)
-                  : null,
+              timeout: Duration(
+                milliseconds: configJson.containsKey('timeoutMs')
+                    ? configJson['timeoutMs'] as int
+                    : 10000,
+              ),
             ),
           );
         }
@@ -427,9 +429,11 @@ class ConfigLoader {
               baseUrl: configJson['baseUrl'] as String?,
               retryOnFailure: configJson['retryOnFailure'] as bool? ?? true,
               maxRetries: configJson['maxRetries'] as int? ?? 3,
-              timeout: configJson.containsKey('timeoutMs')
-                  ? Duration(milliseconds: configJson['timeoutMs'] as int)
-                  : null,
+              timeout: Duration(
+                milliseconds: configJson.containsKey('timeoutMs')
+                    ? configJson['timeoutMs'] as int
+                    : 10000,
+              ),
             ),
           );
         }

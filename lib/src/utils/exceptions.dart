@@ -31,6 +31,9 @@ class MCPPlatformNotSupportedException extends MCPException {
 
 /// 설정 오류
 class MCPConfigurationException extends MCPException {
-  MCPConfigurationException(String message)
+  final Object? cause;
+  final StackTrace? stackTrace;
+
+  MCPConfigurationException(String message, [this.cause, this.stackTrace])
       : super('Configuration error: $message');
 }

@@ -1,16 +1,13 @@
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:mcp_llm/mcp_llm.dart';
 
 import '../utils/logger.dart';
-import '../config/notification_config.dart';
-import '../config/background_config.dart';
-import '../config/tray_config.dart';
 
 // Platform-specific implementations
 import 'background/background_service.dart';
 import 'notification/notification_manager.dart';
 import 'tray/tray_manager.dart';
-import 'storage/storage_manager.dart';
 
 // Native implementations
 import 'background/android_background.dart';
@@ -22,7 +19,6 @@ import 'notification/desktop_notification.dart';
 import 'tray/macos_tray.dart';
 import 'tray/windows_tray.dart';
 import 'tray/linux_tray.dart';
-import 'storage/secure_storage_impl.dart';
 
 // Web implementations
 import 'web/web_background.dart';

@@ -1,6 +1,6 @@
-import 'package:mcp_client/mcp_client.dart';
-import 'package:mcp_server/mcp_server.dart';
-import 'package:mcp_llm/mcp_llm.dart';
+import 'package:mcp_client/mcp_client.dart' as client hide LogLevel;
+import 'package:mcp_server/mcp_server.dart' as server hide LogLevel;
+import 'package:mcp_llm/mcp_llm.dart'  hide LogLevel;
 
 import 'background_config.dart';
 import 'notification_config.dart';
@@ -36,7 +36,7 @@ class MCPServerConfig {
   final String version;
 
   /// 서버 기능
-  final ServerCapabilities? capabilities;
+  final server.ServerCapabilities? capabilities;
 
   /// stdio 트랜스포트 사용 여부
   final bool useStdioTransport;
@@ -66,7 +66,7 @@ class MCPClientConfig {
   final String version;
 
   /// 클라이언트 기능
-  final ClientCapabilities? capabilities;
+  final client.ClientCapabilities? capabilities;
 
   /// stdio 트랜스포트 명령어
   final String? transportCommand;

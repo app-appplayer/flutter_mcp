@@ -1,5 +1,6 @@
 import 'dart:html' as html;
 import 'dart:convert';
+import 'dart:math' as math;
 import '../../storage/secure_storage.dart';
 import '../../utils/logger.dart';
 

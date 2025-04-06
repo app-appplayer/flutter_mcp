@@ -97,7 +97,7 @@ void main() async {
         MCPJob.every(
           Duration(minutes: 15),
           task: () {
-            print('This runs every 15 minutes');
+            log('This runs every 15 minutes');
           },
         ),
       ],
@@ -161,7 +161,7 @@ final response = await FlutterMCP.instance.chat(
   llmId,
   'Hello, how are you today?',
 );
-print('AI: ${response.text}');
+log('AI: ${response.text}');
 
 // Clean up when done
 await FlutterMCP.instance.shutdown();
@@ -255,9 +255,9 @@ FlutterMCP.instance.removeScheduledJob(jobId);
 ```dart
 // Get system status
 final status = FlutterMCP.instance.getSystemStatus();
-print('Clients: ${status['clients']}');
-print('Servers: ${status['servers']}');
-print('LLMs: ${status['llms']}');
+log('Clients: ${status['clients']}');
+log('Servers: ${status['servers']}');
+log('LLMs: ${status['llms']}');
 ```
 
 ## Examples

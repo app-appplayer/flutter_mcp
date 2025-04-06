@@ -255,7 +255,7 @@ class _JobExecution {
       'start_time': startTime.toIso8601String(),
       'end_time': endTime?.toIso8601String(),
       'status': status.toString().split('.').last,
-      'duration': endTime != null ? endTime!.difference(startTime).inMilliseconds : null,
+      'duration': endTime?.difference(startTime).inMilliseconds,
       'error': errorMessage,
     };
   }

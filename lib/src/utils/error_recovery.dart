@@ -301,8 +301,7 @@ class ErrorRecovery {
 
 /// Exception for CircuitBreaker open state
 class MCPCircuitBreakerOpenException extends MCPException {
-  MCPCircuitBreakerOpenException(String message, [dynamic originalError, StackTrace? stackTrace])
-      : super(message, originalError, stackTrace);
+  MCPCircuitBreakerOpenException(super.message, [super.originalError, super.stackTrace]);
 }
 
 /// Circuit breaker states

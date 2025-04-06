@@ -3,7 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'logger.dart';
+import '../utils/logger.dart';
 
 /// Performance monitoring utility for tracking operation metrics
 class PerformanceMonitor {
@@ -26,6 +26,7 @@ class PerformanceMonitor {
   final bool _enableMetricsExport;
   final Duration _autoExportInterval;
   Timer? _exportTimer;
+  String? _exportPath;
 
   // Singleton instance
   static final PerformanceMonitor _instance = PerformanceMonitor._internal();
@@ -65,17 +66,22 @@ class PerformanceMonitor {
       _logger.debug('Performance logging ${enableLogging ? 'enabled' : 'disabled'}');
     }
 
+    // Update export path
+    if (exportPath != null) {
+      _exportPath = exportPath;
+    }
+
     // Set up auto-export timer if enabled
     if (enableMetricsExport != null && enableMetricsExport != _enableMetricsExport) {
       if (enableMetricsExport) {
-        _setupExportTimer(autoExportInterval ?? _autoExportInterval, exportPath);
+        _setupExportTimer(autoExportInterval ?? _autoExportInterval);
       } else if (_exportTimer != null) {
         _exportTimer!.cancel();
         _exportTimer = null;
       }
     } else if (_enableMetricsExport && autoExportInterval != null) {
       // Update export timer interval
-      _setupExportTimer(autoExportInterval, exportPath);
+      _setupExportTimer(autoExportInterval);
     }
   }
 
@@ -96,7 +102,7 @@ class PerformanceMonitor {
   }
 
   /// Stop a timer and record its duration
-  Duration stopTimer(String operationId, {bool success = true}) {
+  Duration stopTimer(String operationId, {bool success = true, Map<String, dynamic>? metadata}) {
     final stopwatch = _activeTimers.remove(operationId);
 
     if (stopwatch == null) {
@@ -116,6 +122,7 @@ class PerformanceMonitor {
       operationName,
       duration,
       success: success,
+      metadata: metadata,
     );
 
     // Log completion if enabled
@@ -151,7 +158,11 @@ class PerformanceMonitor {
   }
 
   /// Record an operation
-  void _recordOperation(String operation, Duration duration, {bool success = true}) {
+  void _recordOperation(
+      String operation,
+      Duration duration,
+      {bool success = true, Map<String, dynamic>? metadata}
+      ) {
     // Update timer metrics
     _timers.putIfAbsent(operation, () => _MetricTimer(operation));
     _timers[operation]!.record(duration, success);
@@ -162,6 +173,7 @@ class PerformanceMonitor {
       duration: duration,
       timestamp: DateTime.now(),
       success: success,
+      metadata: metadata,
     ));
 
     // Trim recent operations queue if needed
@@ -223,9 +235,15 @@ class PerformanceMonitor {
   }
 
   /// Export metrics to JSON file
-  Future<bool> exportMetrics(String filePath) async {
+  Future<bool> exportMetrics([String? filePath]) async {
     if (kIsWeb) {
       _logger.warning('Cannot export metrics to file in web platform');
+      return false;
+    }
+
+    final path = filePath ?? _exportPath;
+    if (path == null) {
+      _logger.warning('No export path specified');
       return false;
     }
 
@@ -233,10 +251,10 @@ class PerformanceMonitor {
       final report = getMetricsReport();
       final json = jsonEncode(report);
 
-      final file = File(filePath);
+      final file = File(path);
       await file.writeAsString(json);
 
-      _logger.info('Metrics exported to $filePath');
+      _logger.info('Metrics exported to $path');
       return true;
     } catch (e, stackTrace) {
       _logger.error('Failed to export metrics to file', e, stackTrace);
@@ -245,22 +263,29 @@ class PerformanceMonitor {
   }
 
   /// Set up auto-export timer
-  void _setupExportTimer(Duration interval, String? exportPath) {
+  void _setupExportTimer(Duration interval) {
     _exportTimer?.cancel();
 
     // Don't set up timer for web platform
     if (kIsWeb) return;
 
-    if (exportPath != null) {
-      _exportTimer = Timer.periodic(interval, (timer) {
-        final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-        final filename = exportPath.endsWith('.json')
-            ? exportPath
-            : '$exportPath/metrics_$timestamp.json';
-
-        exportMetrics(filename);
-      });
+    if (_exportPath == null) {
+      _logger.warning('Cannot set up auto-export: no export path specified');
+      return;
     }
+
+    _exportTimer = Timer.periodic(interval, (timer) {
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+
+      // Determine if we should use the provided path directly or create a timestamped file
+      final filePath = _exportPath!.endsWith('.json')
+          ? _exportPath!
+          : '$_exportPath/metrics_$timestamp.json';
+
+      exportMetrics(filePath);
+    });
+
+    _logger.debug('Auto-export timer set up with interval: ${interval.inSeconds}s');
   }
 
   /// Reset all metrics
@@ -490,21 +515,29 @@ class _OperationRecord {
   final Duration duration;
   final DateTime timestamp;
   final bool success;
+  final Map<String, dynamic>? metadata;
 
   _OperationRecord({
     required this.name,
     required this.duration,
     required this.timestamp,
     required this.success,
+    this.metadata,
   });
 
   /// Convert to JSON
   Map<String, dynamic> toJson() {
-    return {
+    final Map<String, dynamic> json = {
       'name': name,
       'duration_ms': duration.inMilliseconds,
       'timestamp': timestamp.toIso8601String(),
       'success': success,
     };
+
+    if (metadata != null) {
+      json['metadata'] = metadata;
+    }
+
+    return json;
   }
 }

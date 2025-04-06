@@ -1,6 +1,5 @@
-
 import 'dart:async';
-import 'logger.dart';
+import '../utils/logger.dart';
 
 /// Event system for components to communicate across the application
 class EventSystem {
@@ -139,7 +138,7 @@ class EventSystem {
 
     // Create subscription with filter
     final subscription = _eventControllers[topic]!.stream
-        .where((event) => event is T && filter(event as T))
+        .where((event) => event is T && filter(event))
         .listen((event) {
       handler(event as T);
     });

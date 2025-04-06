@@ -1,6 +1,9 @@
 import '../utils/error_recovery.dart';
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
+import 'package:mcp_server/mcp_server.dart';
+import 'package:mcp_client/mcp_client.dart';
+import 'dart:async';
 
 /// Base plugin interface
 abstract class MCPPlugin {
@@ -27,6 +30,9 @@ abstract class MCPToolPlugin extends MCPPlugin {
 
   /// Get tool metadata including input schema
   Map<String, dynamic> getToolMetadata();
+
+  /// Register tool with an MCP server
+  Future<void> registerWithServer(Server server);
 }
 
 /// MCP Resource plugin interface
@@ -36,6 +42,9 @@ abstract class MCPResourcePlugin extends MCPPlugin {
 
   /// Get resource metadata
   Map<String, dynamic> getResourceMetadata();
+
+  /// Register resource with an MCP server
+  Future<void> registerWithServer(Server server);
 }
 
 /// MCP Background plugin interface
@@ -71,6 +80,30 @@ abstract class MCPNotificationPlugin extends MCPPlugin {
   void registerClickHandler(Function(String id, Map<String, dynamic>? data) handler);
 }
 
+/// MCP Client plugin interface
+abstract class MCPClientPlugin extends MCPPlugin {
+  /// Initialize with a client
+  Future<void> initializeWithClient(Client client);
+
+  /// Handle connection state changes
+  void handleConnectionStateChange(bool connected);
+
+  /// Get client extensions
+  Map<String, dynamic> getClientExtensions();
+}
+
+/// MCP Server plugin interface
+abstract class MCPServerPlugin extends MCPPlugin {
+  /// Initialize with a server
+  Future<void> initializeWithServer(Server server);
+
+  /// Handle connection state changes
+  void handleConnectionStateChange(bool connected);
+
+  /// Get server extensions
+  Map<String, dynamic> getServerExtensions();
+}
+
 /// MCP Plugin registry
 class MCPPluginRegistry {
   final MCPLogger _logger = MCPLogger('mcp.plugin_registry');
@@ -80,6 +113,18 @@ class MCPPluginRegistry {
 
   /// Plugin configurations
   final Map<String, Map<String, dynamic>> _configurations = {};
+
+  /// Plugin dependencies
+  final Map<String, List<String>> _dependencies = {};
+
+  /// Plugin load order
+  final List<String> _loadOrder = [];
+
+  /// Registered servers for automatic plugin registration
+  final Map<String, Server> _servers = {};
+
+  /// Registered clients for automatic plugin registration
+  final Map<String, Client> _clients = {};
 
   /// Register a plugin
   Future<void> registerPlugin(MCPPlugin plugin, [Map<String, dynamic>? config]) async {
@@ -105,6 +150,15 @@ class MCPPluginRegistry {
     try {
       await plugin.initialize(pluginConfig);
       _plugins[pluginType]![pluginName] = plugin;
+
+      // Add to load order
+      if (!_loadOrder.contains(pluginName)) {
+        _loadOrder.add(pluginName);
+      }
+
+      // Auto-register with servers/clients if applicable
+      await _autoRegisterPlugin(plugin);
+
       _logger.info('Plugin $pluginName successfully initialized');
     } catch (e, stackTrace) {
       _logger.error('Failed to initialize plugin $pluginName', e, stackTrace);
@@ -143,6 +197,16 @@ class MCPPluginRegistry {
       await foundPlugin.shutdown();
       _plugins[foundType]!.remove(pluginName);
       _configurations.remove(pluginName);
+
+      // Remove from load order
+      _loadOrder.remove(pluginName);
+
+      // Remove dependencies
+      _dependencies.remove(pluginName);
+      for (final deps in _dependencies.values) {
+        deps.remove(pluginName);
+      }
+
       _logger.info('Plugin $pluginName successfully unregistered');
     } catch (e, stackTrace) {
       _logger.error('Failed to shutdown plugin $pluginName', e, stackTrace);
@@ -180,6 +244,79 @@ class MCPPluginRegistry {
     return result;
   }
 
+  /// Register a server for plugins to use
+  void registerServer(String id, Server server) {
+    _servers[id] = server;
+
+    // Auto-register existing plugins with this server
+    for (final typeMap in _plugins.values) {
+      for (final plugin in typeMap.values) {
+        if (plugin is MCPToolPlugin || plugin is MCPResourcePlugin ||
+            plugin is MCPServerPlugin) {
+          _autoRegisterPluginWithServer(plugin, server);
+        }
+      }
+    }
+  }
+
+  /// Register a client for plugins to use
+  void registerClient(String id, Client client) {
+    _clients[id] = client;
+
+    // Auto-register existing plugins with this client
+    for (final typeMap in _plugins.values) {
+      for (final plugin in typeMap.values) {
+        if (plugin is MCPClientPlugin) {
+          _autoRegisterPluginWithClient(plugin, client);
+        }
+      }
+    }
+  }
+
+  /// Auto-register a plugin with servers/clients
+  Future<void> _autoRegisterPlugin(MCPPlugin plugin) async {
+    // Register with servers if applicable
+    if (plugin is MCPToolPlugin || plugin is MCPResourcePlugin ||
+        plugin is MCPServerPlugin) {
+      for (final server in _servers.values) {
+        await _autoRegisterPluginWithServer(plugin, server);
+      }
+    }
+
+    // Register with clients if applicable
+    if (plugin is MCPClientPlugin) {
+      for (final client in _clients.values) {
+        await _autoRegisterPluginWithClient(plugin, client);
+      }
+    }
+  }
+
+  /// Auto-register a plugin with a server
+  Future<void> _autoRegisterPluginWithServer(MCPPlugin plugin, Server server) async {
+    try {
+      if (plugin is MCPToolPlugin) {
+        await plugin.registerWithServer(server);
+      } else if (plugin is MCPResourcePlugin) {
+        await plugin.registerWithServer(server);
+      } else if (plugin is MCPServerPlugin) {
+        await plugin.initializeWithServer(server);
+      }
+    } catch (e) {
+      _logger.error('Failed to auto-register plugin ${plugin.name} with server', e);
+    }
+  }
+
+  /// Auto-register a plugin with a client
+  Future<void> _autoRegisterPluginWithClient(MCPPlugin plugin, Client client) async {
+    try {
+      if (plugin is MCPClientPlugin) {
+        await plugin.initializeWithClient(client);
+      }
+    } catch (e) {
+      _logger.error('Failed to auto-register plugin ${plugin.name} with client', e);
+    }
+  }
+
   /// Execute a tool plugin
   Future<Map<String, dynamic>> executeTool(String name, Map<String, dynamic> arguments) async {
     final plugin = getPlugin<MCPToolPlugin>(name);
@@ -189,7 +326,11 @@ class MCPPluginRegistry {
     }
 
     try {
-      return await plugin.execute(arguments);
+      return await ErrorRecovery.tryWithRetry(
+            () => plugin.execute(arguments),
+        operationName: 'Execute tool plugin $name',
+        maxRetries: 2,
+      );
     } catch (e, stackTrace) {
       _logger.error('Error executing tool plugin $name', e, stackTrace);
       throw MCPPluginException(
@@ -214,7 +355,11 @@ class MCPPluginRegistry {
     }
 
     try {
-      return await plugin.getResource(resourceUri, params);
+      return await ErrorRecovery.tryWithRetry(
+            () => plugin.getResource(resourceUri, params),
+        operationName: 'Get resource from plugin $name',
+        maxRetries: 2,
+      );
     } catch (e, stackTrace) {
       _logger.error('Error getting resource from plugin $name', e, stackTrace);
       throw MCPPluginException(
@@ -302,20 +447,59 @@ class MCPPluginRegistry {
     }
   }
 
+  /// Check plugin dependencies
+  bool hasDependency(String plugin, String dependency) {
+    if (!_dependencies.containsKey(plugin)) {
+      return false;
+    }
+
+    return _dependencies[plugin]!.contains(dependency);
+  }
+
+  /// Add plugin dependency
+  void addDependency(String plugin, String dependency) {
+    if (!_dependencies.containsKey(plugin)) {
+      _dependencies[plugin] = [];
+    }
+
+    if (!_dependencies[plugin]!.contains(dependency)) {
+      _dependencies[plugin]!.add(dependency);
+    }
+  }
+
+  /// Get all plugin dependencies
+  List<String> getDependencies(String plugin) {
+    return _dependencies[plugin] ?? [];
+  }
+
+  /// Get all plugins that depend on a specific plugin
+  List<String> getDependents(String plugin) {
+    return _dependencies.entries
+        .where((entry) => entry.value.contains(plugin))
+        .map((entry) => entry.key)
+        .toList();
+  }
+
   /// Shutdown all plugins
   Future<void> shutdownAll() async {
     _logger.debug('Shutting down all plugins');
 
     final errors = <String, dynamic>{};
 
-    // Shutdown plugins in reverse registration order
-    for (final typeMap in _plugins.values) {
-      for (final pluginName in typeMap.keys.toList()) {
+    // Shutdown plugins in reverse registration order to respect dependencies
+    for (final pluginName in _loadOrder.reversed) {
+      // Find the plugin
+      MCPPlugin? plugin;
+      for (final typeMap in _plugins.values) {
+        if (typeMap.containsKey(pluginName)) {
+          plugin = typeMap[pluginName];
+          break;
+        }
+      }
+
+      if (plugin != null) {
         try {
-          final plugin = typeMap[pluginName];
-          if (plugin != null) {
-            await plugin.shutdown();
-          }
+          await plugin.shutdown();
         } catch (e) {
           _logger.error('Error shutting down plugin $pluginName', e);
           errors[pluginName] = e;
@@ -326,9 +510,67 @@ class MCPPluginRegistry {
     // Clear registries
     _plugins.clear();
     _configurations.clear();
+    _dependencies.clear();
+    _loadOrder.clear();
+    _servers.clear();
+    _clients.clear();
 
     if (errors.isNotEmpty) {
-      throw Exception('Errors occurred while shutting down plugins: $errors');
+      throw MCPException('Errors occurred while shutting down plugins: $errors');
+    }
+  }
+
+  /// Get all registered plugins
+  List<MCPPlugin> getAllPlugins() {
+    final plugins = <MCPPlugin>[];
+
+    for (final typeMap in _plugins.values) {
+      plugins.addAll(typeMap.values);
+    }
+
+    return plugins;
+  }
+
+  /// Get all plugin names
+  List<String> getAllPluginNames() {
+    return _loadOrder;
+  }
+
+  /// Get plugin configuration
+  Map<String, dynamic>? getPluginConfiguration(String pluginName) {
+    return _configurations[pluginName];
+  }
+
+  /// Update plugin configuration
+  Future<void> updatePluginConfiguration(String pluginName, Map<String, dynamic> config) async {
+    // Find the plugin
+    MCPPlugin? plugin;
+    for (final typeMap in _plugins.values) {
+      if (typeMap.containsKey(pluginName)) {
+        plugin = typeMap[pluginName];
+        break;
+      }
+    }
+
+    if (plugin == null) {
+      throw MCPException('Plugin not found: $pluginName');
+    }
+
+    // Update configuration
+    _configurations[pluginName] = config;
+
+    // Re-initialize the plugin
+    try {
+      await plugin.shutdown();
+      await plugin.initialize(config);
+      _logger.info('Plugin $pluginName configuration updated successfully');
+    } catch (e, stackTrace) {
+      _logger.error('Failed to update plugin configuration', e, stackTrace);
+      throw MCPOperationFailedException(
+        'Failed to update plugin configuration',
+        e,
+        stackTrace,
+      );
     }
   }
 
@@ -342,8 +584,12 @@ class MCPPluginRegistry {
       return 'Background';
     } else if (plugin is MCPNotificationPlugin) {
       return 'Notification';
+    } else if (plugin is MCPClientPlugin) {
+      return 'Client';
+    } else if (plugin is MCPServerPlugin) {
+      return 'Server';
     } else {
-      return 'Unknown';
+      return 'Basic';
     }
   }
 }

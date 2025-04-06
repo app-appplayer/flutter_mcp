@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart';
 import '../utils/logger.dart';
+import '../utils/exceptions.dart';
 
-/// MCP localization system
+/// MCP localization system for internationalization support
 class MCPLocalization {
   final MCPLogger _logger = MCPLogger('mcp.localization');
 
@@ -11,26 +12,34 @@ class MCPLocalization {
   Locale _currentLocale;
 
   // Available locales
-  final List<Locale> _supportedLocales;
+  final List<Locale> _supportedLocales = [];
 
   // Translations by locale
   final Map<String, Map<String, String>> _translations = {};
 
   // Fallback locale
-  late final Locale _fallbackLocale;
+  late Locale _fallbackLocale;
+
+  // Delegate for use with MaterialApp/CupertinoApp
+  late LocalizationsDelegate<MCPLocalization> delegate;
 
   // Singleton instance
   static final MCPLocalization _instance = MCPLocalization._internal(
     const Locale('en', 'US'),
-    [const Locale('en', 'US')],
   );
 
   /// Get singleton instance
   static MCPLocalization get instance => _instance;
 
   /// Internal constructor
-  MCPLocalization._internal(this._fallbackLocale, this._supportedLocales)
-      : _currentLocale = _fallbackLocale;
+  MCPLocalization._internal(Locale fallbackLocale)
+      : _currentLocale = fallbackLocale,
+        _fallbackLocale = fallbackLocale {
+    _supportedLocales.add(fallbackLocale);
+
+    // Initialize delegate
+    delegate = _MCPLocalizationDelegate();
+  }
 
   /// Current locale
   Locale get currentLocale => _currentLocale;
@@ -44,9 +53,10 @@ class MCPLocalization {
     List<Locale>? supportedLocales,
     Locale? fallbackLocale,
     String? localizationPath,
+    Map<String, Map<String, String>>? translations,
   }) async {
     if (supportedLocales != null && supportedLocales.isNotEmpty) {
-      _logger.debug('Setting supported locales: ${supportedLocales.join(', ')}');
+      _logger.debug('Setting supported locales: ${supportedLocales.map((l) => l.toString()).join(', ')}');
       _supportedLocales.clear();
       _supportedLocales.addAll(supportedLocales);
     }
@@ -54,17 +64,32 @@ class MCPLocalization {
     if (fallbackLocale != null) {
       _logger.debug('Setting fallback locale: $fallbackLocale');
       _fallbackLocale = fallbackLocale;
+
+      // Ensure fallback locale is in supported locales
+      if (!_supportedLocales.contains(fallbackLocale)) {
+        _supportedLocales.add(fallbackLocale);
+      }
     }
 
-    if (locale != null) {
-      await setLocale(locale);
-    } else {
-      await setLocale(_currentLocale);
+    // Add translations directly if provided
+    if (translations != null) {
+      _translations.addAll(translations);
+      _logger.debug('Added ${translations.length} locale translations');
     }
 
+    // Load translations from assets if path provided
     if (localizationPath != null) {
       await loadTranslationsFromAssets(localizationPath);
     }
+
+    // Set locale (will default to fallback if specified locale is not supported)
+    if (locale != null) {
+      await setLocale(locale);
+    } else if (_currentLocale != _fallbackLocale) {
+      await setLocale(_currentLocale);
+    }
+
+    _logger.debug('Localization initialized with ${_supportedLocales.length} locales');
   }
 
   /// Set the current locale
@@ -110,6 +135,30 @@ class MCPLocalization {
     return _formatTranslation(translation, args);
   }
 
+  /// Pluralize a key based on count
+  String plural(String key, int count, [Map<String, dynamic>? args]) {
+    final baseArgs = args ?? {};
+    baseArgs['count'] = count;
+
+    // Try specific count key first
+    final countKey = '${key}_$count';
+    final localeKey = _getLocaleKey(_currentLocale);
+
+    if (_translations[localeKey]?.containsKey(countKey) == true) {
+      return translate(countKey, baseArgs);
+    }
+
+    // Try plural/singular forms
+    final pluralKey = count == 1 ? '${key}_one' : '${key}_many';
+
+    if (_translations[localeKey]?.containsKey(pluralKey) == true) {
+      return translate(pluralKey, baseArgs);
+    }
+
+    // Fall back to base key
+    return translate(key, baseArgs);
+  }
+
   /// Format a translation with arguments
   String _formatTranslation(String translation, Map<String, dynamic>? args) {
     if (args == null || args.isEmpty) {
@@ -134,6 +183,7 @@ class MCPLocalization {
       }
     } catch (e, stackTrace) {
       _logger.error('Failed to load translations from assets', e, stackTrace);
+      throw MCPConfigurationException('Failed to load translations: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -143,14 +193,20 @@ class MCPLocalization {
     _logger.debug('Loading translations for locale: $localeKey');
 
     try {
+      // Skip if translations already loaded for this locale
+      if (_translations.containsKey(localeKey)) {
+        _logger.debug('Translations already loaded for locale: $localeKey');
+        return;
+      }
+
       // Determine path
       final path = basePath != null
           ? '$basePath/${locale.languageCode}${locale.countryCode != null ? '_${locale.countryCode}' : ''}.json'
-          : 'assets/lang/${locale.languageCode}${locale.countryCode != null ? '_${locale.countryCode}' : ''}.json';
+          : 'assets/localization/${locale.languageCode}${locale.countryCode != null ? '_${locale.countryCode}' : ''}.json';
 
       // Load and parse JSON
       final jsonString = await rootBundle.loadString(path);
-      final Map<String, dynamic> data = json.decode(jsonString);
+      final Map<String, dynamic> data = jsonDecode(jsonString);
 
       // Convert to string-string map
       final Map<String, String> stringMap = {};
@@ -161,7 +217,8 @@ class MCPLocalization {
 
       _logger.debug('Loaded ${stringMap.length} translations for $localeKey');
     } catch (e, stackTrace) {
-      _logger.error('Failed to load translations for locale: $localeKey', e, stackTrace);
+      // Log but don't fail - just use fallback locale
+      _logger.warning('Failed to load translations for locale: $localeKey', e, stackTrace);
     }
   }
 
@@ -235,6 +292,31 @@ class MCPLocalization {
       _logger.debug('Added supported locale: $locale');
     }
   }
+
+  /// Export translations to JSON
+  Map<String, Map<String, String>> exportTranslations() {
+    return Map.from(_translations);
+  }
+}
+
+/// Delegate for use with MaterialApp/CupertinoApp
+class _MCPLocalizationDelegate extends LocalizationsDelegate<MCPLocalization> {
+  @override
+  bool isSupported(Locale locale) {
+    return MCPLocalization.instance.supportedLocales.contains(locale) ||
+        MCPLocalization.instance.supportedLocales.any(
+                (supportedLocale) => supportedLocale.languageCode == locale.languageCode
+        );
+  }
+
+  @override
+  Future<MCPLocalization> load(Locale locale) async {
+    await MCPLocalization.instance.setLocale(locale);
+    return MCPLocalization.instance;
+  }
+
+  @override
+  bool shouldReload(_MCPLocalizationDelegate old) => false;
 }
 
 /// Extension for easy access to translations
@@ -243,4 +325,12 @@ extension MCPLocalizationExtension on BuildContext {
   String translate(String key, [Map<String, dynamic>? args]) {
     return MCPLocalization.instance.translate(key, args);
   }
+
+  /// Pluralize a key based on count
+  String plural(String key, int count, [Map<String, dynamic>? args]) {
+    return MCPLocalization.instance.plural(key, count, args);
+  }
+
+  /// Get current locale
+  Locale get currentLocale => MCPLocalization.instance.currentLocale;
 }

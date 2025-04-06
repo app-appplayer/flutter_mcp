@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'logger.dart';
+import '../utils/logger.dart';
+import '../utils/exceptions.dart';
 
 /// Resource manager to track and properly dispose of resources
 class ResourceManager {
@@ -71,9 +72,13 @@ class ResourceManager {
     try {
       await _resources[key]!.dispose();
       _resources.remove(key);
-    } catch (e) {
-      _logger.error('Error disposing resource: $key', e);
-      rethrow;
+    } catch (e, stackTrace) {
+      _logger.error('Error disposing resource: $key', e, stackTrace);
+      throw MCPOperationFailedException(
+        'Failed to dispose resource: $key',
+        e,
+        stackTrace,
+      );
     }
   }
 
@@ -90,16 +95,16 @@ class ResourceManager {
     for (final key in keys.reversed) {
       try {
         await _resources[key]!.dispose();
-      } catch (e) {
-        _logger.error('Error disposing resource: $key', e);
+      } catch (e, stackTrace) {
+        _logger.error('Error disposing resource: $key', e, stackTrace);
         errors[key] = e;
+      } finally {
+        _resources.remove(key);
       }
     }
 
-    _resources.clear();
-
     if (errors.isNotEmpty) {
-      throw Exception('Errors disposing resources: $errors');
+      throw MCPException('Errors occurred while disposing resources: $errors');
     }
   }
 
@@ -132,14 +137,14 @@ class ResourceManager {
       try {
         await _resources[key]!.dispose();
         _resources.remove(key);
-      } catch (e) {
-        _logger.error('Error disposing resource: $key', e);
+      } catch (e, stackTrace) {
+        _logger.error('Error disposing resource: $key', e, stackTrace);
         errors[key] = e;
       }
     }
 
     if (errors.isNotEmpty) {
-      throw Exception('Errors disposing resources with tag $tag: $errors');
+      throw MCPException('Errors occurred while disposing resources with tag $tag: $errors');
     }
   }
 
@@ -149,6 +154,12 @@ class ResourceManager {
         .where((entry) => entry.value.tag == tag)
         .map((entry) => entry.key)
         .toList();
+  }
+
+  /// Clear all resources without disposing them
+  void clear() {
+    _logger.debug('Clearing all resources without disposing');
+    _resources.clear();
   }
 }
 

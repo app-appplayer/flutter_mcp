@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'logger.dart';
 import 'exceptions.dart';
-import 'error_recovery.dart';
 import 'package:synchronized/synchronized.dart' show Lock;
 
 /// Utility class for managing asynchronous operations with advanced error handling

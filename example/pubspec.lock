@@ -314,9 +314,10 @@ packages:
   mcp_client:
     dependency: transitive
     description:
-      path: "../../mcp_client"
-      relative: true
-    source: path
+      name: mcp_client
+      sha256: "6f173857fc1307c3c3bc79e8d5ef05124354b10b6a0c8ffdab0154c50d9dbae7"
+      url: "https://pub.dev"
+    source: hosted
     version: "0.1.6"
   mcp_llm:
     dependency: transitive
@@ -328,9 +329,10 @@ packages:
   mcp_server:
     dependency: transitive
     description:
-      path: "../../mcp_server"
-      relative: true
-    source: path
+      name: mcp_server
+      sha256: be78294cc6ed1a79b03eda7539bda95bacdb336e702b5233c8c07c281669f57a
+      url: "https://pub.dev"
+    source: hosted
     version: "0.1.7"
   menu_base:
     dependency: transitive

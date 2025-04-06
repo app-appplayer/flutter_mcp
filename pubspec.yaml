@@ -22,8 +22,8 @@ dependencies:
   #  path: ../mcp_client
   mcp_server: ^0.1.7
   #  path: ../mcp_server
-  mcp_llm:
-    path: ../mcp_llm
+  mcp_llm: ^0.1.0
+  #  path: ../mcp_llm
 
   # Platform service libraries
   flutter_foreground_task: ^8.17.0  # For Android background services

@@ -1,4 +1,5 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'src/config/mcp_config.dart';
 
 abstract class FlutterMcpPlatform extends PlatformInterface {
   FlutterMcpPlatform() : super(token: _token);
@@ -21,7 +22,53 @@ abstract class FlutterMcpPlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  /// Returns a [String] containing the version of the platform.
   Future<String?> getPlatformVersion() {
     throw UnimplementedError('getPlatformVersion() has not been implemented.');
+  }
+
+  /// Initialize the platform implementation with config
+  Future<void> initialize(MCPConfig config) {
+    throw UnimplementedError('initialize() has not been implemented.');
+  }
+
+  /// Start background service
+  Future<bool> startBackgroundService() {
+    throw UnimplementedError('startBackgroundService() has not been implemented.');
+  }
+
+  /// Stop background service
+  Future<bool> stopBackgroundService() {
+    throw UnimplementedError('stopBackgroundService() has not been implemented.');
+  }
+
+  /// Check if background service is running
+  bool get isBackgroundServiceRunning {
+    throw UnimplementedError('isBackgroundServiceRunning has not been implemented.');
+  }
+
+  /// Show notification
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? icon,
+    String id = 'mcp_notification',
+  }) {
+    throw UnimplementedError('showNotification() has not been implemented.');
+  }
+
+  /// Store a value securely
+  Future<void> secureStore(String key, String value) {
+    throw UnimplementedError('secureStore() has not been implemented.');
+  }
+
+  /// Read a value from secure storage
+  Future<String?> secureRead(String key) {
+    throw UnimplementedError('secureRead() has not been implemented.');
+  }
+
+  /// Shutdown all services
+  Future<void> shutdown() {
+    throw UnimplementedError('shutdown() has not been implemented.');
   }
 }

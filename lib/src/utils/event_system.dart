@@ -1,7 +1,8 @@
 import 'dart:async';
 import '../utils/logger.dart';
+import '../utils/error_recovery.dart';
 
-/// Event system for components to communicate across the application
+/// Type-safe event system for components to communicate across the application
 class EventSystem {
   final MCPLogger _logger = MCPLogger('mcp.event_system');
 
@@ -14,6 +15,18 @@ class EventSystem {
   // Subscription counter for generating unique tokens
   int _subscriptionCounter = 0;
 
+  // Cached events by topic (for late subscribers)
+  final Map<String, List<dynamic>> _cachedEvents = {};
+
+  // Maximum cache size per topic
+  final int _maxCacheSize = 10;
+
+  // Whether event system is paused
+  bool _isPaused = false;
+
+  // Events queued while paused
+  final List<_QueuedEvent> _queuedEvents = [];
+
   // Singleton instance
   static final EventSystem _instance = EventSystem._internal();
 
@@ -25,12 +38,30 @@ class EventSystem {
 
   /// Publish an event to a topic
   void publish<T>(String topic, T event) {
-    if (!_eventControllers.containsKey(topic)) {
-      _logger.debug('No subscribers for topic: $topic');
+    if (_isPaused) {
+      _queuedEvents.add(_QueuedEvent<T>(topic, event));
+      _logger.debug('Event queued for topic: $topic (system paused)');
       return;
     }
 
+    if (!_eventControllers.containsKey(topic)) {
+      // Create a controller if we need to cache but don't have subscribers yet
+      if (_shouldCacheTopic(topic)) {
+        _eventControllers[topic] = StreamController<dynamic>.broadcast();
+      } else {
+        _logger.debug('No subscribers for topic: $topic');
+        return;
+      }
+    }
+
     _logger.debug('Publishing event to topic: $topic');
+
+    // Add to cache if this topic uses caching
+    if (_shouldCacheTopic(topic)) {
+      _cacheEvent(topic, event);
+    }
+
+    // Publish to subscribers
     _eventControllers[topic]!.add(event);
   }
 
@@ -46,20 +77,23 @@ class EventSystem {
     // Generate unique token
     final token = '${topic}_${++_subscriptionCounter}';
 
-    // Create subscription
-    final subscription = _eventControllers[topic]!.stream.listen((event) {
-      if (event is T) {
+    // Create subscription with type checking
+    final subscription = _eventControllers[topic]!.stream
+        .where((event) => event is T)
+        .cast<T>()
+        .listen((event) {
+      try {
         handler(event);
-      } else {
-        _logger.warning(
-            'Event type mismatch for topic $topic - expected ${T.toString()}, '
-                'got ${event.runtimeType}'
-        );
+      } catch (e, stackTrace) {
+        _logger.error('Error in event handler for topic $topic', e, stackTrace);
       }
     });
 
     // Store subscription with token
     _subscriptions[token] = subscription;
+
+    // Deliver cached events if available
+    _deliverCachedEvents<T>(topic, handler);
 
     return token;
   }
@@ -72,6 +106,8 @@ class EventSystem {
     }
 
     _logger.debug('Unsubscribing: $token');
+
+    // Cancel subscription
     _subscriptions[token]!.cancel();
     _subscriptions.remove(token);
 
@@ -83,6 +119,8 @@ class EventSystem {
       _logger.debug('No more subscribers for topic: $topic, cleaning up');
       _eventControllers[topic]?.close();
       _eventControllers.remove(topic);
+
+      // Don't remove cached events - they may be needed for future subscribers
     }
   }
 
@@ -104,11 +142,15 @@ class EventSystem {
     // Clean up controller
     _eventControllers[topic]?.close();
     _eventControllers.remove(topic);
+
+    // Don't remove cached events
   }
 
   /// Check if a topic has subscribers
   bool hasSubscribers(String topic) {
-    return _eventControllers.containsKey(topic) && !_eventControllers[topic]!.isClosed;
+    return _eventControllers.containsKey(topic) &&
+        !_eventControllers[topic]!.isClosed &&
+        _subscriptions.keys.where((token) => token.startsWith('${topic}_')).isNotEmpty;
   }
 
   /// Get number of subscribers for a topic
@@ -139,12 +181,29 @@ class EventSystem {
     // Create subscription with filter
     final subscription = _eventControllers[topic]!.stream
         .where((event) => event is T && filter(event))
+        .cast<T>()
         .listen((event) {
-      handler(event as T);
+      try {
+        handler(event);
+      } catch (e, stackTrace) {
+        _logger.error('Error in filtered event handler for topic $topic', e, stackTrace);
+      }
     });
 
     // Store subscription with token
     _subscriptions[token] = subscription;
+
+    // Deliver cached events that match the filter
+    if (_cachedEvents.containsKey(topic)) {
+      for (final event in _cachedEvents[topic]!) {
+        if (event is T && filter(event)) {
+          ErrorRecovery.tryCatch(
+                () => handler(event),
+            operationName: 'cached event delivery with filter for $topic',
+          );
+        }
+      }
+    }
 
     return token;
   }
@@ -170,8 +229,11 @@ class EventSystem {
     int receivedEvents = 0;
 
     // Create subscription
-    final subscription = _eventControllers[topic]!.stream.listen((event) {
-      if (event is T) {
+    final subscription = _eventControllers[topic]!.stream
+        .where((event) => event is T)
+        .cast<T>()
+        .listen((event) {
+      try {
         handler(event);
 
         // Check if max events reached
@@ -181,6 +243,8 @@ class EventSystem {
             unsubscribe(token);
           }
         }
+      } catch (e, stackTrace) {
+        _logger.error('Error in temporary event handler for topic $topic', e, stackTrace);
       }
     });
 
@@ -195,6 +259,24 @@ class EventSystem {
           unsubscribe(token);
         }
       });
+    }
+
+    // Deliver cached events (count towards maxEvents)
+    if (_cachedEvents.containsKey(topic) && maxEvents != null) {
+      for (final event in _cachedEvents[topic]!) {
+        if (event is T) {
+          ErrorRecovery.tryCatch(
+                () => handler(event),
+            operationName: 'cached event delivery for temporary subscription to $topic',
+          );
+
+          receivedEvents++;
+          if (receivedEvents >= maxEvents) {
+            unsubscribe(token);
+            break;
+          }
+        }
+      }
     }
 
     return token;
@@ -224,9 +306,15 @@ class EventSystem {
     // Create subscription with debounce
     final subscription = _eventControllers[topic]!.stream
         .where((event) => event is T)
-        .map((event) => event as T)
+        .cast<T>()
         .debounceTime(duration)
-        .listen(handler);
+        .listen((event) {
+      try {
+        handler(event);
+      } catch (e, stackTrace) {
+        _logger.error('Error in debounced event handler for topic $topic', e, stackTrace);
+      }
+    });
 
     // Store subscription with token
     _subscriptions[token] = subscription;
@@ -255,15 +343,22 @@ class EventSystem {
     bool canEmit = true;
 
     // Create subscription with manual throttle
-    final subscription = _eventControllers[topic]!.stream.listen((event) {
-      if (event is T && canEmit) {
-        handler(event);
-        canEmit = false;
+    final subscription = _eventControllers[topic]!.stream
+        .where((event) => event is T)
+        .cast<T>()
+        .listen((event) {
+      if (canEmit) {
+        try {
+          handler(event);
+          canEmit = false;
 
-        throttleTimer?.cancel();
-        throttleTimer = Timer(duration, () {
-          canEmit = true;
-        });
+          throttleTimer?.cancel();
+          throttleTimer = Timer(duration, () {
+            canEmit = true;
+          });
+        } catch (e, stackTrace) {
+          _logger.error('Error in throttled event handler for topic $topic', e, stackTrace);
+        }
       }
     });
 
@@ -271,6 +366,105 @@ class EventSystem {
     _subscriptions[token] = subscription;
 
     return token;
+  }
+
+  /// Enable event caching for a topic
+  void enableCaching(String topic) {
+    if (!_cachedEvents.containsKey(topic)) {
+      _cachedEvents[topic] = [];
+    }
+  }
+
+  /// Disable event caching for a topic
+  void disableCaching(String topic) {
+    _cachedEvents.remove(topic);
+  }
+
+  /// Clear cached events for a topic
+  void clearCache(String topic) {
+    if (_cachedEvents.containsKey(topic)) {
+      _cachedEvents[topic]!.clear();
+    }
+  }
+
+  /// Cache an event
+  void _cacheEvent<T>(String topic, T event) {
+    if (!_shouldCacheTopic(topic)) {
+      return;
+    }
+
+    // Ensure cache exists
+    _cachedEvents.putIfAbsent(topic, () => []);
+
+    // Add to cache
+    _cachedEvents[topic]!.add(event);
+
+    // Trim cache if needed
+    if (_cachedEvents[topic]!.length > _maxCacheSize) {
+      _cachedEvents[topic]!.removeAt(0);
+    }
+  }
+
+  /// Deliver cached events to a new subscriber
+  void _deliverCachedEvents<T>(String topic, void Function(T) handler) {
+    if (!_cachedEvents.containsKey(topic)) {
+      return;
+    }
+
+    for (final event in _cachedEvents[topic]!) {
+      if (event is T) {
+        ErrorRecovery.tryCatch(
+              () => handler(event),
+          operationName: 'cached event delivery for $topic',
+        );
+      }
+    }
+  }
+
+  /// Check if a topic should cache events
+  bool _shouldCacheTopic(String topic) {
+    return _cachedEvents.containsKey(topic);
+  }
+
+  /// Pause event delivery
+  void pause() {
+    _isPaused = true;
+    _logger.debug('Event system paused');
+  }
+
+  /// Resume event delivery, optionally processing queued events
+  void resume({bool processQueued = true}) {
+    _isPaused = false;
+    _logger.debug('Event system resumed');
+
+    if (processQueued && _queuedEvents.isNotEmpty) {
+      _logger.debug('Processing ${_queuedEvents.length} queued events');
+
+      // Take a copy to avoid concurrent modification issues
+      final queuedEvents = List<_QueuedEvent>.from(_queuedEvents);
+      _queuedEvents.clear();
+
+      // Process queued events
+      for (final queuedEvent in queuedEvents) {
+        queuedEvent.publish(this);
+      }
+    } else if (!processQueued) {
+      // Clear queued events without processing
+      _queuedEvents.clear();
+    }
+  }
+
+  /// Get a list of active topics
+  List<String> getActiveTopics() {
+    final Set<String> topics = {};
+
+    // Add topics with controllers
+    topics.addAll(_eventControllers.keys);
+
+    // Add topics with cached events
+    topics.addAll(_cachedEvents.keys);
+
+    return topics.toList();
   }
 
   /// Clean up resources
@@ -290,6 +484,8 @@ class EventSystem {
     // Clear collections
     _subscriptions.clear();
     _eventControllers.clear();
+    _cachedEvents.clear();
+    _queuedEvents.clear();
   }
 }
 
@@ -324,5 +520,18 @@ extension DebounceExtension<T> on Stream<T> {
     );
 
     return controller.stream;
+  }
+}
+
+/// Queued event for when system is paused
+class _QueuedEvent<T> {
+  final String topic;
+  final T event;
+
+  _QueuedEvent(this.topic, this.event);
+
+  /// Publish the event to the event system
+  void publish(EventSystem eventSystem) {
+    eventSystem.publish<T>(topic, event);
   }
 }

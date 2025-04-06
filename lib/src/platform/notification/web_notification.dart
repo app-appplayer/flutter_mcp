@@ -5,7 +5,7 @@ import 'package:web/web.dart' as web;
 
 import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
-import '../notification/notification_manager.dart';
+import 'notification_manager.dart';
 import '../../utils/exceptions.dart';
 
 

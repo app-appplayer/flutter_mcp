@@ -5,7 +5,7 @@ import 'package:web/web.dart' as web;
 
 import '../../config/background_config.dart';
 import '../../utils/logger.dart';
-import '../background/background_service.dart';
+import 'background_service.dart';
 
 /// Web background service implementation using Web Workers
 class WebBackgroundService implements BackgroundService {

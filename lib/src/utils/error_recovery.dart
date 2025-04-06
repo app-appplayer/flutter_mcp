@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'logger.dart';
 import 'exceptions.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 /// Error recovery utility for handling retries and fallbacks
 class ErrorRecovery {
@@ -18,11 +20,13 @@ class ErrorRecovery {
       }) async {
     final name = operationName ?? 'operation';
     int attempt = 0;
+    Exception? lastException;
 
     while (true) {
       attempt++;
 
       try {
+        // Execute the operation
         return await operation();
       } catch (e, stackTrace) {
         // If we've reached max retries, rethrow
@@ -40,13 +44,21 @@ class ErrorRecovery {
         }
 
         // Check if we should retry this exception
-        if (retryIf != null && e is Exception && !retryIf(e)) {
-          _logger.error('$name failed with non-retryable exception', e, stackTrace);
-          throw MCPOperationFailedException(
-            'Failed to complete $name with non-retryable exception',
-            e,
-            stackTrace,
-          );
+        if (e is Exception) {
+          lastException = e;
+
+          if (retryIf != null && !retryIf(e)) {
+            _logger.error('$name failed with non-retryable exception', e, stackTrace);
+            throw MCPOperationFailedException(
+              'Failed to complete $name with non-retryable exception',
+              e,
+              stackTrace,
+            );
+          }
+        } else {
+          // For non-Exception errors (like Error types), don't retry
+          _logger.error('$name failed with non-Exception error', e, stackTrace);
+          rethrow;
         }
 
         // Calculate delay for next retry
@@ -60,9 +72,10 @@ class ErrorRecovery {
         _logger.warning(
           '$name failed, retrying in ${delay.inMilliseconds}ms '
               '(attempt $attempt of $maxRetries)',
-          e,
+          lastException,
         );
 
+        // Wait before retry
         await Future.delayed(delay);
       }
     }
@@ -140,30 +153,61 @@ class ErrorRecovery {
     }
   }
 
-  /// Try an operation with circuit breaker pattern
-  static Future<T> tryWithCircuitBreaker<T>(
+  /// Execute operation with jitter for distributed systems
+  static Future<T> tryWithJitter<T>(
+      Future<T> Function() operation, {
+        Duration baseDelay = const Duration(milliseconds: 100),
+        double jitterFactor = 0.5,
+        String? operationName,
+      }) async {
+    final name = operationName ?? 'operation';
+    final random = math.Random();
+
+    // Apply jitter to delay
+    final jitterMs = (baseDelay.inMilliseconds * jitterFactor * random.nextDouble()).toInt();
+    final delay = Duration(milliseconds: baseDelay.inMilliseconds + jitterMs);
+
+    // Wait for jitter delay
+    await Future.delayed(delay);
+
+    try {
+      return await operation();
+    } catch (e, stackTrace) {
+      _logger.error('$name failed after jitter delay', e, stackTrace);
+      throw MCPOperationFailedException(
+        'Failed to complete $name after jitter delay',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Execute operation with saga pattern (compensation actions on failure)
+  static Future<T> tryWithCompensation<T>(
       Future<T> Function() operation,
-      CircuitBreaker circuitBreaker, {
+      Future<void> Function() compensationAction, {
         String? operationName,
       }) async {
     final name = operationName ?? 'operation';
 
-    if (!circuitBreaker.allowRequest) {
-      _logger.warning('Circuit breaker open, skipping $name');
-      throw MCPCircuitBreakerOpenException(
-        'Circuit breaker is open, request for $name rejected',
-      );
-    }
-
     try {
-      final result = await operation();
-      circuitBreaker.recordSuccess();
-      return result;
+      return await operation();
     } catch (e, stackTrace) {
-      circuitBreaker.recordFailure();
-      _logger.error('$name failed, circuit breaker state: ${circuitBreaker.state}', e);
+      _logger.error('$name failed, executing compensation action', e, stackTrace);
+
+      try {
+        await compensationAction();
+        _logger.info('Compensation action for $name completed successfully');
+      } catch (compensationError, compensationStackTrace) {
+        _logger.error(
+          'Compensation action for $name also failed',
+          compensationError,
+          compensationStackTrace,
+        );
+      }
+
       throw MCPOperationFailedException(
-        'Failed to complete $name',
+        'Failed to complete $name and compensation action was executed',
         e,
         stackTrace,
       );
@@ -183,7 +227,11 @@ class ErrorRecovery {
 
     // Exponential backoff with jitter
     final exponentialPart = initialDelay.inMilliseconds * (1 << (attempt - 1));
-    final jitter = (DateTime.now().millisecondsSinceEpoch % 100) - 50; // -50 to +49 ms
+
+    // Add jitter (±10%)
+    final random = math.Random();
+    final jitterFactor = 0.2 * random.nextDouble() - 0.1; // -10% to +10%
+    final jitter = (exponentialPart * jitterFactor).toInt();
     final delayMs = exponentialPart + jitter;
 
     // Enforce maxDelay if provided
@@ -193,6 +241,75 @@ class ErrorRecovery {
 
     return Duration(milliseconds: delayMs);
   }
+
+  /// Wrap synchronous code with error handling
+  static T tryCatch<T>(
+      T Function() operation, {
+        T Function(Exception)? onException,
+        String? operationName,
+      }) {
+    final name = operationName ?? 'operation';
+
+    try {
+      return operation();
+    } catch (e, stackTrace) {
+      _logger.error('$name failed', e, stackTrace);
+
+      if (e is Exception && onException != null) {
+        return onException(e);
+      }
+
+      if (e is Exception) {
+        throw MCPOperationFailedException(
+          'Failed to complete $name',
+          e,
+          stackTrace,
+        );
+      }
+
+      rethrow;
+    }
+  }
+
+  /// Log and re-throw any exception
+  static Future<T> logAndRethrow<T>(
+      Future<T> Function() operation, {
+        String? operationName,
+        bool includeStackTrace = true,
+      }) async {
+    final name = operationName ?? 'operation';
+
+    try {
+      return await operation();
+    } catch (e, stackTrace) {
+      if (includeStackTrace) {
+        _logger.error('$name failed', e, stackTrace);
+      } else {
+        _logger.error('$name failed: ${e.toString()}');
+      }
+
+      // Add debugging info in debug mode
+      if (kDebugMode) {
+        print('Error in $name: $e');
+        print('Stack trace: $stackTrace');
+      }
+
+      rethrow;
+    }
+  }
+}
+
+/// Exception for CircuitBreaker open state
+class MCPCircuitBreakerOpenException extends MCPException {
+  MCPCircuitBreakerOpenException(String message, [dynamic originalError, StackTrace? stackTrace])
+      : super(message, originalError, stackTrace);
+}
+
+/// Circuit breaker states
+enum CircuitBreakerState {
+  closed,
+  open,
+  halfOpen,
 }
 
 /// Circuit breaker implementation
@@ -308,11 +425,4 @@ class CircuitBreaker {
     _successCount = 0;
     _logger.info('Circuit breaker $name transitioned to CLOSED');
   }
-}
-
-/// Circuit breaker states
-enum CircuitBreakerState {
-  closed,
-  open,
-  halfOpen,
 }

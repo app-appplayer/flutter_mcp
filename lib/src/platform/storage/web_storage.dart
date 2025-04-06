@@ -1,11 +1,9 @@
-import 'dart:async';
-import 'dart:typed_data';
-import 'dart:convert';
 import 'package:web/web.dart' as web;
-import 'package:crypto/crypto.dart';
+import 'dart:convert';
 import 'dart:math' as math;
-
-import '../../storage/secure_storage.dart';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
+import 'secure_storage.dart';
 import '../../utils/logger.dart';
 import '../../utils/exceptions.dart';
 
@@ -150,7 +148,8 @@ class WebStorageManager implements SecureStorageManager {
   @override
   Future<bool> containsKey(String key) async {
     try {
-      return _getStorage().getItem('$_prefix$key') != null;
+      final value = _getStorage().getItem('$_prefix$key');
+      return value != null;
     } catch (e, stackTrace) {
       _logger.error(
           'Failed to check if key exists in web storage', e, stackTrace);
@@ -161,28 +160,101 @@ class WebStorageManager implements SecureStorageManager {
     }
   }
 
-  /// Get all keys in storage with the prefix
-  Future<List<String>> getKeys() async {
+  @override
+  Future<void> saveMap(String key, Map<String, dynamic> value) async {
+    _logger.debug('Saving map to web storage: $key');
+
     try {
-      final allKeys = <String>[];
-      final storage = _getStorage();
+      // Convert map to JSON string
+      final jsonString = jsonEncode(value);
 
-      for (int i = 0; i < storage.length; i++) {
-        final key = storage.key(i).toString();
-        if (key.startsWith(_prefix)) {
-          allKeys.add(key.substring(_prefix.length));
-        }
-      }
+      // Save as string with type metadata
+      final metadata = {
+        'v': _storageVersion,
+        'ts': DateTime.now().millisecondsSinceEpoch,
+        't': 'map', // Type is map
+      };
 
-      return allKeys;
+      // Encrypt the JSON string
+      final encryptedValue = _encrypt(jsonString);
+
+      // Create the entry
+      final entry = {
+        'meta': metadata,
+        'data': encryptedValue,
+      };
+
+      // Store as JSON
+      _getStorage().setItem('$_prefix$key', jsonEncode(entry));
     } catch (e, stackTrace) {
-      _logger.error('Failed to get keys from web storage', e, stackTrace);
-      throw MCPException('Failed to get keys from web storage: ${e.toString()}',
-          e, stackTrace);
+      _logger.error('Failed to save map to web storage', e, stackTrace);
+      throw MCPException(
+          'Failed to save map to web storage: ${e.toString()}',
+          e,
+          stackTrace
+      );
     }
   }
 
-  /// Clear all data for this prefix
+  @override
+  Future<Map<String, dynamic>?> readMap(String key) async {
+    _logger.debug('Reading map from web storage: $key');
+
+    try {
+      final value = _getStorage().getItem('$_prefix$key');
+      if (value == null) {
+        return null;
+      }
+
+      // Parse the JSON entry
+      if (value.startsWith('{') && value.endsWith('}')) {
+        try {
+          final entry = jsonDecode(value) as Map<String, dynamic>;
+          final version = entry['meta']?['v'] as int? ?? 1;
+          final type = entry['meta']?['t'];
+
+          // Check if it's a map type or an old format
+          if (type != 'map' && version >= 2 && type != null) {
+            _logger.warning('Value is not a map: $key');
+            return null;
+          }
+
+          // Decrypt the data
+          final decrypted = _decrypt(entry['data'] as String);
+          if (decrypted == null) {
+            return null;
+          }
+
+          // Parse the JSON map
+          return jsonDecode(decrypted) as Map<String, dynamic>;
+        } catch (e) {
+          _logger.error('Failed to parse map value for key: $key', e);
+          return null;
+        }
+      } else {
+        // Legacy format - try to parse as JSON directly
+        try {
+          final legacy = _decryptLegacy(value);
+          if (legacy == null) {
+            return null;
+          }
+          return jsonDecode(legacy) as Map<String, dynamic>;
+        } catch (e) {
+          _logger.error('Failed to parse legacy map for key: $key', e);
+          return null;
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.error('Failed to read map from web storage', e, stackTrace);
+      throw MCPException(
+          'Failed to read map from web storage: ${e.toString()}',
+          e,
+          stackTrace
+      );
+    }
+  }
+
+  @override
   Future<void> clear() async {
     _logger.debug('Clearing all web storage with prefix: $_prefix');
 
@@ -191,9 +263,10 @@ class WebStorageManager implements SecureStorageManager {
       final keysToRemove = <String>[];
 
       // Collect keys first to avoid modification during iteration
+      // Need to iterate through all keys
       for (int i = 0; i < storage.length; i++) {
-        final key = storage.key(i).toString();
-        if (key.startsWith(_prefix)) {
+        final key = storage.key(i);
+        if (key != null && key.startsWith(_prefix)) {
           keysToRemove.add(key);
         }
       }
@@ -209,19 +282,38 @@ class WebStorageManager implements SecureStorageManager {
     }
   }
 
+  /// Get all keys in storage with the prefix
+  Future<List<String>> getKeys() async {
+    try {
+      final allKeys = <String>[];
+      final storage = _getStorage();
+
+      // Iterate through all keys
+      for (int i = 0; i < storage.length; i++) {
+        final key = storage.key(i);
+        if (key != null && key.startsWith(_prefix)) {
+          allKeys.add(key.substring(_prefix.length));
+        }
+      }
+
+      return allKeys;
+    } catch (e, stackTrace) {
+      _logger.error('Failed to get keys from web storage', e, stackTrace);
+      throw MCPException('Failed to get keys from web storage: ${e.toString()}',
+          e, stackTrace);
+    }
+  }
+
   /// Initialize encryption materials
   Future<void> _initializeEncryption() async {
     final storage = _getStorage();
 
     // Check if we already have encryption materials
-    final encryptionKeyKey = '${_prefix}__encryption_key';
-    final encryptionSaltKey = '${_prefix}__encryption_salt';
-    final encryptionIvKey = '${_prefix}__encryption_iv';
-
-    if (storage.getItem(encryptionKeyKey) != null) {
-      _encryptionKey = storage.getItem(encryptionKeyKey)!;
-      _encryptionSalt = base64Decode(storage.getItem(encryptionSaltKey)!);
-      _encryptionIV = base64Decode(storage.getItem(encryptionIvKey)!);
+    final encryptionKey = storage.getItem('${_prefix}__encryption_key');
+    if (encryptionKey != null) {
+      _encryptionKey = encryptionKey;
+      _encryptionSalt = base64Decode(storage.getItem('${_prefix}__encryption_salt')!);
+      _encryptionIV = base64Decode(storage.getItem('${_prefix}__encryption_iv')!);
     } else {
       // Generate new encryption materials
       _encryptionKey = _generateRandomString(32);
@@ -229,9 +321,9 @@ class WebStorageManager implements SecureStorageManager {
       _encryptionIV = _getRandomBytes(16);
 
       // Store encryption materials
-      storage.setItem(encryptionKeyKey, _encryptionKey);
-      storage.setItem(encryptionSaltKey, base64Encode(_encryptionSalt));
-      storage.setItem(encryptionIvKey, base64Encode(_encryptionIV));
+      storage.setItem('${_prefix}__encryption_key', _encryptionKey);
+      storage.setItem('${_prefix}__encryption_salt', base64Encode(_encryptionSalt));
+      storage.setItem('${_prefix}__encryption_iv', base64Encode(_encryptionIV));
 
       // Store the version
       storage.setItem('${_prefix}__storage_version', _storageVersion.toString());
@@ -241,20 +333,22 @@ class WebStorageManager implements SecureStorageManager {
   /// Check if we need to migrate from legacy storage format
   bool _checkIfMigrationNeeded() {
     final storage = _getStorage();
+    final versionString = storage.getItem('${_prefix}__storage_version');
 
-    if (storage.getItem('${_prefix}__storage_version') != null) {
-      final version =
-          int.tryParse(storage.getItem('${_prefix}__storage_version')!) ?? 1;
+    if (versionString != null) {
+      final version = int.tryParse(versionString) ?? 1;
       return version < _storageVersion;
     }
 
+    // Check for legacy keys - iterate through all keys
     for (int i = 0; i < storage.length; i++) {
-      final key = storage.key(i).toString();
-      if (key.startsWith(_prefix) &&
+      final key = storage.key(i);
+      if (key != null && key.startsWith(_prefix) &&
           key != '${_prefix}__encryption_key' &&
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
+
         final value = storage.getItem(key);
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
           return true;
@@ -272,13 +366,15 @@ class WebStorageManager implements SecureStorageManager {
     final storage = _getStorage();
     final legacyKeys = <String>[];
 
+    // Collect legacy keys
     for (int i = 0; i < storage.length; i++) {
-      final key = storage.key(i).toString();
-      if (key.startsWith(_prefix) &&
+      final key = storage.key(i);
+      if (key != null && key.startsWith(_prefix) &&
           key != '${_prefix}__encryption_key' &&
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
+
         final value = storage.getItem(key);
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
           legacyKeys.add(key);
@@ -286,6 +382,7 @@ class WebStorageManager implements SecureStorageManager {
       }
     }
 
+    // Migrate each legacy key
     for (final key in legacyKeys) {
       try {
         final value = storage.getItem(key);
@@ -328,6 +425,9 @@ class WebStorageManager implements SecureStorageManager {
 
   /// Encrypt a string (improved security)
   String _encrypt(String value) {
+    // In a production environment, use a proper encryption library
+    // This is a relatively simple implementation for demonstration
+
     // Create key from the encryption key and salt
     final keyBytes = utf8.encode(_encryptionKey);
     final keyHash = sha256.convert([...keyBytes, ..._encryptionSalt]);

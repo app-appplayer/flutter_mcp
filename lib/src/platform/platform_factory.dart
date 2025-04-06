@@ -2,7 +2,6 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../utils/logger.dart';
-import '../storage/secure_storage.dart';
 
 // Platform-specific implementations
 import 'background/background_service.dart';
@@ -13,17 +12,16 @@ import 'tray/tray_manager.dart';
 import 'background/android_background.dart';
 import 'background/ios_background.dart';
 import 'background/desktop_background.dart';
+import 'background/web_background.dart';
 import 'notification/android_notification.dart';
 import 'notification/ios_notification.dart';
+import 'notification/web_notification.dart';
 import 'notification/desktop_notification.dart';
 import 'tray/macos_tray.dart';
 import 'tray/windows_tray.dart';
 import 'tray/linux_tray.dart';
-
-// Web implementations
-import 'web/web_background.dart';
-import 'web/web_notification.dart';
-import 'web/web_storage.dart';
+import 'storage/secure_storage.dart';
+import 'storage/web_storage.dart';
 
 /// Factory for creating platform-specific implementations
 class PlatformFactory {
@@ -36,17 +34,22 @@ class PlatformFactory {
       return WebBackgroundService();
     }
 
-    if (io.Platform.isAndroid) {
-      _logger.debug('Creating Android background service');
-      return AndroidBackgroundService();
-    } else if (io.Platform.isIOS) {
-      _logger.debug('Creating iOS background service');
-      return IOSBackgroundService();
-    } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
-      _logger.debug('Creating desktop background service');
-      return DesktopBackgroundService();
-    } else {
-      _logger.warning('No background service implementation for current platform');
+    try {
+      if (io.Platform.isAndroid) {
+        _logger.debug('Creating Android background service');
+        return AndroidBackgroundService();
+      } else if (io.Platform.isIOS) {
+        _logger.debug('Creating iOS background service');
+        return IOSBackgroundService();
+      } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
+        _logger.debug('Creating desktop background service');
+        return DesktopBackgroundService();
+      } else {
+        _logger.warning('Unsupported platform for background service, using no-op implementation');
+        return NoOpBackgroundService();
+      }
+    } catch (e) {
+      _logger.warning('Error determining platform for background service: $e, using no-op implementation');
       return NoOpBackgroundService();
     }
   }
@@ -58,17 +61,22 @@ class PlatformFactory {
       return WebNotificationManager();
     }
 
-    if (io.Platform.isAndroid) {
-      _logger.debug('Creating Android notification manager');
-      return AndroidNotificationManager();
-    } else if (io.Platform.isIOS) {
-      _logger.debug('Creating iOS notification manager');
-      return IOSNotificationManager();
-    } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
-      _logger.debug('Creating desktop notification manager');
-      return DesktopNotificationManager();
-    } else {
-      _logger.warning('No notification manager implementation for current platform');
+    try {
+      if (io.Platform.isAndroid) {
+        _logger.debug('Creating Android notification manager');
+        return AndroidNotificationManager();
+      } else if (io.Platform.isIOS) {
+        _logger.debug('Creating iOS notification manager');
+        return IOSNotificationManager();
+      } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
+        _logger.debug('Creating desktop notification manager');
+        return DesktopNotificationManager();
+      } else {
+        _logger.warning('Unsupported platform for notification manager, using no-op implementation');
+        return NoOpNotificationManager();
+      }
+    } catch (e) {
+      _logger.warning('Error determining platform for notification manager: $e, using no-op implementation');
       return NoOpNotificationManager();
     }
   }
@@ -80,17 +88,22 @@ class PlatformFactory {
       return NoOpTrayManager();
     }
 
-    if (io.Platform.isMacOS) {
-      _logger.debug('Creating macOS tray manager');
-      return MacOSTrayManager();
-    } else if (io.Platform.isWindows) {
-      _logger.debug('Creating Windows tray manager');
-      return WindowsTrayManager();
-    } else if (io.Platform.isLinux) {
-      _logger.debug('Creating Linux tray manager');
-      return LinuxTrayManager();
-    } else {
-      _logger.warning('No tray manager implementation for current platform');
+    try {
+      if (io.Platform.isMacOS) {
+        _logger.debug('Creating macOS tray manager');
+        return MacOSTrayManager();
+      } else if (io.Platform.isWindows) {
+        _logger.debug('Creating Windows tray manager');
+        return WindowsTrayManager();
+      } else if (io.Platform.isLinux) {
+        _logger.debug('Creating Linux tray manager');
+        return LinuxTrayManager();
+      } else {
+        _logger.warning('Unsupported platform for tray manager, using no-op implementation');
+        return NoOpTrayManager();
+      }
+    } catch (e) {
+      _logger.warning('Error determining platform for tray manager: $e, using no-op implementation');
       return NoOpTrayManager();
     }
   }
@@ -99,12 +112,10 @@ class PlatformFactory {
   SecureStorageManager createStorageManager() {
     if (kIsWeb) {
       _logger.debug('Creating web storage manager');
-      // Ensure WebStorageManager implements SecureStorageManager
-      return WebStorageManager();
+      return WebStorageManager(useLocalStorage: true);
     } else {
       _logger.debug('Creating secure storage manager');
-      // Use SecureStorageManagerImpl from secure_storage.dart
-      return SecureStorageManagerImpl();
+      return SecureStorageFactory.create();
     }
   }
 
@@ -112,18 +123,56 @@ class PlatformFactory {
   bool supportsFeature(PlatformFeature feature) {
     switch (feature) {
       case PlatformFeature.background:
-        return kIsWeb || io.Platform.isAndroid || io.Platform.isIOS ||
-            io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux;
+        if (kIsWeb) return true; // Limited web background support
+        try {
+          return io.Platform.isAndroid ||
+              io.Platform.isIOS ||
+              io.Platform.isMacOS ||
+              io.Platform.isWindows ||
+              io.Platform.isLinux;
+        } catch (e) {
+          return false;
+        }
 
       case PlatformFeature.notification:
-        return kIsWeb || io.Platform.isAndroid || io.Platform.isIOS ||
-            io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux;
+        if (kIsWeb) return true; // Web notifications API
+        try {
+          return io.Platform.isAndroid ||
+              io.Platform.isIOS ||
+              io.Platform.isMacOS ||
+              io.Platform.isWindows ||
+              io.Platform.isLinux;
+        } catch (e) {
+          return false;
+        }
 
       case PlatformFeature.tray:
-        return !kIsWeb && (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux);
+        if (kIsWeb) return false; // Web doesn't support system tray
+        try {
+          return io.Platform.isMacOS ||
+              io.Platform.isWindows ||
+              io.Platform.isLinux;
+        } catch (e) {
+          return false;
+        }
 
       case PlatformFeature.secureStorage:
         return true; // All platforms have some form of storage
+    }
+  }
+
+  /// Get current platform name
+  String get platformName {
+    if (kIsWeb) return 'Web';
+    try {
+      if (io.Platform.isAndroid) return 'Android';
+      if (io.Platform.isIOS) return 'iOS';
+      if (io.Platform.isWindows) return 'Windows';
+      if (io.Platform.isMacOS) return 'macOS';
+      if (io.Platform.isLinux) return 'Linux';
+      return 'Unknown';
+    } catch (e) {
+      return 'Unknown';
     }
   }
 }

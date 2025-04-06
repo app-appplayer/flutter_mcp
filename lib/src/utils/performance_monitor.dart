@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../utils/logger.dart';
+import '../utils/exceptions.dart';
 
 /// Performance monitoring utility for tracking operation metrics
 class PerformanceMonitor {
@@ -54,7 +55,7 @@ class PerformanceMonitor {
     Duration? autoExportInterval,
     String? exportPath,
   }) {
-    if (maxRecentOperations != null) {
+    if (maxRecentOperations != null && maxRecentOperations != _maxRecentOperations) {
       // Resize operations queue if needed
       while (_recentOperations.length > maxRecentOperations) {
         _recentOperations.removeFirst();
@@ -143,6 +144,16 @@ class PerformanceMonitor {
 
     if (_enableLogging) {
       _logger.debug('Counter $name incremented by $value');
+    }
+  }
+
+  /// Decrement a counter
+  void decrementCounter(String name, [int value = 1]) {
+    _counters.putIfAbsent(name, () => _MetricCounter(name));
+    _counters[name]!.increment(-value);
+
+    if (_enableLogging) {
+      _logger.debug('Counter $name decremented by $value');
     }
   }
 

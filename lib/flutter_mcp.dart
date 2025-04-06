@@ -6,11 +6,12 @@ export 'src/config/job.dart';
 export 'src/utils/exceptions.dart';
 
 import 'dart:async';
-import 'package:mcp_client/mcp_client.dart';
-import 'package:mcp_server/mcp_server.dart';
+import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
+import 'package:mcp_server/mcp_server.dart' hide CallToolResult;
 import 'package:mcp_llm/mcp_llm.dart';
 
 import 'src/config/mcp_config.dart';
+import 'src/config/job.dart';
 import 'src/core/client_manager.dart';
 import 'src/core/server_manager.dart';
 import 'src/core/llm_manager.dart';
@@ -34,10 +35,13 @@ class FlutterMCP {
   // Private constructor
   FlutterMCP._();
 
-  // MCP core managers
+  // MCP core components
   final MCPClientManager _clientManager = MCPClientManager();
   final MCPServerManager _serverManager = MCPServerManager();
   final MCPLlmManager _llmManager = MCPLlmManager();
+
+  // Multiple MCP LLM instances
+  final Map<String, MCPLlm> _mcpLlmInstances = {};
 
   // Platform services
   final PlatformServices _platformServices = PlatformServices();
@@ -73,6 +77,13 @@ class FlutterMCP {
 
     _logger.info('Flutter MCP initialization started');
 
+    // Create default MCP LLM instance
+    final defaultLlm = MCPLlm();
+    _mcpLlmInstances['default'] = defaultLlm;
+
+    // Register default LLM providers on the default instance
+    _registerDefaultProviders(defaultLlm);
+
     // Initialize platform services
     await _platformServices.initialize(config);
 
@@ -98,6 +109,32 @@ class FlutterMCP {
 
     _initialized = true;
     _logger.info('Flutter MCP initialization completed');
+  }
+
+  /// Register default LLM providers
+  void _registerDefaultProviders(MCPLlm mcpLlm) {
+    try {
+      mcpLlm.registerProvider('openai', OpenAiProviderFactory());
+      _logger.debug('Registered OpenAI provider');
+    } catch (e) {
+      _logger.warning('Failed to register OpenAI provider: $e');
+    }
+
+    try {
+      mcpLlm.registerProvider('claude', ClaudeProviderFactory());
+      _logger.debug('Registered Claude provider');
+    } catch (e) {
+      _logger.warning('Failed to register Claude provider: $e');
+    }
+
+    try {
+      mcpLlm.registerProvider('together', TogetherProviderFactory());
+      _logger.debug('Registered Together provider');
+    } catch (e) {
+      _logger.warning('Failed to register Together provider: $e');
+    }
+
+    // Register other providers as needed
   }
 
   /// Start services
@@ -233,7 +270,7 @@ class FlutterMCP {
 
     _logger.info('Creating MCP client: $name');
 
-    // Create client
+    // Create client using McpClient factory
     final clientId = _clientManager.generateId();
     final client = McpClient.createClient(
       name: name,
@@ -255,7 +292,7 @@ class FlutterMCP {
     }
 
     // Register client
-    await _clientManager.registerClient(clientId, client, transport);
+    _clientManager.registerClient(clientId, client, transport);
 
     return clientId;
   }
@@ -267,6 +304,8 @@ class FlutterMCP {
   /// [capabilities]: Server capabilities
   /// [useStdioTransport]: Whether to use stdio transport
   /// [ssePort]: Port for SSE transport
+  /// [fallbackPorts]: Fallback ports if primary port is unavailable
+  /// [authToken]: Authentication token for SSE transport
   ///
   /// Returns ID of the created server
   Future<String> createServer({
@@ -275,6 +314,8 @@ class FlutterMCP {
     ServerCapabilities? capabilities,
     bool useStdioTransport = true,
     int? ssePort,
+    List<int>? fallbackPorts,
+    String? authToken,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -282,7 +323,7 @@ class FlutterMCP {
 
     _logger.info('Creating MCP server: $name');
 
-    // Create server
+    // Create server using McpServer factory
     final serverId = _serverManager.generateId();
     final server = McpServer.createServer(
       name: name,
@@ -299,6 +340,8 @@ class FlutterMCP {
         endpoint: '/sse',
         messagesEndpoint: '/messages',
         port: ssePort,
+        fallbackPorts: fallbackPorts,
+        authToken: authToken,
       );
     }
 
@@ -308,29 +351,74 @@ class FlutterMCP {
     return serverId;
   }
 
+  /// Create a new MCPLlm instance with custom ID
+  ///
+  /// [instanceId]: ID for the new instance
+  /// [registerDefaultProviders]: Whether to register default providers
+  ///
+  /// Returns the newly created MCPLlm instance
+  MCPLlm createMcpLlmInstance(String instanceId, {bool registerDefaultProviders = true}) {
+    if (_mcpLlmInstances.containsKey(instanceId)) {
+      _logger.warning('MCPLlm instance with ID $instanceId already exists');
+      return _mcpLlmInstances[instanceId]!;
+    }
+
+    final mcpLlm = MCPLlm();
+    _mcpLlmInstances[instanceId] = mcpLlm;
+
+    if (registerDefaultProviders) {
+      _registerDefaultProviders(mcpLlm);
+    }
+
+    return mcpLlm;
+  }
+
+  /// Get an existing MCPLlm instance by ID
+  ///
+  /// [instanceId]: ID of the instance to get
+  ///
+  /// Returns the requested MCPLlm instance or null if not found
+  MCPLlm? getMcpLlmInstance(String instanceId) {
+    return _mcpLlmInstances[instanceId];
+  }
+
   /// Create MCP LLM
   ///
   /// [providerName]: LLM provider name
   /// [config]: LLM configuration
+  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
+  /// [storageManager]: Optional storage manager for the LLM
+  /// [retrievalManager]: Optional retrieval manager for RAG capabilities
   ///
   /// Returns ID of the created LLM
   Future<String> createLlm({
     required String providerName,
     required LlmConfiguration config,
+    String mcpLlmInstanceId = 'default',
+    StorageManager? storageManager,
+    RetrievalManager? retrievalManager,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
     }
 
-    _logger.info('Creating MCP LLM: $providerName');
+    // Get MCPLlm instance, create if doesn't exist
+    MCPLlm mcpLlm;
+    if (!_mcpLlmInstances.containsKey(mcpLlmInstanceId)) {
+      _logger.debug('Creating new MCPLlm instance: $mcpLlmInstanceId');
+      mcpLlm = createMcpLlmInstance(mcpLlmInstanceId);
+    } else {
+      mcpLlm = _mcpLlmInstances[mcpLlmInstanceId]!;
+    }
 
-    // Get LLM instance
-    final mcpLlm = MCPLlm.instance;
+    _logger.info('Creating MCP LLM: $providerName on instance $mcpLlmInstanceId');
 
-    // Create LLM client
+    // Create LLM client using specified MCP LLM instance and its factory method
     final llmClient = await mcpLlm.createClient(
       providerName: providerName,
       config: config,
+      storageManager: storageManager,
+      retrievalManager: retrievalManager,
     );
 
     // Generate and register LLM ID
@@ -344,9 +432,13 @@ class FlutterMCP {
   ///
   /// [serverId]: Server ID
   /// [llmId]: LLM ID
+  /// [storageManager]: Optional storage manager
+  /// [retrievalManager]: Optional retrieval manager for RAG capabilities
   Future<void> integrateServerWithLlm({
     required String serverId,
     required String llmId,
+    StorageManager? storageManager,
+    RetrievalManager? retrievalManager,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -364,14 +456,14 @@ class FlutterMCP {
       throw MCPException('LLM not found: $llmId');
     }
 
-    // Create LLM server
-    final llmServer = LlmServer(
-      llmProvider: llmInfo.client.getLlmProvider(),
+    // Create LLM server using MCPLlm's createServer method
+    final llmServer = await llmInfo.mcpLlm.createServer(
+      providerName: llmInfo.mcpLlm.getProviderCapabilities().keys.first, // Get first available provider
+      config: null, // Using null as the LLM client is already configured
       mcpServer: server,
+      storageManager: storageManager,
+      retrievalManager: retrievalManager,
     );
-
-    // Register LLM tools
-    await llmServer.registerLlmTools();
 
     // Register LLM server
     _serverManager.setLlmServer(serverId, llmServer);
@@ -483,7 +575,7 @@ class FlutterMCP {
       String llmId,
       String message, {
         bool enableTools = false,
-        Map<String, dynamic>? parameters,
+        Map<String, dynamic> parameters = const {},
       }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -498,6 +590,240 @@ class FlutterMCP {
       message,
       enableTools: enableTools,
       parameters: parameters,
+    );
+  }
+
+  /// Stream chat with LLM
+  ///
+  /// [llmId]: LLM ID
+  /// [message]: Message content
+  /// [enableTools]: Whether to enable tools
+  /// [parameters]: Additional parameters
+  Stream<LlmResponseChunk> streamChat(
+      String llmId,
+      String message, {
+        bool enableTools = false,
+        Map<String, dynamic> parameters = const {},
+      }) async* {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPException('LLM not found: $llmId');
+    }
+
+    await for (final chunk in llmInfo.client.streamChat(
+      message,
+      enableTools: enableTools,
+      parameters: parameters,
+    )) {
+      yield chunk;
+    }
+  }
+
+  /// Add document to LLM for retrieval
+  ///
+  /// [llmId]: LLM ID
+  /// [document]: Document to add
+  Future<String> addDocument(String llmId, Document document) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPException('LLM not found: $llmId');
+    }
+
+    return await llmInfo.client.addDocument(document);
+  }
+
+  /// Retrieve relevant documents for a query
+  ///
+  /// [llmId]: LLM ID
+  /// [query]: Query text
+  /// [topK]: Number of results to return
+  Future<List<Document>> retrieveRelevantDocuments(
+      String llmId,
+      String query, {
+        int topK = 5,
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPException('LLM not found: $llmId');
+    }
+
+    return await llmInfo.client.retrieveRelevantDocuments(
+      query,
+      topK: topK,
+    );
+  }
+
+  /// Generate embeddings
+  ///
+  /// [llmId]: LLM ID
+  /// [text]: Text to embed
+  Future<List<double>> generateEmbeddings(String llmId, String text) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPException('LLM not found: $llmId');
+    }
+
+    return await llmInfo.client.generateEmbeddings(text);
+  }
+
+  /// Select client for a query
+  ///
+  /// [query]: Query text
+  /// [properties]: Properties to match
+  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
+  LlmClient? selectClient(
+      String query, {
+        Map<String, dynamic>? properties,
+        String mcpLlmInstanceId = 'default',
+      }) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final mcpLlm = _getMcpLlmInstanceOrThrow(mcpLlmInstanceId);
+    return mcpLlm.selectClient(query, properties: properties);
+  }
+
+  /// Fan out query to multiple clients
+  ///
+  /// [query]: Query text
+  /// [enableTools]: Whether to enable tools
+  /// [parameters]: Additional parameters
+  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
+  Future<Map<String, LlmResponse>> fanOutQuery(
+      String query, {
+        bool enableTools = false,
+        Map<String, dynamic> parameters = const {},
+        String mcpLlmInstanceId = 'default',
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final mcpLlm = _getMcpLlmInstanceOrThrow(mcpLlmInstanceId);
+    return await mcpLlm.fanOutQuery(
+      query,
+      enableTools: enableTools,
+      parameters: parameters,
+    );
+  }
+
+  /// Execute parallel query across multiple providers
+  ///
+  /// [query]: Query text
+  /// [providers]: List of provider names
+  /// [enableTools]: Whether to enable tools
+  /// [parameters]: Additional parameters
+  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
+  Future<LlmResponse> executeParallel(
+      String query, {
+        List<String>? providerNames,
+        ResultAggregator? aggregator,
+        Map<String, dynamic> parameters = const {},
+        LlmConfiguration? config,
+        String mcpLlmInstanceId = 'default',
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final mcpLlm = _getMcpLlmInstanceOrThrow(mcpLlmInstanceId);
+    return await mcpLlm.executeParallel(
+      query,
+      providerNames: providerNames,
+      aggregator: aggregator,
+      parameters: parameters,
+      config: config,
+    );
+  }
+
+  /// Helper method to get MCPLlm instance or throw if not found
+  MCPLlm _getMcpLlmInstanceOrThrow(String instanceId) {
+    final mcpLlm = _mcpLlmInstances[instanceId];
+    if (mcpLlm == null) {
+      throw MCPException('MCPLlm instance not found: $instanceId');
+    }
+    return mcpLlm;
+  }
+
+  /// Create chat session
+  ///
+  /// [llmId]: LLM ID
+  /// [sessionId]: Optional session ID
+  /// [title]: Optional session title
+  /// [storageManager]: Optional storage manager for persisting chat history
+  Future<ChatSession> createChatSession(
+      String llmId, {
+        String? sessionId,
+        String? title,
+        StorageManager? storageManager,
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPException('LLM not found: $llmId');
+    }
+
+    // Create a new chat session with storage
+    final storage = storageManager ?? MemoryStorage();
+
+    return ChatSession(
+      llmProvider: llmInfo.client.llmProvider,
+      storageManager: storage,
+      id: sessionId ?? 'session_${DateTime.now().millisecondsSinceEpoch}',
+      title: title ?? 'Chat Session',
+    );
+  }
+
+  /// Create a conversation with multiple sessions
+  ///
+  /// [llmId]: LLM ID
+  /// [title]: Optional conversation title
+  /// [topics]: Optional topics for the conversation
+  /// [storageManager]: Optional storage manager for persisting conversation
+  Future<Conversation> createConversation(
+      String llmId, {
+        String? title,
+        List<String>? topics,
+        StorageManager? storageManager,
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPException('LLM not found: $llmId');
+    }
+
+    // Create a new conversation
+    final storage = storageManager ?? MemoryStorage();
+
+    return Conversation(
+      id: 'conv_${DateTime.now().millisecondsSinceEpoch}',
+      title: title ?? 'Conversation',
+      llmProvider: llmInfo.client.llmProvider,
+      topics: topics ?? [],
+      storageManager: storage,
     );
   }
 
@@ -546,6 +872,46 @@ class FlutterMCP {
     }
 
     return await _platformServices.secureRead(key);
+  }
+
+  /// Show notification
+  ///
+  /// [title]: Notification title
+  /// [body]: Notification body
+  /// [icon]: Optional icon
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? icon,
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    await _platformServices.showNotification(
+      title: title,
+      body: body,
+      icon: icon,
+    );
+  }
+
+  /// Register LLM provider
+  ///
+  /// [name]: Provider name
+  /// [factory]: Provider factory
+  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to register on (defaults to 'default')
+  void registerLlmProvider(
+      String name,
+      LlmProviderFactory factory, {
+        String mcpLlmInstanceId = 'default',
+      }) {
+    final mcpLlm = _getMcpLlmInstanceOrThrow(mcpLlmInstanceId);
+    mcpLlm.registerProvider(name, factory);
+  }
+
+  /// List all registered MCPLlm instances
+  List<String> getAllMcpLlmInstanceIds() {
+    return _mcpLlmInstances.keys.toList();
   }
 
   /// Shutdown all services

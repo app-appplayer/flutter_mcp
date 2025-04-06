@@ -324,7 +324,7 @@ class _MetricTimer {
   int _count = 0;
   int _successCount = 0;
   Duration _totalDuration = Duration.zero;
-  Duration _minDuration = Duration.days(1);
+  Duration _minDuration = Duration(days: 365 * 100);
   Duration _maxDuration = Duration.zero;
   final List<Duration> _recentDurations = [];
   final int _maxRecentDurations = 100;
@@ -388,7 +388,7 @@ class _MetricTimer {
     _count = 0;
     _successCount = 0;
     _totalDuration = Duration.zero;
-    _minDuration = Duration.days(1);
+    _minDuration = Duration(days: 365 * 100);
     _maxDuration = Duration.zero;
     _recentDurations.clear();
   }
@@ -472,8 +472,12 @@ class _ResourceUsage {
     };
 
     if (_capacity != null) {
-      json['capacity'] = _capacity;
-      json['usage_percentage'] = usagePercentage;
+      json['capacity'] = _capacity as Object;
+
+      final percentage = usagePercentage;
+      if (percentage != null) {
+        json['usage_percentage'] = percentage;
+      }
     }
 
     return json;

@@ -1,3 +1,4 @@
+import '../utils/error_recovery.dart';
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
 

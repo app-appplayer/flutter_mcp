@@ -51,20 +51,21 @@ class WindowsTrayManager implements TrayManager {
 
   @override
   Future<void> setContextMenu(List<TrayMenuItem> items) async {
-    _logger.debug('Windows 트레이 컨텍스트 메뉴 설정');
+    _logger.debug('Setting Linux tray context menu');
 
     try {
-      // 네이티브 메뉴 항목 변환
+      // Convert to native menu items
       final nativeItems = _convertToNativeMenuItems(items);
 
-      // 메뉴 초기화
-      final menu = native_tray.Menu();
-      await menu.buildFrom(nativeItems);
+      // Create menu directly with items
+      final menu = native_tray.Menu(
+        items: nativeItems,
+      );
 
-      // 트레이 메뉴 설정
+      // Set tray menu
       await native_tray.TrayManager.instance.setContextMenu(menu);
     } catch (e) {
-      _logger.error('Windows 트레이 컨텍스트 메뉴 설정 오류', e);
+      _logger.error('Failed to set windows tray context menu', e);
     }
   }
 

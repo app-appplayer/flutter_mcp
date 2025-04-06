@@ -1,27 +1,27 @@
 import '../../config/tray_config.dart';
 
-/// 트레이 메뉴 항목
+/// Tray menu item
 class TrayMenuItem {
-  /// 메뉴 항목 라벨
+  /// Menu item label
   final String? label;
 
-  /// 메뉴 항목 클릭 핸들러
+  /// Menu item click handler
   final Function()? onTap;
 
-  /// 메뉴 항목 비활성화 여부
+  /// Whether menu item is disabled
   final bool disabled;
 
-  /// 구분선 여부
+  /// Whether item is a separator
   final bool isSeparator;
 
-  /// 메뉴 항목 생성
+  /// Create menu item
   TrayMenuItem({
     this.label,
     this.onTap,
     this.disabled = false,
   }) : isSeparator = false;
 
-  /// 구분선 생성
+  /// Create separator
   TrayMenuItem.separator()
       : label = null,
         onTap = null,
@@ -29,25 +29,25 @@ class TrayMenuItem {
         isSeparator = true;
 }
 
-/// 트레이 관리자 인터페이스
+/// Tray manager interface
 abstract class TrayManager {
-  /// 트레이 관리자 초기화
+  /// Initialize tray manager
   Future<void> initialize(TrayConfig? config);
 
-  /// 아이콘 설정
+  /// Set icon
   Future<void> setIcon(String path);
 
-  /// 툴팁 설정
+  /// Set tooltip
   Future<void> setTooltip(String tooltip);
 
-  /// 컨텍스트 메뉴 설정
+  /// Set context menu
   Future<void> setContextMenu(List<TrayMenuItem> items);
 
-  /// 리소스 해제
+  /// Dispose resources
   Future<void> dispose();
 }
 
-/// 기능 없는 트레이 관리자 (지원하지 않는 플랫폼용)
+/// No-op tray manager (for platforms without tray support)
 class NoOpTrayManager implements TrayManager {
   @override
   Future<void> initialize(TrayConfig? config) async {}

@@ -2,7 +2,8 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:mcp_client/mcp_client.dart' hide LogLevel;
+import 'package:mcp_client/mcp_client.dart' hide LogLevel, ServerCapabilities;
+import 'package:mcp_server/mcp_server.dart' hide LogLevel;
 import 'package:mcp_llm/mcp_llm.dart' hide LogLevel;
 import 'package:yaml/yaml.dart';
 
@@ -317,10 +318,12 @@ class ConfigLoader {
     for (final item in json) {
       final Map<String, dynamic> serverJson = item as Map<String, dynamic>;
 
-      // Parse server capabilities
+      // Parse server capabilities - convert to mcp_server ServerCapabilities
       ServerCapabilities? capabilities;
       if (serverJson.containsKey('capabilities')) {
         final Map<String, dynamic> capsJson = serverJson['capabilities'] as Map<String, dynamic>;
+
+        // Create using mcp_server ServerCapabilities constructor
         capabilities = ServerCapabilities(
           tools: capsJson['tools'] as bool? ?? false,
           toolsListChanged: capsJson['toolsListChanged'] as bool? ?? false,

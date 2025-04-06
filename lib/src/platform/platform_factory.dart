@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:mcp_llm/mcp_llm.dart';
 
 import '../utils/logger.dart';
+import '../storage/secure_storage.dart';
 
 // Platform-specific implementations
 import 'background/background_service.dart';
@@ -96,13 +97,15 @@ class PlatformFactory {
   }
 
   /// Create appropriate storage manager for current platform
-  StorageManager createStorageManager() {
+  SecureStorageManager createStorageManager() {
     if (kIsWeb) {
       _logger.debug('Creating web storage manager');
+      // Ensure WebStorageManager implements SecureStorageManager
       return WebStorageManager();
     } else {
       _logger.debug('Creating secure storage manager');
-      return SecureStorageImpl();
+      // Use SecureStorageManagerImpl from secure_storage.dart
+      return SecureStorageManagerImpl();
     }
   }
 

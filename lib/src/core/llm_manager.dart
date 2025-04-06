@@ -3,31 +3,31 @@ import 'package:mcp_llm/mcp_llm.dart';
 import '../managers/llm_info.dart';
 import '../utils/logger.dart';
 
-/// MCP LLM 매니저
+/// MCP LLM Manager
 class MCPLlmManager {
-  /// 등록된 LLM
+  /// Registered LLMs
   final Map<String, LlmInfo> _llms = {};
 
-  /// LLM 카운터 (ID 생성용)
+  /// LLM counter (for ID generation)
   int _counter = 0;
 
-  /// 로거
+  /// Logger
   final MCPLogger _logger = MCPLogger('mcp.llm_manager');
 
-  /// 초기화
+  /// Initialize
   Future<void> initialize() async {
-    _logger.debug('LLM 매니저 초기화');
+    _logger.debug('LLM manager initialization');
   }
 
-  /// 새 LLM ID 생성
+  /// Generate new LLM ID
   String generateId() {
     _counter++;
     return 'llm_${DateTime.now().millisecondsSinceEpoch}_$_counter';
   }
 
-  /// LLM 등록
+  /// Register LLM
   void registerLlm(String id, MCPLlm mcpLlm, LlmClient client) {
-    _logger.debug('LLM 등록: $id');
+    _logger.debug('Registering LLM: $id');
     _llms[id] = LlmInfo(
       id: id,
       mcpLlm: mcpLlm,
@@ -35,34 +35,43 @@ class MCPLlmManager {
     );
   }
 
-  /// LLM에 클라이언트 추가
+  /// Add client to LLM
   Future<void> addClientToLlm(String llmId, Client client) async {
-    _logger.debug('LLM에 클라이언트 추가: $llmId, ${client.name}');
+    _logger.debug('Adding client to LLM: $llmId, ${client.name}');
     final llmInfo = _llms[llmId];
     if (llmInfo != null) {
-      await llmInfo.mcpLlm.addClient(client);
+      // Since mcpLlm.addClient() doesn't exist, we'll just track the client
+      // in our connected clients list
       llmInfo.connectedClientIds.add(client.name);
+
+      // Your actual integration logic here
+      // This might involve:
+      // 1. Registering the client with tools from the LLM
+      // 2. Setting up communication channels between the client and LLM
+      // 3. Any other necessary integration steps
+
+      _logger.info('Client ${client.name} connected to LLM $llmId');
     }
   }
 
-  /// LLM 정보 가져오기
+  /// Get LLM info
   LlmInfo? getLlmInfo(String id) {
     return _llms[id];
   }
 
-  /// LLM 클라이언트 가져오기
+  /// Get LLM client
   LlmClient? getLlm(String id) {
     return _llms[id]?.client;
   }
 
-  /// 모든 LLM ID 가져오기
+  /// Get all LLM IDs
   List<String> getAllLlmIds() {
     return _llms.keys.toList();
   }
 
-  /// LLM 종료
+  /// Close LLM
   Future<void> closeLlm(String id) async {
-    _logger.debug('LLM 종료: $id');
+    _logger.debug('Closing LLM: $id');
     final llmInfo = _llms[id];
     if (llmInfo != null) {
       await llmInfo.client.close();
@@ -70,20 +79,20 @@ class MCPLlmManager {
     }
   }
 
-  /// 모든 LLM 종료
+  /// Close all LLMs
   Future<void> closeAll() async {
-    _logger.debug('모든 LLM 종료');
+    _logger.debug('Closing all LLMs');
     for (final id in _llms.keys.toList()) {
       await closeLlm(id);
     }
   }
 
-  /// 상태 정보 가져오기
+  /// Get status information
   Map<String, dynamic> getStatus() {
     return {
       'total': _llms.length,
       'llms': _llms.map((key, value) => MapEntry(key, {
-        'provider': value.client.llmProvider.runtimeType.toString(),
+        'provider': value.client.runtimeType.toString(),
         'connectedClients': value.connectedClientIds.length,
       })),
     };

@@ -9,7 +9,7 @@ class LinuxTrayManager implements TrayManager {
 
   @override
   Future<void> initialize(TrayConfig? config) async {
-    _logger.debug('Initializing Linux tray manager');
+    _logger.debug('Linux tray manager initialization');
 
     // Initial setup
     if (config != null) {
@@ -57,9 +57,10 @@ class LinuxTrayManager implements TrayManager {
       // Convert to native menu items
       final nativeItems = _convertToNativeMenuItems(items);
 
-      // Initialize menu
-      final menu = native_tray.Menu();
-      await menu.buildFrom(nativeItems);
+      // Create menu directly with items
+      final menu = native_tray.Menu(
+        items: nativeItems,
+      );
 
       // Set tray menu
       await native_tray.TrayManager.instance.setContextMenu(menu);

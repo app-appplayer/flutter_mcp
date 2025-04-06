@@ -3,16 +3,16 @@ import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
 import 'notification_manager.dart';
 
-/// iOS 알림 관리자 구현
+/// iOS notification manager implementation
 class IOSNotificationManager implements NotificationManager {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   final MCPLogger _logger = MCPLogger('mcp.ios_notification');
 
   @override
   Future<void> initialize(NotificationConfig? config) async {
-    _logger.debug('iOS 알림 관리자 초기화');
+    _logger.debug('iOS notification manager initialization');
 
-    // iOS 알림 설정
+    // iOS notification settings
     const DarwinInitializationSettings initializationSettingsIOS =
     DarwinInitializationSettings(
       requestSoundPermission: false,
@@ -29,7 +29,7 @@ class IOSNotificationManager implements NotificationManager {
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    // iOS 권한 요청
+    // Request iOS permissions
     await _requestPermissions();
   }
 
@@ -40,18 +40,18 @@ class IOSNotificationManager implements NotificationManager {
     String? icon,
     String id = 'mcp_notification',
   }) async {
-    _logger.debug('iOS 알림 표시: $title');
+    _logger.debug('Showing iOS notification: $title');
 
-    // iOS 알림 설정
-    DarwinNotificationDetails iOSPlatformChannelSpecifics =
-    const DarwinNotificationDetails(
+    // iOS notification settings
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+    DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
     );
 
     NotificationDetails platformChannelSpecifics =
-    NotificationDetails(iOS: iOSPlatformChannelSpecifics);
+    const NotificationDetails(iOS: iOSPlatformChannelSpecifics);
 
     await _notificationsPlugin.show(
       0, // Notification ID
@@ -64,29 +64,31 @@ class IOSNotificationManager implements NotificationManager {
 
   @override
   Future<void> hideNotification(String id) async {
-    _logger.debug('iOS 알림 숨김: $id');
+    _logger.debug('Hiding iOS notification: $id');
 
     await _notificationsPlugin.cancel(0);
   }
 
-  /// 알림 권한 요청
+  /// Request notification permissions
   Future<void> _requestPermissions() async {
-    _logger.debug('iOS 알림 권한 요청');
+    _logger.debug('Requesting iOS notification permissions');
 
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation
-    IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    final iOS = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+
+    if (iOS != null) {
+      await iOS.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
   }
 
-  /// 알림 탭 핸들러
+  /// Notification tap handler
   void _onNotificationTap(NotificationResponse response) {
-    _logger.debug('알림 탭됨: ${response.payload}');
+    _logger.debug('Notification tapped: ${response.payload}');
 
-    // 알림 탭 이벤트 처리
+    // Handle notification tap event
   }
 }

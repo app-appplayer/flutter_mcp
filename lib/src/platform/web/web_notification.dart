@@ -1,5 +1,5 @@
-import 'dart:html' as html;
 import 'dart:async';
+import 'dart:html' as html;
 import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
 import '../notification/notification_manager.dart';
@@ -70,8 +70,8 @@ class WebNotificationManager implements NotificationManager {
     // Close existing notification with same ID
     await hideNotification(id);
 
-    // Create options
-    final options = {
+    // Create notification options
+    final Map<String, dynamic> options = {
       'body': body,
       'tag': id,
     };
@@ -82,7 +82,13 @@ class WebNotificationManager implements NotificationManager {
 
     // Create and display the notification
     try {
-      final notification = html.Notification(title, options);
+      // Use the correct constructor based on the updated API
+      final notification = html.Notification(
+          title,
+          body: options['body'],
+          tag: options['tag'],
+          icon: options['icon']
+      );
       _activeNotifications[id] = notification;
 
       // Set up click handler

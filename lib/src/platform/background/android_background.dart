@@ -3,10 +3,9 @@ import '../../config/background_config.dart';
 import '../../utils/logger.dart';
 import 'background_service.dart';
 
-/// 안드로이드 백그라운드 서비스 구현
+/// Android background service implementation
 class AndroidBackgroundService implements BackgroundService {
   bool _isRunning = false;
-  late FlutterForegroundTask _foregroundTask;
   final MCPLogger _logger = MCPLogger('mcp.android_background');
 
   @override
@@ -14,17 +13,22 @@ class AndroidBackgroundService implements BackgroundService {
 
   @override
   Future<void> initialize(BackgroundConfig? config) async {
-    _logger.debug('안드로이드 백그라운드 서비스 초기화');
-    _foregroundTask = FlutterForegroundTask();
+    _logger.debug('Android background service initialization');
 
-    await _foregroundTask.init(
+    // Initialize the foreground task
+    // Using the correct enum values for the latest flutter_foreground_task API
+    FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: config?.notificationChannelId ?? 'flutter_mcp_channel',
         channelName: config?.notificationChannelName ?? 'MCP Service',
         channelDescription: config?.notificationDescription ?? 'MCP Background Service',
-        channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
-        iconData: config?.notificationIcon,
+        channelImportance: NotificationChannelImportance.LOW,  // Using capital letters for enum
+        priority: NotificationPriority.LOW,  // Using capital letters for enum
+        icon: NotificationIconData(
+          resType: ResourceType.mipmap,
+          resPrefix: ResourcePrefix.ic,
+          name: config?.notificationIcon ?? 'launcher',
+        ),
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: true,
@@ -32,17 +36,20 @@ class AndroidBackgroundService implements BackgroundService {
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
         interval: 5000,
+        isOnceEvent: false,
         autoRunOnBoot: config?.autoStartOnBoot ?? false,
+        allowWakeLock: true,
         allowWifiLock: true,
+        eventAction: 'com.example.action.FOREGROUND_TASK',  // Added required parameter
       ),
-      printDevLog: false,
     );
   }
 
   @override
   Future<bool> start() async {
-    _logger.debug('안드로이드 백그라운드 서비스 시작');
-    bool result = await _foregroundTask.startService(
+    _logger.debug('Starting Android background service');
+
+    bool result = await FlutterForegroundTask.startService(
       notificationTitle: 'MCP Service',
       notificationText: 'Running in background',
       callback: _startCallback,
@@ -54,38 +61,38 @@ class AndroidBackgroundService implements BackgroundService {
 
   @override
   Future<bool> stop() async {
-    _logger.debug('안드로이드 백그라운드 서비스 중지');
-    bool result = await _foregroundTask.stopService();
+    _logger.debug('Stopping Android background service');
+    bool result = await FlutterForegroundTask.stopService();
     _isRunning = false;
     return result;
   }
 }
 
-// 백그라운드에서 실행될 콜백
+// Background callback function that will be executed when the service starts
 @pragma('vm:entry-point')
 void _startCallback() {
   FlutterForegroundTask.setTaskHandler(MCPTaskHandler());
 }
 
-/// MCP 태스크 핸들러
+/// MCP task handler for background processing
 class MCPTaskHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, SendPort? sendPort) async {
-    // 백그라운드 작업 시작
+    // Initialize background task
   }
 
   @override
   Future<void> onEvent(DateTime timestamp, SendPort? sendPort) async {
-    // 주기적으로 실행되는 이벤트
+    // Periodic event handling
   }
 
   @override
   Future<void> onDestroy(DateTime timestamp, SendPort? sendPort) async {
-    // 작업 정리
+    // Cleanup resources
   }
 
   @override
   void onButtonPressed(String id) {
-    // 알림 버튼 클릭 처리
+    // Handle notification button press
   }
 }

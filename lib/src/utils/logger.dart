@@ -62,6 +62,8 @@ class MCPLogger {
   /// Logger instances map
   static final Map<String, MCPLogger> _loggers = {};
 
+  IOSink _output = stderr;
+
   /// Set default log level
   static void setDefaultLevel(LogLevel level) {
     _defaultLevel = level;
@@ -298,7 +300,7 @@ class MCPLogger {
 
     // Console output with optional color
     final consoleMessage = _buildConsoleMessage(timestamp, levelStr, message, error, stackTrace);
-    print(consoleMessage);
+    _output.writeln(consoleMessage);
 
     // File logging with rotation check
     if (_logToFile && _logFileSink != null) {

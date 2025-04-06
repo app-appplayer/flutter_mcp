@@ -21,6 +21,9 @@ class PerformanceMonitor {
   final Queue<_OperationRecord> _recentOperations = Queue();
   final int _maxRecentOperations;
 
+  // Topics that should cache events
+  final Set<String> _cachingTopics = {};
+
   // Monitoring configuration
   final bool _enableLogging;
   final bool _enableMetricsExport;
@@ -83,6 +86,18 @@ class PerformanceMonitor {
       // Update export timer interval
       _setupExportTimer(autoExportInterval);
     }
+  }
+
+  /// Enable event caching for a topic
+  void enableCaching(String topic) {
+    _cachingTopics.add(topic);
+    _logger.debug('Enabled caching for topic: $topic');
+  }
+
+  /// Disable event caching for a topic
+  void disableCaching(String topic) {
+    _cachingTopics.remove(topic);
+    _logger.debug('Disabled caching for topic: $topic');
   }
 
   /// Start a timer for a specific operation
@@ -192,6 +207,11 @@ class PerformanceMonitor {
     }
   }
 
+  /// Check if a topic has caching enabled
+  bool hasCachingEnabled(String topic) {
+    return _cachingTopics.contains(topic);
+  }
+
   /// Get metrics report
   Map<String, dynamic> getMetricsReport() {
     final now = DateTime.now();
@@ -202,6 +222,7 @@ class PerformanceMonitor {
       'timers': _timers.map((key, value) => MapEntry(key, value.toJson())),
       'resources': _resources.map((key, value) => MapEntry(key, value.toJson())),
       'recent_operations': _recentOperations.map((op) => op.toJson()).toList(),
+      'caching_topics': _cachingTopics.toList(),
     };
   }
 

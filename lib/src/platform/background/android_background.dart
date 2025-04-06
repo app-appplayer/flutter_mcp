@@ -52,6 +52,7 @@ class AndroidBackgroundService implements BackgroundService {
 
     if (await FlutterForegroundTask.isRunningService) {
       _logger.debug('Service is already running');
+      _isRunning = true;
       return true;
     }
 
@@ -75,8 +76,9 @@ class AndroidBackgroundService implements BackgroundService {
   Future<bool> stop() async {
     _logger.debug('Android background service stopping');
 
-    if (!_isRunning) {
+    if (!await FlutterForegroundTask.isRunningService) {
       _logger.debug('Service is not running');
+      _isRunning = false;
       return true;
     }
 

@@ -1,8 +1,5 @@
 import 'dart:io';
 import '../config/mcp_config.dart';
-import '../config/background_config.dart';
-import '../config/notification_config.dart';
-import '../config/tray_config.dart';
 import '../utils/logger.dart';
 import '../utils/platform_utils.dart';
 

@@ -1,6 +1,5 @@
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:mcp_llm/mcp_llm.dart';
 
 import '../utils/logger.dart';
 import '../storage/secure_storage.dart';

@@ -2,7 +2,6 @@ import 'package:tray_manager/tray_manager.dart' as native_tray;
 import 'dart:ui' show Rect;
 
 import '../../flutter_mcp.dart';
-import '../utils/logger.dart';
 import '../platform/tray/tray_manager.dart';
 
 /// Linux tray manager implementation

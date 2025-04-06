@@ -20,8 +20,8 @@ class WindowsTrayManager implements TrayManager {
   final List<TrayEventListener> _eventListeners = [];
 
   // Current tray state
-  String? _currentIconPath;
-  String? _currentTooltip;
+  //String? _currentIconPath;
+  //String? _currentTooltip;
 
   // Native implementation event listener
   native_tray.TrayListener? _nativeListener;
@@ -64,7 +64,7 @@ class WindowsTrayManager implements TrayManager {
 
     try {
       await native_tray.TrayManager.instance.setIcon(path);
-      _currentIconPath = path;
+      //_currentIconPath = path;
     } catch (e, stackTrace) {
       _logger.error('Failed to set Windows tray icon', e, stackTrace);
       throw MCPException('Failed to set Windows tray icon: ${e.toString()}', e, stackTrace);
@@ -77,7 +77,7 @@ class WindowsTrayManager implements TrayManager {
 
     try {
       await native_tray.TrayManager.instance.setToolTip(tooltip);
-      _currentTooltip = tooltip;
+      //_currentTooltip = tooltip;
     } catch (e, stackTrace) {
       _logger.error('Failed to set Windows tray tooltip', e, stackTrace);
       throw MCPException('Failed to set Windows tray tooltip: ${e.toString()}', e, stackTrace);

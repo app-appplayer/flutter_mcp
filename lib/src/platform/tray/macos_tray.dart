@@ -20,8 +20,8 @@ class MacOSTrayManager implements TrayManager {
   final List<TrayEventListener> _eventListeners = [];
 
   // Current tray state
-  String? _currentIconPath;
-  String? _currentTooltip;
+  //String? _currentIconPath;
+  //String? _currentTooltip;
 
   // Native implementation event listener
   native_tray.TrayListener? _nativeListener;
@@ -67,7 +67,7 @@ class MacOSTrayManager implements TrayManager {
 
     try {
       await native_tray.TrayManager.instance.setIcon(path);
-      _currentIconPath = path;
+      //_currentIconPath = path;
     } catch (e, stackTrace) {
       _logger.error('Failed to set macOS tray icon', e, stackTrace);
       throw MCPException(
@@ -81,7 +81,7 @@ class MacOSTrayManager implements TrayManager {
 
     try {
       await native_tray.TrayManager.instance.setToolTip(tooltip);
-      _currentTooltip = tooltip;
+      //_currentTooltip = tooltip;
     } catch (e, stackTrace) {
       _logger.error('Failed to set macOS tray tooltip', e, stackTrace);
       throw MCPException(

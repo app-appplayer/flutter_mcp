@@ -1,5 +1,8 @@
 import 'dart:async';
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'package:web/web.dart' as web;
+
 import '../../config/background_config.dart';
 import '../../utils/logger.dart';
 import '../background/background_service.dart';
@@ -7,7 +10,7 @@ import '../background/background_service.dart';
 /// Web background service implementation using Web Workers
 class WebBackgroundService implements BackgroundService {
   bool _isRunning = false;
-  html.Worker? _worker;
+  web.Worker? _worker;
   Timer? _periodicTimer;
   final MCPLogger _logger = MCPLogger('mcp.web_background');
 
@@ -88,7 +91,7 @@ class WebBackgroundService implements BackgroundService {
     _logger.debug('Starting web background service with Web Worker');
 
     // Create a blob URL with the worker script
-    final String workerScript = '''
+    final workerScript = '''
       let intervalId = null;
       
       self.onmessage = function(e) {
@@ -108,18 +111,30 @@ class WebBackgroundService implements BackgroundService {
       };
     ''';
 
-    final blob = html.Blob([workerScript], 'application/javascript');
-    final url = html.Url.createObjectUrlFromBlob(blob);
+    final blob = web.Blob(
+        [workerScript.toJS].toJS as JSArray<web.BlobPart>,
+        web.BlobPropertyBag(type: 'application/javascript')
+    );
+
+    final url = web.URL.createObjectURL(blob);
 
     // Create and start the worker
-    _worker = html.Worker(url);
-    _worker!.onMessage.listen(_handleWorkerMessage);
+    _worker = web.Worker(url.toString().toJS);
+
+    // Use addEventListener instead of onMessage
+    _worker!.addEventListener('message', ((event) {
+      final messageEvent = event as web.MessageEvent;
+      final data = messageEvent.data.dartify();
+      _handleWorkerMessage(data);
+    }).toJS);
 
     // Start the worker
-    _worker!.postMessage({
-      'command': 'start',
-      'interval': _intervalMs
-    });
+    _worker!.postMessage(
+        {
+          'command': 'start',
+          'interval': _intervalMs
+        }.jsify()
+    );
   }
 
   /// Start background service using a Timer (fallback)
@@ -133,9 +148,7 @@ class WebBackgroundService implements BackgroundService {
   }
 
   /// Handle messages from the Web Worker
-  void _handleWorkerMessage(html.MessageEvent event) {
-    final data = event.data;
-
+  void _handleWorkerMessage(dynamic data) {
     if (data['type'] == 'task') {
       _performBackgroundTask();
     } else if (data['type'] == 'started') {
@@ -161,9 +174,8 @@ class WebBackgroundService implements BackgroundService {
   /// Check if the browser supports Web Workers
   bool _supportsWebWorkers() {
     try {
-      return html.Worker.supported;
+      return web.window.hasProperty('Worker'.toJS).toDart;
     } catch (e) {
       return false;
     }
-  }
-}
+  }}

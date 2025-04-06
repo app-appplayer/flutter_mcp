@@ -1,18 +1,31 @@
 import 'dart:async';
-import 'dart:html' as html;
-import 'dart:js' as js;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'package:web/web.dart' as web;
+
 import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
 import '../notification/notification_manager.dart';
 import '../../utils/exceptions.dart';
 
-/// Web notification manager implementation
+
+@JS()
+external Object newObject();
+
+@JS('Object.defineProperty')
+external Object defineProperty(
+    Object o,
+    String propertyKey,
+    Object attributes,
+    );
+
+/// Web notification manager implementation using modern Web APIs
 class WebNotificationManager implements NotificationManager {
   final MCPLogger _logger = MCPLogger('mcp.web_notification');
   bool _permissionGranted = false;
 
   /// Map of active notifications
-  final Map<String, html.Notification> _activeNotifications = {};
+  final Map<String, web.Notification> _activeNotifications = {};
 
   /// Notification click handlers
   final Map<String, Function(String id, Map<String, dynamic>? data)> _clickHandlers = {};
@@ -21,7 +34,7 @@ class WebNotificationManager implements NotificationManager {
   String? _defaultIcon;
 
   /// Default notification duration in seconds
-  int _defaultDurationSeconds = 5;
+  //int _defaultDurationSeconds = 5;
 
   @override
   Future<void> initialize(NotificationConfig? config) async {
@@ -39,7 +52,7 @@ class WebNotificationManager implements NotificationManager {
     }
 
     // Check permission status
-    final permission = html.Notification.permission;
+    final permission = web.Notification.permission;
 
     if (permission == 'granted') {
       _permissionGranted = true;
@@ -72,8 +85,8 @@ class WebNotificationManager implements NotificationManager {
     if (!_permissionGranted) {
       _logger.debug('Requesting notification permission');
 
-      final permission = await html.Notification.requestPermission();
-      _permissionGranted = permission == 'granted';
+      final permission = await web.Notification.requestPermission().toDart;
+      _permissionGranted = permission == 'granted'.toJS;
 
       if (!_permissionGranted) {
         _logger.warning('Notification permission not granted');
@@ -85,49 +98,38 @@ class WebNotificationManager implements NotificationManager {
     await hideNotification(id);
 
     // Create notification options
-    final Map<String, dynamic> options = {
+    final options = <String, Object?>{
       'body': body,
       'tag': id,
-      'requireInteraction': true,  // Keep notification until user dismisses it
+      'requireInteraction': true,
     };
+    final jsOptions = newObject();
+    options.forEach((key, value) {
+      if (value != null) {
+        defineProperty(jsOptions, key, <String, Object?>{'value': value});
+      }
+    });
 
     // Set icon (use default if not provided)
     if (icon != null) {
-      options['icon'] = icon;
+      defineProperty(jsOptions, 'icon', <String, Object?>{'value': icon});
     } else if (_defaultIcon != null) {
-      options['icon'] = _defaultIcon;
+      defineProperty(jsOptions, 'icon', <String, Object?>{'value': _defaultIcon!});
     }
 
-    // Add badge for mobile devices
-    options['badge'] = icon ?? _defaultIcon ?? '';
-
     // Store additional data for later retrieval
-    final notificationData = additionalData ?? {};
+    //final notificationData = additionalData ?? {};
 
-    // Create and display the notification
     try {
-      // Create notification with correct properties
-      final notification = html.Notification(
-          title,
-          body: options['body'],
-          icon: options['icon'],
-          tag: options['tag']
-      );
-
+      // Create and display the notification
+      final notification = web.Notification(title, jsOptions as web.NotificationOptions);
       _activeNotifications[id] = notification;
 
       // Set up click handler
-      notification.onClick.listen((_) {
+      notification.onclick = ((event) {
         _logger.debug('Notification clicked: $id');
-        _handleNotificationClick(id, notificationData);
-      });
-
-      // Auto-close after default duration if requireInteraction is false
-      if (!options['requireInteraction']) {
-        Timer(Duration(seconds: _defaultDurationSeconds), () {
-          hideNotification(id);
-        });
-      }
+        _handleNotificationTap(id);
+      }).toJS;
 
       // Return immediately as the notification has been displayed
       return;
@@ -173,7 +175,7 @@ class WebNotificationManager implements NotificationManager {
 
   /// Set the default auto-close duration
   void setDefaultDuration(int seconds) {
-    _defaultDurationSeconds = seconds;
+    //_defaultDurationSeconds = seconds;
   }
 
   /// Request notification permission explicitly
@@ -183,8 +185,8 @@ class WebNotificationManager implements NotificationManager {
     }
 
     _logger.debug('Explicitly requesting notification permission');
-    final permission = await html.Notification.requestPermission();
-    _permissionGranted = permission == 'granted';
+    final permission = await web.Notification.requestPermission().toDart;
+    _permissionGranted = permission == 'granted'.toJS;
 
     return _permissionGranted;
   }
@@ -192,31 +194,45 @@ class WebNotificationManager implements NotificationManager {
   /// Check if notifications are supported
   bool _isSupported() {
     try {
-      return html.Notification.supported;
+      return web.window.hasProperty('Notification'.toJS).toDart;
     } catch (e) {
       return false;
     }
   }
 
   /// Handle notification click
-  void _handleNotificationClick(String id, Map<String, dynamic> data) {
+  void _handleNotificationTap(String id) {
+    // Get the stored data for this notification
+    final data = _activeNotifications[id];
+
+    // Try focusing the window when notification is clicked
+    try {
+      web.window.focus();
+    } catch (e) {
+      _logger.warning('Window focus failed: $e');
+    }
+
     // Find specific handler for this ID
     if (_clickHandlers.containsKey(id)) {
-      _clickHandlers[id]!(id, data);
+      _clickHandlers[id]!(id, _convertNotificationToMap(data));
       return;
     }
 
     // Find default handler
     if (_clickHandlers.containsKey('default')) {
-      _clickHandlers['default']!(id, data);
+      _clickHandlers['default']!(id, _convertNotificationToMap(data));
     }
+  }
 
-    // Focus the window when notification is clicked
-    try {
-      js.context.callMethod('focus');
-    } catch (e) {
-      _logger.warning('Window focus failed: $e');
-    }
+  /// Convert Notification to a map for easier data handling
+  Map<String, dynamic>? _convertNotificationToMap(web.Notification? notification) {
+    if (notification == null) return null;
+
+    return {
+      'title': notification.title,
+      'body': notification.body,
+      'tag': notification.tag,
+    };
   }
 
   /// Check if notification permission is granted

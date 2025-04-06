@@ -1,8 +1,10 @@
-import 'dart:html' as html;
-import 'dart:convert';
-import 'dart:math' as math;
+import 'dart:async';
 import 'dart:typed_data';
+import 'dart:convert';
+import 'package:web/web.dart' as web;
 import 'package:crypto/crypto.dart';
+import 'dart:math' as math;
+
 import '../../storage/secure_storage.dart';
 import '../../utils/logger.dart';
 import '../../utils/exceptions.dart';
@@ -78,7 +80,7 @@ class WebStorageManager implements SecureStorageManager {
       };
 
       // Store as JSON
-      _getStorage()['$_prefix$key'] = jsonEncode(entry);
+      _getStorage().setItem('$_prefix$key', jsonEncode(entry));
     } catch (e, stackTrace) {
       _logger.error('Failed to save string to web storage', e, stackTrace);
       throw MCPException(
@@ -93,7 +95,7 @@ class WebStorageManager implements SecureStorageManager {
     _logger.debug('Reading string from web storage: $key');
 
     try {
-      final value = _getStorage()['$_prefix$key'];
+      final value = _getStorage().getItem('$_prefix$key');
       if (value == null) {
         return null;
       }
@@ -134,7 +136,7 @@ class WebStorageManager implements SecureStorageManager {
     _logger.debug('Deleting key from web storage: $key');
 
     try {
-      _getStorage().remove('$_prefix$key');
+      _getStorage().removeItem('$_prefix$key');
       return true;
     } catch (e, stackTrace) {
       _logger.error('Failed to delete key from web storage', e, stackTrace);
@@ -148,7 +150,7 @@ class WebStorageManager implements SecureStorageManager {
   @override
   Future<bool> containsKey(String key) async {
     try {
-      return _getStorage().containsKey('$_prefix$key');
+      return _getStorage().getItem('$_prefix$key') != null;
     } catch (e, stackTrace) {
       _logger.error(
           'Failed to check if key exists in web storage', e, stackTrace);
@@ -165,7 +167,8 @@ class WebStorageManager implements SecureStorageManager {
       final allKeys = <String>[];
       final storage = _getStorage();
 
-      for (final key in storage.keys) {
+      for (int i = 0; i < storage.length; i++) {
+        final key = storage.key(i).toString();
         if (key.startsWith(_prefix)) {
           allKeys.add(key.substring(_prefix.length));
         }
@@ -180,7 +183,6 @@ class WebStorageManager implements SecureStorageManager {
   }
 
   /// Clear all data for this prefix
-  /// Clear all data for this prefix
   Future<void> clear() async {
     _logger.debug('Clearing all web storage with prefix: $_prefix');
 
@@ -189,7 +191,8 @@ class WebStorageManager implements SecureStorageManager {
       final keysToRemove = <String>[];
 
       // Collect keys first to avoid modification during iteration
-      for (final key in storage.keys) {
+      for (int i = 0; i < storage.length; i++) {
+        final key = storage.key(i).toString();
         if (key.startsWith(_prefix)) {
           keysToRemove.add(key);
         }
@@ -197,7 +200,7 @@ class WebStorageManager implements SecureStorageManager {
 
       // Remove collected keys
       for (final key in keysToRemove) {
-        storage.remove(key);
+        storage.removeItem(key);
       }
     } catch (e, stackTrace) {
       _logger.error('Failed to clear web storage', e, stackTrace);
@@ -211,10 +214,14 @@ class WebStorageManager implements SecureStorageManager {
     final storage = _getStorage();
 
     // Check if we already have encryption materials
-    if (storage.containsKey('${_prefix}__encryption_key')) {
-      _encryptionKey = storage['${_prefix}__encryption_key']!;
-      _encryptionSalt = base64Decode(storage['${_prefix}__encryption_salt']!);
-      _encryptionIV = base64Decode(storage['${_prefix}__encryption_iv']!);
+    final encryptionKeyKey = '${_prefix}__encryption_key';
+    final encryptionSaltKey = '${_prefix}__encryption_salt';
+    final encryptionIvKey = '${_prefix}__encryption_iv';
+
+    if (storage.getItem(encryptionKeyKey) != null) {
+      _encryptionKey = storage.getItem(encryptionKeyKey)!;
+      _encryptionSalt = base64Decode(storage.getItem(encryptionSaltKey)!);
+      _encryptionIV = base64Decode(storage.getItem(encryptionIvKey)!);
     } else {
       // Generate new encryption materials
       _encryptionKey = _generateRandomString(32);
@@ -222,12 +229,12 @@ class WebStorageManager implements SecureStorageManager {
       _encryptionIV = _getRandomBytes(16);
 
       // Store encryption materials
-      storage['${_prefix}__encryption_key'] = _encryptionKey;
-      storage['${_prefix}__encryption_salt'] = base64Encode(_encryptionSalt);
-      storage['${_prefix}__encryption_iv'] = base64Encode(_encryptionIV);
+      storage.setItem(encryptionKeyKey, _encryptionKey);
+      storage.setItem(encryptionSaltKey, base64Encode(_encryptionSalt));
+      storage.setItem(encryptionIvKey, base64Encode(_encryptionIV));
 
       // Store the version
-      storage['${_prefix}__storage_version'] = _storageVersion.toString();
+      storage.setItem('${_prefix}__storage_version', _storageVersion.toString());
     }
   }
 
@@ -235,19 +242,20 @@ class WebStorageManager implements SecureStorageManager {
   bool _checkIfMigrationNeeded() {
     final storage = _getStorage();
 
-    if (storage.containsKey('${_prefix}__storage_version')) {
+    if (storage.getItem('${_prefix}__storage_version') != null) {
       final version =
-          int.tryParse(storage['${_prefix}__storage_version']!) ?? 1;
+          int.tryParse(storage.getItem('${_prefix}__storage_version')!) ?? 1;
       return version < _storageVersion;
     }
 
-    for (final key in storage.keys) {
+    for (int i = 0; i < storage.length; i++) {
+      final key = storage.key(i).toString();
       if (key.startsWith(_prefix) &&
           key != '${_prefix}__encryption_key' &&
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
-        final value = storage[key];
+        final value = storage.getItem(key);
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
           return true;
         }
@@ -264,13 +272,14 @@ class WebStorageManager implements SecureStorageManager {
     final storage = _getStorage();
     final legacyKeys = <String>[];
 
-    for (final key in storage.keys) {
+    for (int i = 0; i < storage.length; i++) {
+      final key = storage.key(i).toString();
       if (key.startsWith(_prefix) &&
           key != '${_prefix}__encryption_key' &&
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
-        final value = storage[key];
+        final value = storage.getItem(key);
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
           legacyKeys.add(key);
         }
@@ -279,7 +288,7 @@ class WebStorageManager implements SecureStorageManager {
 
     for (final key in legacyKeys) {
       try {
-        final value = storage[key];
+        final value = storage.getItem(key);
         if (value != null) {
           final decrypted = _decryptLegacy(value);
           if (decrypted != null) {
@@ -291,14 +300,14 @@ class WebStorageManager implements SecureStorageManager {
       }
     }
 
-    storage['${_prefix}__storage_version'] = _storageVersion.toString();
+    storage.setItem('${_prefix}__storage_version', _storageVersion.toString());
   }
 
   /// Get the appropriate storage based on settings
-  html.Storage _getStorage() {
+  web.Storage _getStorage() {
     return _useLocalStorage
-        ? html.window.localStorage
-        : html.window.sessionStorage;
+        ? web.window.localStorage
+        : web.window.sessionStorage;
   }
 
   /// Generate a random string of specified length
@@ -319,9 +328,6 @@ class WebStorageManager implements SecureStorageManager {
 
   /// Encrypt a string (improved security)
   String _encrypt(String value) {
-    // In a production environment, use a proper encryption library
-    // This is a relatively simple implementation for demonstration
-
     // Create key from the encryption key and salt
     final keyBytes = utf8.encode(_encryptionKey);
     final keyHash = sha256.convert([...keyBytes, ..._encryptionSalt]);
@@ -335,8 +341,8 @@ class WebStorageManager implements SecureStorageManager {
 
     for (int i = 0; i < valueBytes.length; i++) {
       encrypted[i] = valueBytes[i] ^
-          keyDigest[i % keyDigest.length] ^
-          _encryptionIV[i % _encryptionIV.length];
+      keyDigest[i % keyDigest.length] ^
+      _encryptionIV[i % _encryptionIV.length];
     }
 
     // Return Base64 encoded result
@@ -359,8 +365,8 @@ class WebStorageManager implements SecureStorageManager {
 
       for (int i = 0; i < encrypted.length; i++) {
         decrypted[i] = encrypted[i] ^
-            keyDigest[i % keyDigest.length] ^
-            _encryptionIV[i % _encryptionIV.length];
+        keyDigest[i % keyDigest.length] ^
+        _encryptionIV[i % _encryptionIV.length];
       }
 
       // Convert bytes back to string

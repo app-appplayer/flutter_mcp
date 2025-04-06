@@ -1,3 +1,11 @@
+## 0.0.2
+
+* Bug fixes and improvements
+    * Fixed issues with background service initialization
+    * Improved error handling and logging
+    * Enhanced performance monitoring features
+    * Updated documentation for better clarity
+  
 ## 0.0.1
 
 * Initial release

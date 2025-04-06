@@ -18,6 +18,8 @@ A Flutter plugin for integrating Large Language Models (LLMs) with [Model Contex
 
 - **Advanced Capabilities**:
   - Task scheduling
+  - Memory management with high-memory protections
+  - Performance monitoring and metrics
   - Configurable logging
   - Cross-platform support: Android, iOS, macOS, Windows, Linux
 
@@ -29,7 +31,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_mcp: ^0.0.1
+  flutter_mcp: ^0.0.2
 ```
 
 Or install via command line:
@@ -59,6 +61,8 @@ void main() async {
       useNotification: true,
       useTray: true,
       autoStart: true,
+      enablePerformanceMonitoring: true, // Enable performance monitoring
+      highMemoryThresholdMB: 512, // Set memory threshold for automatic cleanup
       // Auto-start server configuration
       autoStartServer: [
         MCPServerConfig(
@@ -97,10 +101,23 @@ void main() async {
         MCPJob.every(
           Duration(minutes: 15),
           task: () {
-            log('This runs every 15 minutes');
+            // This runs every 15 minutes
           },
         ),
       ],
+      // System tray configuration
+      tray: TrayConfig(
+        tooltip: 'My MCP App',
+        menuItems: [
+          TrayMenuItem(label: 'Show', onTap: () {
+            // Show window code
+          }),
+          TrayMenuItem.separator(),
+          TrayMenuItem(label: 'Exit', onTap: () {
+            // Exit app code
+          }),
+        ],
+      ),
     ),
   );
   
@@ -137,7 +154,7 @@ final llmId = await FlutterMCP.instance.createLlm(
   providerName: 'openai',
   config: LlmConfiguration(
     apiKey: 'your-api-key',
-    model: 'gpt-4',
+    model: 'gpt-4o',
   ),
 );
 
@@ -156,12 +173,23 @@ await FlutterMCP.instance.integrateClientWithLlm(
 FlutterMCP.instance.connectServer(serverId);
 await FlutterMCP.instance.connectClient(clientId);
 
-// Use components
+// Use components with memory-efficient caching
 final response = await FlutterMCP.instance.chat(
   llmId,
   'Hello, how are you today?',
+  useCache: true, // Enable caching for repeated questions
 );
-log('AI: ${response.text}');
+print('AI: ${response.text}');
+
+// Stream responses from LLM
+Stream<LlmResponseChunk> responseStream = FlutterMCP.instance.streamChat(
+  llmId,
+  'Write me a short story about robots',
+);
+
+responseStream.listen((chunk) {
+  print(chunk.textChunk); // Process each chunk as it arrives
+});
 
 // Clean up when done
 await FlutterMCP.instance.shutdown();
@@ -178,6 +206,34 @@ await FlutterMCP.instance.shutdown();
 | Linux    | ✅                | ✅             | ✅          |
 
 ## Configuration Options
+
+### MCPConfig Options
+
+```dart
+MCPConfig(
+  appName: 'My App',
+  appVersion: '1.0.0',
+  useBackgroundService: true,
+  useNotification: true,
+  useTray: true,
+  secure: true,
+  lifecycleManaged: true,
+  autoStart: true,
+  loggingLevel: LogLevel.debug,
+  enablePerformanceMonitoring: true,
+  enableMetricsExport: false,
+  highMemoryThresholdMB: 512,
+  lowBatteryWarningThreshold: 20,
+  maxConnectionRetries: 3,
+  llmRequestTimeoutMs: 60000,
+  background: BackgroundConfig(...),
+  notification: NotificationConfig(...),
+  tray: TrayConfig(...),
+  schedule: [...],
+  autoStartServer: [...],
+  autoStartClient: [...],
+)
+```
 
 ### Background Service Configuration
 
@@ -223,6 +279,43 @@ TrayConfig(
 
 ## Advanced Usage
 
+### Memory-Efficient Processing
+
+```dart
+// Process large data in chunks to avoid memory spikes
+final documents = [...]; // List of documents
+final processedDocs = await FlutterMCP.instance.processDocumentsInChunks(
+  documents,
+  (doc) async {
+    // Process each document
+    return processedDocument;
+  },
+  chunkSize: 10,
+  pauseBetweenChunks: Duration(milliseconds: 100),
+);
+```
+
+### Memory-Aware Caching
+
+```dart
+// Chat with memory-aware caching for faster responses
+// The cache will automatically reduce in size during high memory conditions
+final response = await FlutterMCP.instance.chat(
+  llmId,
+  userMessage,
+  useCache: true,
+);
+```
+
+### Performance Monitoring
+
+```dart
+// Get system performance metrics
+final status = FlutterMCP.instance.getSystemStatus();
+print('Memory usage: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
+print('LLM response time: ${status['performanceMetrics']['timers']['llm.chat']['avg_ms']}ms');
+```
+
 ### Secure Storage
 
 ```dart
@@ -246,6 +339,16 @@ final jobId = FlutterMCP.instance.addScheduledJob(
   ),
 );
 
+// Schedule one-time tasks
+FlutterMCP.instance.addScheduledJob(
+  MCPJob.once(
+    Duration(minutes: 5),
+    task: () {
+      // Will execute only once after 5 minutes
+    },
+  ),
+);
+
 // Remove scheduled tasks
 FlutterMCP.instance.removeScheduledJob(jobId);
 ```
@@ -255,9 +358,27 @@ FlutterMCP.instance.removeScheduledJob(jobId);
 ```dart
 // Get system status
 final status = FlutterMCP.instance.getSystemStatus();
-log('Clients: ${status['clients']}');
-log('Servers: ${status['servers']}');
-log('LLMs: ${status['llms']}');
+print('Clients: ${status['clients']}');
+print('Servers: ${status['servers']}');
+print('LLMs: ${status['llms']}');
+print('Platform: ${status['platformName']}');
+print('Memory: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
+```
+
+### Plugin Registration
+
+```dart
+// Register custom plugins
+await FlutterMCP.instance.registerPlugin(
+  MyCustomPlugin(),
+  {'config_key': 'value'},
+);
+
+// Execute custom tool plugins
+final result = await FlutterMCP.instance.executeToolPlugin(
+  'my_tool_plugin',
+  {'param1': 'value1'},
+);
 ```
 
 ## Examples

@@ -29,6 +29,7 @@ export 'src/utils/logger.dart';
 export 'package:mcp_client/mcp_client.dart'  show ClientCapabilities;
 export 'package:mcp_server/mcp_server.dart'  show ServerCapabilities;
 export 'package:mcp_llm/mcp_llm.dart'  show LlmConfiguration;
+export 'src/platform/tray/tray_manager.dart' show TrayMenuItem;
 
 /// Flutter MCP - Integrated MCP Management System
 ///

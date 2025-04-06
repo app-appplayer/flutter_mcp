@@ -36,6 +36,8 @@ Future<void> initMCP() async {
         useTray: true,
         autoStart: false, // We'll start services manually
         loggingLevel: LogLevel.debug,
+        enablePerformanceMonitoring: true, // Enable performance monitoring
+        highMemoryThresholdMB: 512, // Set memory threshold for automatic cleanup
         background: BackgroundConfig(
           notificationChannelId: 'mcp_demo_channel',
           notificationChannelName: 'MCP Demo Service',
@@ -51,6 +53,17 @@ Future<void> initMCP() async {
         ),
         tray: TrayConfig(
           tooltip: 'MCP Integration Demo',
+          menuItems: [
+            TrayMenuItem(label: 'Show', onTap: () {
+              // Code to show app window
+              logger.debug('Show app from tray');
+            }),
+            TrayMenuItem.separator(),
+            TrayMenuItem(label: 'Exit', onTap: () {
+              // Code to exit app
+              logger.debug('Exit app from tray');
+            }),
+          ],
         ),
         // We'll set up components programmatically instead of auto-start
       ),
@@ -156,9 +169,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  // Helper method to check if MCP is ready
+  bool isReady() {
+    try {
+      // If getSystemStatus doesn't throw an exception, it's ready
+      FlutterMCP.instance.getSystemStatus();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Start MCP services
   Future<void> _startServices() async {
-    if (!FlutterMCP.instance.initialized) {
+    if (!isReady()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('MCP is not initialized')),
       );
@@ -301,10 +325,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
 
     try {
+      // Use memory-efficient chat method with caching enabled
       final response = await FlutterMCP.instance.chat(
         _llmId!,
         message,
         enableTools: true,
+        useCache: true, // Enable caching for faster subsequent responses
       );
 
       setState(() {
@@ -344,6 +370,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Text('LLMs: ${status['llms']}'),
                 Text('Background Service: ${status['backgroundServiceRunning']}'),
                 Text('Scheduler: ${status['schedulerRunning']}'),
+                Text('Platform: ${status['platformName']}'),
+                const Divider(),
+                const Text('Memory Usage:', style: TextStyle(fontWeight: FontWeight.bold)),
+                if (status['performanceMetrics'] != null &&
+                    status['performanceMetrics']['resources'] != null &&
+                    status['performanceMetrics']['resources']['memory.usageMB'] != null)
+                  Text('Current: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB'),
                 const Divider(),
                 const Text('Client Status:', style: TextStyle(fontWeight: FontWeight.bold)),
                 Text(status['clientsStatus'].toString()),

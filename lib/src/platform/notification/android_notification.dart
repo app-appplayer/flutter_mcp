@@ -215,7 +215,7 @@ class AndroidNotificationManager implements NotificationManager {
       await androidPlugin.createNotificationChannel(
         AndroidNotificationChannel(
           '${_channelId}_summary',
-          '${_channelName} Summary',
+          '$_channelName Summary',
           description: 'Summary notifications',
           importance: Importance.low,
         ),
@@ -231,7 +231,7 @@ class AndroidNotificationManager implements NotificationManager {
       // Create summary details
       final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
         '${_channelId}_summary',
-        '${_channelName} Summary',
+        '$_channelName Summary',
         channelDescription: 'Summary notifications',
         importance: Importance.low,
         priority: Priority.low,

@@ -106,21 +106,21 @@ class ConfigLoader {
   /// Convert YAML document to JSON map
   static Map<String, dynamic> _convertYamlToJson(YamlMap yamlDoc) {
     // Helper function to convert YAML nodes to JSON-compatible objects
-    dynamic _convertNode(dynamic node) {
+    dynamic convertNode(dynamic node) {
       if (node is YamlMap) {
         final map = <String, dynamic>{};
         for (final entry in node.entries) {
-          map[entry.key.toString()] = _convertNode(entry.value);
+          map[entry.key.toString()] = convertNode(entry.value);
         }
         return map;
       } else if (node is YamlList) {
-        return node.map((item) => _convertNode(item)).toList();
+        return node.map((item) => convertNode(item)).toList();
       } else {
         return node;
       }
     }
 
-    return _convertNode(yamlDoc) as Map<String, dynamic>;
+    return convertNode(yamlDoc) as Map<String, dynamic>;
   }
 
   /// Parse JSON configuration into MCPConfig

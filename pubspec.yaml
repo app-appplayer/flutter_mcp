@@ -18,10 +18,10 @@ dependencies:
   plugin_platform_interface: ^2.0.2
 
   # MCP Core libraries
-  mcp_client:
-    path: ../mcp_client
-  mcp_server:
-    path: ../mcp_server
+  mcp_client: ^0.1.6
+  #  path: ../mcp_client
+  mcp_server: ^0.1.7
+  #  path: ../mcp_server
   mcp_llm:
     path: ../mcp_llm
 

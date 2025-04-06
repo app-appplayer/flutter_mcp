@@ -33,6 +33,7 @@ dependencies:
   path_provider: ^2.1.5  # For file system access
 
   # Utility libraries
+  path: ^1.9.1
   meta: ^1.16.0
   uuid: ^4.5.1
   intl: ^0.20.2

@@ -62,7 +62,7 @@ class MCPLogger {
   /// Logger instances map
   static final Map<String, MCPLogger> _loggers = {};
 
-  IOSink _output = stderr;
+  final IOSink _output = stderr;
 
   /// Set default log level
   static void setDefaultLevel(LogLevel level) {

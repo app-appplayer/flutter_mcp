@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
@@ -30,9 +29,6 @@ class AndroidNotificationManager implements NotificationManager {
   bool _vibrationEnabled = true;
   NotificationPriority _defaultPriority = NotificationPriority.high;
   String? _defaultIcon;
-
-  // Last notification ID (for group summaries)
-  int _lastNotificationId = 0;
 
   @override
   Future<void> initialize(NotificationConfig? config) async {
@@ -278,8 +274,6 @@ class AndroidNotificationManager implements NotificationManager {
         return Importance.low;
       case NotificationPriority.min:
         return Importance.min;
-      default:
-        return Importance.defaultImportance;
     }
   }
 
@@ -296,8 +290,6 @@ class AndroidNotificationManager implements NotificationManager {
         return Priority.low;
       case NotificationPriority.min:
         return Priority.min;
-      default:
-        return Priority.defaultPriority;
     }
   }
 

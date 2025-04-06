@@ -303,7 +303,7 @@ extension DebounceExtension<T> on Stream<T> {
     controller = StreamController<T>(
       sync: true,
       onListen: () {
-        subscription = this.listen(
+        subscription = listen(
               (data) {
             timer?.cancel();
             timer = Timer(duration, () {

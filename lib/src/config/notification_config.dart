@@ -1,24 +1,24 @@
-/// 알림 설정
+/// Notification configuration
 class NotificationConfig {
-  /// 알림 채널 ID (Android)
+  /// Notification channel ID (Android)
   final String? channelId;
 
-  /// 알림 채널 이름 (Android)
+  /// Notification channel name (Android)
   final String? channelName;
 
-  /// 알림 채널 설명 (Android)
+  /// Notification channel description (Android)
   final String? channelDescription;
 
-  /// 알림 아이콘
+  /// Notification icon
   final String? icon;
 
-  /// 알림음 사용 여부
+  /// Whether to enable notification sound
   final bool enableSound;
 
-  /// 알림 진동 사용 여부
+  /// Whether to enable notification vibration
   final bool enableVibration;
 
-  /// 알림 중요도
+  /// Notification priority
   final NotificationPriority priority;
 
   NotificationConfig({
@@ -32,7 +32,7 @@ class NotificationConfig {
   });
 }
 
-/// 알림 중요도
+/// Notification priority
 enum NotificationPriority {
   min,
   low,

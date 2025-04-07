@@ -1075,7 +1075,7 @@ class FlutterMCP {
         PerformanceMonitor.instance.incrementCounter('llm.cache.hits');
         PerformanceMonitor.instance.stopTimer(timer, success: true, metadata: {'cached': true});
 
-        // 캐시된 맵에서 LlmResponse로 변환
+        // Convert cached map to LlmResponse
         return LlmResponse(
           text: cachedResponse['text'] as String,
           metadata: cachedResponse['metadata'] as Map<String, dynamic>? ?? {},
@@ -1120,7 +1120,7 @@ class FlutterMCP {
           _config?.highMemoryThresholdMB != null) {
         final cache = _getOrCreateResponseCache(llmId);
 
-        // LlmResponse를 Map으로 변환
+        // Convert LlmResponse to Map
         final responseMap = response.toJson();
 
         cache.put(message, responseMap);
@@ -1230,9 +1230,9 @@ class FlutterMCP {
         // Track chunk stats
         chunkCount++;
 
-        // textChunk 속성 사용
+        // Use textChunk property
         if (chunk.textChunk.isNotEmpty) {
-          // 문자 수를 토큰으로 대략 변환 (1토큰≈4자)
+          // Roughly convert character count to tokens (1 token ≈ 4 chars)
           totalTokens += chunk.textChunk.length ~/ 4;
         }
 

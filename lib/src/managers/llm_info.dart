@@ -1,6 +1,6 @@
 import 'package:mcp_llm/mcp_llm.dart';
 
-/// LLM 정보
+/// LLM information
 class LlmInfo {
   /// LLM ID
   final String id;
@@ -8,10 +8,10 @@ class LlmInfo {
   /// MCP LLM
   final MCPLlm mcpLlm;
 
-  /// LLM 클라이언트
+  /// LLM client
   final LlmClient client;
 
-  /// 연결된 클라이언트 ID
+  /// Connected client IDs
   final List<String> connectedClientIds = [];
 
   LlmInfo({

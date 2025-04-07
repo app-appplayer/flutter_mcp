@@ -1,24 +1,24 @@
-/// 백그라운드 서비스 설정
+/// Background service configuration
 class BackgroundConfig {
-  /// 알림 채널 ID (Android)
+  /// Notification channel ID (Android)
   final String? notificationChannelId;
 
-  /// 알림 채널 이름 (Android)
+  /// Notification channel name (Android)
   final String? notificationChannelName;
 
-  /// 알림 채널 설명 (Android)
+  /// Notification channel description (Android)
   final String? notificationDescription;
 
-  /// 알림 아이콘 (Android)
+  /// Notification icon (Android)
   final String? notificationIcon;
 
-  /// 부팅 시 자동 시작 여부
+  /// Auto start on boot
   final bool autoStartOnBoot;
 
-  /// 백그라운드 작업 간격 (밀리초)
+  /// Background task interval (milliseconds)
   final int intervalMs;
 
-  /// 연결 유지
+  /// Keep connection alive
   final bool keepAlive;
 
   BackgroundConfig({
@@ -31,7 +31,7 @@ class BackgroundConfig {
     this.keepAlive = true,
   });
 
-  /// 기본 설정 생성
+  /// Create default configuration
   factory BackgroundConfig.defaultConfig() {
     return BackgroundConfig(
       notificationChannelId: 'flutter_mcp_channel',

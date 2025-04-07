@@ -8,15 +8,15 @@ import 'tray_config.dart';
 import 'job.dart';
 import '../utils/logger.dart';
 
-/// MCP LLM 통합 설정
+/// MCP LLM Integration Configuration
 class MCPLlmIntegration {
-  /// 기존 LLM ID (기존 LLM 사용 시)
+  /// Existing LLM ID (when using an existing LLM)
   final String? existingLlmId;
 
-  /// LLM 공급자 이름 (새 LLM 생성 시)
+  /// LLM provider name (when creating a new LLM)
   final String? providerName;
 
-  /// LLM 설정 (새 LLM 생성 시)
+  /// LLM configuration (when creating a new LLM)
   final LlmConfiguration? config;
 
   MCPLlmIntegration({
@@ -24,7 +24,7 @@ class MCPLlmIntegration {
     this.providerName,
     this.config,
   }) : assert(existingLlmId != null || (providerName != null && config != null),
-  'existingLlmId 또는 (providerName과 config) 중 하나는 제공되어야 합니다');
+  'Either existingLlmId or (providerName and config) must be provided');
 
   /// Validate configuration
   void validate() {
@@ -59,21 +59,21 @@ class MCPLlmIntegration {
   }
 }
 
-/// MCP 서버 자동 시작 설정
+/// MCP Server Auto Start Configuration
 class MCPServerConfig {
-  /// 서버 이름
+  /// Server name
   final String name;
 
-  /// 서버 버전
+  /// Server version
   final String version;
 
-  /// 서버 기능
+  /// Server capabilities
   final server.ServerCapabilities? capabilities;
 
-  /// stdio 트랜스포트 사용 여부
+  /// Whether to use stdio transport
   final bool useStdioTransport;
 
-  /// SSE 트랜스포트 포트
+  /// SSE transport port
   final int? ssePort;
 
   /// SSE fallback ports
@@ -82,7 +82,7 @@ class MCPServerConfig {
   /// SSE authentication token
   final String? authToken;
 
-  /// LLM 통합 설정
+  /// LLM integration settings
   final MCPLlmIntegration? integrateLlm;
 
   MCPServerConfig({
@@ -141,27 +141,27 @@ class MCPServerConfig {
   }
 }
 
-/// MCP 클라이언트 자동 시작 설정
+/// MCP Client Auto Start Configuration
 class MCPClientConfig {
-  /// 클라이언트 이름
+  /// Client name
   final String name;
 
-  /// 클라이언트 버전
+  /// Client version
   final String version;
 
-  /// 클라이언트 기능
+  /// Client capabilities
   final client.ClientCapabilities? capabilities;
 
-  /// stdio 트랜스포트 명령어
+  /// stdio transport command
   final String? transportCommand;
 
-  /// stdio 트랜스포트 인수
+  /// stdio transport arguments
   final List<String>? transportArgs;
 
-  /// SSE 트랜스포트 URL
+  /// SSE transport URL
   final String? serverUrl;
 
-  /// LLM 통합 설정
+  /// LLM integration settings
   final MCPLlmIntegration? integrateLlm;
 
   MCPClientConfig({
@@ -217,78 +217,78 @@ class MCPClientConfig {
   }
 }
 
-/// MCP 메인 설정 클래스
+/// MCP Main Configuration Class
 class MCPConfig {
-  /// 앱 이름
+  /// App name
   final String appName;
 
-  /// 앱 버전
+  /// App version
   final String appVersion;
 
-  /// 백그라운드 서비스 사용 여부
+  /// Whether to use background service
   final bool useBackgroundService;
 
-  /// 알림 사용 여부
+  /// Whether to use notifications
   final bool useNotification;
 
-  /// 트레이 사용 여부
+  /// Whether to use tray
   final bool useTray;
 
-  /// 보안 저장소 사용 여부
+  /// Whether to use secure storage
   final bool secure;
 
-  /// 라이프사이클 관리 여부
+  /// Whether to manage lifecycle
   final bool lifecycleManaged;
 
-  /// 자동 시작 여부
+  /// Whether to auto start
   final bool autoStart;
 
-  /// 로깅 레벨
+  /// Logging level
   final LogLevel? loggingLevel;
 
-  /// 성능 모니터링 사용 여부
+  /// Whether to enable performance monitoring
   final bool? enablePerformanceMonitoring;
 
-  /// 성능 메트릭 내보내기 사용 여부
+  /// Whether to enable metrics export
   final bool? enableMetricsExport;
 
-  /// 성능 메트릭 내보내기 경로
+  /// Metrics export path
   final String? metricsExportPath;
 
-  /// 플러그인 자동 로드 여부
+  /// Whether to auto load plugins
   final bool? autoLoadPlugins;
 
-  /// 플러그인 설정
+  /// Plugin configurations
   final Map<String, Map<String, dynamic>>? pluginConfigurations;
 
-  /// 높은 메모리 사용량 임계값 (MB)
+  /// High memory usage threshold (MB)
   final int? highMemoryThresholdMB;
 
-  /// 낮은 배터리 경고 임계값 (%)
+  /// Low battery warning threshold (%)
   final int? lowBatteryWarningThreshold;
 
-  /// 연결 재시도 제한
+  /// Connection retry limit
   final int? maxConnectionRetries;
 
-  /// LLM 요청 제한 시간 (밀리초)
+  /// LLM request timeout (milliseconds)
   final int? llmRequestTimeoutMs;
 
-  /// 백그라운드 설정
+  /// Background configuration
   final BackgroundConfig? background;
 
-  /// 알림 설정
+  /// Notification configuration
   final NotificationConfig? notification;
 
-  /// 트레이 설정
+  /// Tray configuration
   final TrayConfig? tray;
 
-  /// 스케줄 작업
+  /// Scheduled jobs
   final List<MCPJob>? schedule;
 
-  /// 자동 시작 서버 설정
+  /// Auto start server configuration
   final List<MCPServerConfig>? autoStartServer;
 
-  /// 자동 시작 클라이언트 설정
+  /// Auto start client configuration
   final List<MCPClientConfig>? autoStartClient;
 
   MCPConfig({

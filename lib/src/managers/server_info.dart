@@ -1,21 +1,21 @@
 import 'package:mcp_server/mcp_server.dart';
 import 'package:mcp_llm/mcp_llm.dart';
 
-/// 서버 정보
+/// Server information
 class ServerInfo {
-  /// 서버 ID
+  /// Server ID
   final String id;
 
-  /// MCP 서버
+  /// MCP server
   final Server server;
 
-  /// 서버 트랜스포트
+  /// Server transport
   final ServerTransport? transport;
 
-  /// LLM 서버
+  /// LLM server
   LlmServer? llmServer;
 
-  /// 실행 여부
+  /// Running status
   bool running = false;
 
   ServerInfo({

@@ -179,7 +179,7 @@ final response = await FlutterMCP.instance.chat(
   'Hello, how are you today?',
   useCache: true, // Enable caching for repeated questions
 );
-print('AI: ${response.text}');
+_logger('AI: ${response.text}');
 
 // Stream responses from LLM
 Stream<LlmResponseChunk> responseStream = FlutterMCP.instance.streamChat(
@@ -188,7 +188,7 @@ Stream<LlmResponseChunk> responseStream = FlutterMCP.instance.streamChat(
 );
 
 responseStream.listen((chunk) {
-  print(chunk.textChunk); // Process each chunk as it arrives
+  _logger(chunk.textChunk); // Process each chunk as it arrives
 });
 
 // Clean up when done
@@ -312,8 +312,8 @@ final response = await FlutterMCP.instance.chat(
 ```dart
 // Get system performance metrics
 final status = FlutterMCP.instance.getSystemStatus();
-print('Memory usage: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
-print('LLM response time: ${status['performanceMetrics']['timers']['llm.chat']['avg_ms']}ms');
+_logger('Memory usage: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
+_logger('LLM response time: ${status['performanceMetrics']['timers']['llm.chat']['avg_ms']}ms');
 ```
 
 ### Secure Storage
@@ -358,11 +358,11 @@ FlutterMCP.instance.removeScheduledJob(jobId);
 ```dart
 // Get system status
 final status = FlutterMCP.instance.getSystemStatus();
-print('Clients: ${status['clients']}');
-print('Servers: ${status['servers']}');
-print('LLMs: ${status['llms']}');
-print('Platform: ${status['platformName']}');
-print('Memory: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
+_logger('Clients: ${status['clients']}');
+_logger('Servers: ${status['servers']}');
+_logger('LLMs: ${status['llms']}');
+_logger('Platform: ${status['platformName']}');
+_logger('Memory: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
 ```
 
 ### Plugin Registration

@@ -1,14 +1,14 @@
 import '../platform/tray/tray_manager.dart';
 
-/// 트레이 설정
+/// Tray configuration
 class TrayConfig {
-  /// 트레이 아이콘 경로
+  /// Tray icon path
   final String? iconPath;
 
-  /// 트레이 툴팁
+  /// Tray tooltip
   final String? tooltip;
 
-  /// 트레이 메뉴 항목
+  /// Tray menu items
   final List<TrayMenuItem>? menuItems;
 
   TrayConfig({

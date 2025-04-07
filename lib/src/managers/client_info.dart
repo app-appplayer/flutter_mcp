@@ -1,17 +1,17 @@
 import 'package:mcp_client/mcp_client.dart';
 
-/// 클라이언트 정보
+/// Client information
 class ClientInfo {
-  /// 클라이언트 ID
+  /// Client ID
   final String id;
 
-  /// MCP 클라이언트
+  /// MCP client
   final Client client;
 
-  /// 클라이언트 트랜스포트
+  /// Client transport
   final ClientTransport? transport;
 
-  /// 연결 여부
+  /// Connection status
   bool connected = false;
 
   ClientInfo({

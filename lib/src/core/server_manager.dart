@@ -3,31 +3,31 @@ import 'package:mcp_llm/mcp_llm.dart';
 import '../managers/server_info.dart';
 import '../utils/logger.dart';
 
-/// MCP 서버 매니저
+/// MCP Server Manager
 class MCPServerManager {
-  /// 등록된 서버
+  /// Registered servers
   final Map<String, ServerInfo> _servers = {};
 
-  /// 서버 카운터 (ID 생성용)
+  /// Server counter (for ID generation)
   int _counter = 0;
 
-  /// 로거
+  /// Logger
   final MCPLogger _logger = MCPLogger('mcp.server_manager');
 
-  /// 초기화
+  /// Initialization
   Future<void> initialize() async {
-    _logger.debug('서버 매니저 초기화');
+    _logger.debug('Server manager initialization');
   }
 
-  /// 새 서버 ID 생성
+  /// Generate new server ID
   String generateId() {
     _counter++;
     return 'server_${DateTime.now().millisecondsSinceEpoch}_$_counter';
   }
 
-  /// 서버 등록
+  /// Register server
   void registerServer(String id, Server server, ServerTransport? transport) {
-    _logger.debug('서버 등록: $id');
+    _logger.debug('Server registered: $id');
     _servers[id] = ServerInfo(
       id: id,
       server: server,
@@ -35,33 +35,33 @@ class MCPServerManager {
     );
   }
 
-  /// LLM 서버 설정
+  /// Set LLM server
   void setLlmServer(String id, LlmServer llmServer) {
-    _logger.debug('LLM 서버 설정: $id');
+    _logger.debug('LLM server set: $id');
     final serverInfo = _servers[id];
     if (serverInfo != null) {
       serverInfo.llmServer = llmServer;
     }
   }
 
-  /// 서버 정보 가져오기
+  /// Get server information
   ServerInfo? getServerInfo(String id) {
     return _servers[id];
   }
 
-  /// 서버 가져오기
+  /// Get server
   Server? getServer(String id) {
     return _servers[id]?.server;
   }
 
-  /// 모든 서버 ID 가져오기
+  /// Get all server IDs
   List<String> getAllServerIds() {
     return _servers.keys.toList();
   }
 
-  /// 서버 종료
+  /// Close server
   Future<void> closeServer(String id) async {
-    _logger.debug('서버 종료: $id');
+    _logger.debug('Closing server: $id');
     final serverInfo = _servers[id];
     if (serverInfo != null) {
       serverInfo.server.disconnect();
@@ -72,15 +72,15 @@ class MCPServerManager {
     }
   }
 
-  /// 모든 서버 종료
+  /// Close all servers
   Future<void> closeAll() async {
-    _logger.debug('모든 서버 종료');
+    _logger.debug('Closing all servers');
     for (final id in _servers.keys.toList()) {
       await closeServer(id);
     }
   }
 
-  /// 상태 정보 가져오기
+  /// Get status information
   Map<String, dynamic> getStatus() {
     return {
       'total': _servers.length,

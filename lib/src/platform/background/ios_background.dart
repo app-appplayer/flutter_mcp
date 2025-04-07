@@ -3,7 +3,7 @@ import '../../config/background_config.dart';
 import '../../utils/logger.dart';
 import 'background_service.dart';
 
-/// iOS 백그라운드 서비스 구현
+/// iOS background service implementation
 class IOSBackgroundService implements BackgroundService {
   bool _isRunning = false;
   final MCPLogger _logger = MCPLogger('mcp.ios_background');

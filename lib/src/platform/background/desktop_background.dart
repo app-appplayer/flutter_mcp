@@ -3,7 +3,7 @@ import '../../config/background_config.dart';
 import '../../utils/logger.dart';
 import 'background_service.dart';
 
-/// 데스크탑(macOS, Windows, Linux) 백그라운드 서비스 구현
+/// Desktop (macOS, Windows, Linux) background service implementation
 class DesktopBackgroundService implements BackgroundService {
   bool _isRunning = false;
   Timer? _backgroundTimer;
@@ -14,16 +14,16 @@ class DesktopBackgroundService implements BackgroundService {
 
   @override
   Future<void> initialize(BackgroundConfig? config) async {
-    _logger.debug('데스크탑 백그라운드 서비스 초기화');
+    _logger.debug('Desktop background service initializing');
 
-    // 데스크탑 플랫폼별 초기화 로직
+    // Initialization logic for desktop platforms
   }
 
   @override
   Future<bool> start() async {
-    _logger.debug('데스크탑 백그라운드 서비스 시작');
+    _logger.debug('Desktop background service starting');
 
-    // 주기적 작업을 위한 타이머 설정
+    // Set up timer for periodic tasks
     _backgroundTimer = Timer.periodic(Duration(minutes: 1), (timer) {
       _performBackgroundTask();
     });
@@ -34,7 +34,7 @@ class DesktopBackgroundService implements BackgroundService {
 
   @override
   Future<bool> stop() async {
-    _logger.debug('데스크탑 백그라운드 서비스 중지');
+    _logger.debug('Desktop background service stopping');
 
     _backgroundTimer?.cancel();
     _backgroundTimer = null;
@@ -43,13 +43,13 @@ class DesktopBackgroundService implements BackgroundService {
     return true;
   }
 
-  /// 백그라운드 작업 수행
+  /// Perform background task
   void _performBackgroundTask() {
-    _logger.debug('데스크탑 백그라운드 작업 수행');
+    _logger.debug('Performing desktop background task');
 
-    // 실제 백그라운드 작업 구현
-    // - 상태 유지
-    // - 정기적인 작업 수행
-    // - 시스템 정보 업데이트 등
+    // Implement actual background tasks
+    // - Maintain state
+    // - Perform regular tasks
+    // - Update system information, etc.
   }
 }

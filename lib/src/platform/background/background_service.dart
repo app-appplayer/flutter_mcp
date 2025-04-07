@@ -1,21 +1,21 @@
 import '../../config/background_config.dart';
 
-/// 백그라운드 서비스 인터페이스
+/// Background service interface
 abstract class BackgroundService {
-  /// 서비스 초기화
+  /// Initialize service
   Future<void> initialize(BackgroundConfig? config);
 
-  /// 서비스 시작
+  /// Start service
   Future<bool> start();
 
-  /// 서비스 중지
+  /// Stop service
   Future<bool> stop();
 
-  /// 서비스 실행 여부
+  /// Check if service is running
   bool get isRunning;
 }
 
-/// 기능이 없는 백그라운드 서비스 (지원하지 않는 플랫폼용)
+/// No-operation background service (for unsupported platforms)
 class NoOpBackgroundService implements BackgroundService {
   @override
   bool get isRunning => false;

@@ -161,6 +161,9 @@ class MCPClientConfig {
   /// SSE transport URL
   final String? serverUrl;
 
+  /// SSE authentication token
+  final String? authToken;
+
   /// LLM integration settings
   final MCPLlmIntegration? integrateLlm;
 
@@ -171,6 +174,7 @@ class MCPClientConfig {
     this.transportCommand,
     this.transportArgs,
     this.serverUrl,
+    this.authToken,
     this.integrateLlm,
   }) {
     validate();
@@ -203,6 +207,7 @@ class MCPClientConfig {
     String? transportCommand,
     List<String>? transportArgs,
     String? serverUrl,
+    String? authToken,
     MCPLlmIntegration? integrateLlm,
   }) {
     return MCPClientConfig(
@@ -212,6 +217,7 @@ class MCPClientConfig {
       transportCommand: transportCommand ?? this.transportCommand,
       transportArgs: transportArgs ?? this.transportArgs,
       serverUrl: serverUrl ?? this.serverUrl,
+      authToken: authToken ?? this.authToken,
       integrateLlm: integrateLlm ?? this.integrateLlm,
     );
   }

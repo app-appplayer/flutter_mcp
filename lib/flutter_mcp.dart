@@ -510,6 +510,7 @@ class FlutterMCP {
     String? transportCommand,
     List<String>? transportArgs,
     String? serverUrl,
+    String? authToken,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -545,6 +546,7 @@ class FlutterMCP {
       } else if (serverUrl != null) {
         transport = await client.McpClient.createSseTransport(
           serverUrl: serverUrl,
+          headers: authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
         );
       }
 

@@ -1,11 +1,11 @@
 import '../../config/notification_config.dart';
 
-/// 알림 관리자 인터페이스
+/// Notification Manager Interface
 abstract class NotificationManager {
-  /// 알림 관리자 초기화
+  /// Initialize notification manager
   Future<void> initialize(NotificationConfig? config);
 
-  /// 알림 표시
+  /// Show notification
   Future<void> showNotification({
     required String title,
     required String body,
@@ -13,11 +13,11 @@ abstract class NotificationManager {
     String id = 'mcp_notification',
   });
 
-  /// 알림 숨김
+  /// Hide notification
   Future<void> hideNotification(String id);
 }
 
-/// 기능 없는 알림 관리자 (지원하지 않는 플랫폼용)
+/// No-operation notification manager (for unsupported platforms)
 class NoOpNotificationManager implements NotificationManager {
   @override
   Future<void> initialize(NotificationConfig? config) async {}

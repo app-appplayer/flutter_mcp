@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter_mcp/src/utils/error_recovery.dart';
-import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
-import 'package:mcp_server/mcp_server.dart' hide CallToolResult;
-import 'package:mcp_llm/mcp_llm.dart' hide PerformanceMonitor;
+import 'package:mcp_client/mcp_client.dart' as client hide LogLevel;
+import 'package:mcp_server/mcp_server.dart' as server hide LogLevel;
+import 'package:mcp_llm/mcp_llm.dart' as llm hide LogLevel;
 
 import 'src/config/mcp_config.dart';
 import 'src/config/job.dart';
@@ -19,17 +19,42 @@ import 'src/utils/performance_monitor.dart';
 import 'src/utils/event_system.dart';
 import 'src/utils/memory_manager.dart';
 
+// Re-export configuration classes
 export 'src/config/mcp_config.dart';
 export 'src/config/background_config.dart';
 export 'src/config/notification_config.dart';
 export 'src/config/tray_config.dart';
 export 'src/config/job.dart';
+
+// Re-export utility classes
 export 'src/utils/exceptions.dart';
 export 'src/utils/logger.dart';
-export 'package:mcp_client/mcp_client.dart'  show ClientCapabilities;
-export 'package:mcp_server/mcp_server.dart'  show ServerCapabilities;
-export 'package:mcp_llm/mcp_llm.dart'  show LlmConfiguration;
+
+// Re-export plugin interfaces
+export 'src/plugins/plugin_system.dart' show MCPPlugin, MCPToolPlugin, MCPResourcePlugin,
+MCPBackgroundPlugin, MCPNotificationPlugin, MCPClientPlugin, MCPServerPlugin;
+
+// Re-export tray menu classes
 export 'src/platform/tray/tray_manager.dart' show TrayMenuItem;
+
+// Re-export model classes from original packages (with type aliases)
+// This way apps using flutter_mcp don't need to import the original packages
+
+// MCP Client exports
+export 'package:mcp_client/mcp_client.dart'
+    show ClientCapabilities, Client, ClientTransport;
+
+// MCP Server exports
+export 'package:mcp_server/mcp_server.dart'
+    show ServerCapabilities, Server, ServerTransport,
+    Content, TextContent, ImageContent, ResourceContent,
+    Tool, Resource, Message, MessageRole, MCPContentType, CallToolResult;
+
+// MCP LLM exports
+export 'package:mcp_llm/mcp_llm.dart'
+    show LlmConfiguration, LlmResponse, LlmToolCall, LlmResponseChunk,
+    Document, StorageManager, RetrievalManager, ResultAggregator,
+    ChatSession, Conversation, MemoryStorage;
 
 /// Flutter MCP - Integrated MCP Management System
 ///
@@ -52,7 +77,7 @@ class FlutterMCP {
   final MCPLlmManager _llmManager = MCPLlmManager();
 
   // Multiple MCP LLM instances
-  final Map<String, MCPLlm> _mcpLlmInstances = {};
+  final Map<String, llm.MCPLlm> _mcpLlmInstances = {};
 
   // Platform services
   final PlatformServices _platformServices = PlatformServices();
@@ -70,7 +95,7 @@ class FlutterMCP {
   final EventSystem _eventSystem = EventSystem.instance;
 
   // Memory cache for LLM responses
-  final Map<String, MemoryAwareCache<String, Map<String, dynamic>>> _llmResponseCaches = {};
+  final Map<String, dynamic> _llmResponseCaches = {};
 
   // Plugin state
   bool _initialized = false;
@@ -115,7 +140,7 @@ class FlutterMCP {
       }
 
       // Create default MCP LLM instance
-      final defaultLlm = MCPLlm();
+      final defaultLlm = llm.MCPLlm();
       _mcpLlmInstances['default'] = defaultLlm;
 
       // Register default LLM providers on the default instance
@@ -302,16 +327,16 @@ class FlutterMCP {
   }
 
   /// Register default LLM providers with improved error handling
-  void _registerDefaultProviders(MCPLlm mcpLlm) {
-    _registerProviderSafely(mcpLlm, 'openai', OpenAiProviderFactory());
-    _registerProviderSafely(mcpLlm, 'claude', ClaudeProviderFactory());
-    _registerProviderSafely(mcpLlm, 'together', TogetherProviderFactory());
+  void _registerDefaultProviders(llm.MCPLlm mcpLlm) {
+    _registerProviderSafely(mcpLlm, 'openai', llm.OpenAiProviderFactory());
+    _registerProviderSafely(mcpLlm, 'claude', llm.ClaudeProviderFactory());
+    _registerProviderSafely(mcpLlm, 'together', llm.TogetherProviderFactory());
 
     // Register other providers as needed
   }
 
   /// Safely register an LLM provider with error handling
-  void _registerProviderSafely(MCPLlm mcpLlm, String name, LlmProviderFactory factory) {
+  void _registerProviderSafely(llm.MCPLlm mcpLlm, String name, llm.LlmProviderFactory factory) {
     try {
       mcpLlm.registerProvider(name, factory);
       _logger.debug('Registered $name provider');
@@ -481,7 +506,7 @@ class FlutterMCP {
   Future<String> createClient({
     required String name,
     required String version,
-    ClientCapabilities? capabilities,
+    client.ClientCapabilities? capabilities,
     String? transportCommand,
     List<String>? transportArgs,
     String? serverUrl,
@@ -504,35 +529,35 @@ class FlutterMCP {
 
       // Create client using McpClient factory
       final clientId = _clientManager.generateId();
-      final client = McpClient.createClient(
+      final mcpClient = client.McpClient.createClient(
         name: name,
         version: version,
-        capabilities: capabilities ?? ClientCapabilities(),
+        capabilities: capabilities ?? client.ClientCapabilities(),
       );
 
       // Create transport
-      ClientTransport? transport;
+      client.ClientTransport? transport;
       if (transportCommand != null) {
-        transport = await McpClient.createStdioTransport(
+        transport = await client.McpClient.createStdioTransport(
           command: transportCommand,
           arguments: transportArgs ?? [],
         );
       } else if (serverUrl != null) {
-        transport = await McpClient.createSseTransport(
+        transport = await client.McpClient.createSseTransport(
           serverUrl: serverUrl,
         );
       }
 
       // Register client
-      _clientManager.registerClient(clientId, client, transport);
+      _clientManager.registerClient(clientId, mcpClient, transport);
 
       // Update plugin registry
-      _pluginRegistry.registerClient(clientId, client);
+      _pluginRegistry.registerClient(clientId, mcpClient);
 
       // Register for resource cleanup
-      _resourceManager.register<Client>(
+      _resourceManager.register<client.Client>(
           'client_$clientId',
-          client,
+          mcpClient,
               (c) async => await _clientManager.closeClient(clientId)
       );
 
@@ -553,7 +578,7 @@ class FlutterMCP {
   Future<String> createServer({
     required String name,
     required String version,
-    ServerCapabilities? capabilities,
+    server.ServerCapabilities? capabilities,
     bool useStdioTransport = true,
     int? ssePort,
     List<int>? fallbackPorts,
@@ -577,18 +602,18 @@ class FlutterMCP {
 
       // Create server using McpServer factory
       final serverId = _serverManager.generateId();
-      final server = McpServer.createServer(
+      final mcpServer = server.McpServer.createServer(
         name: name,
         version: version,
-        capabilities: capabilities ?? ServerCapabilities(),
+        capabilities: capabilities ?? server.ServerCapabilities(),
       );
 
       // Create transport
-      ServerTransport? transport;
+      server.ServerTransport? transport;
       if (useStdioTransport) {
-        transport = McpServer.createStdioTransport();
+        transport = server.McpServer.createStdioTransport();
       } else if (ssePort != null) {
-        transport = McpServer.createSseTransport(
+        transport = server.McpServer.createSseTransport(
           endpoint: '/sse',
           messagesEndpoint: '/messages',
           port: ssePort,
@@ -598,15 +623,15 @@ class FlutterMCP {
       }
 
       // Register server
-      _serverManager.registerServer(serverId, server, transport);
+      _serverManager.registerServer(serverId, mcpServer, transport);
 
       // Update plugin registry
-      _pluginRegistry.registerServer(serverId, server);
+      _pluginRegistry.registerServer(serverId, mcpServer);
 
       // Register for resource cleanup
-      _resourceManager.register<Server>(
+      _resourceManager.register<server.Server>(
           'server_$serverId',
-          server,
+          mcpServer,
               (s) async => await _serverManager.closeServer(serverId)
       );
 
@@ -629,13 +654,13 @@ class FlutterMCP {
   /// [registerDefaultProviders]: Whether to register default providers
   ///
   /// Returns the newly created MCPLlm instance
-  MCPLlm createMcpLlmInstance(String instanceId, {bool registerDefaultProviders = true}) {
+  llm.MCPLlm createMcpLlmInstance(String instanceId, {bool registerDefaultProviders = true}) {
     if (_mcpLlmInstances.containsKey(instanceId)) {
       _logger.warning('MCPLlm instance with ID $instanceId already exists');
       return _mcpLlmInstances[instanceId]!;
     }
 
-    final mcpLlm = MCPLlm();
+    final mcpLlm = llm.MCPLlm();
     _mcpLlmInstances[instanceId] = mcpLlm;
 
     if (registerDefaultProviders) {
@@ -643,7 +668,7 @@ class FlutterMCP {
     }
 
     // Register for resource cleanup
-    _resourceManager.register<MCPLlm>(
+    _resourceManager.register<llm.MCPLlm>(
         'mcpllm_$instanceId',
         mcpLlm,
             (instance) async {
@@ -661,7 +686,7 @@ class FlutterMCP {
   /// [instanceId]: ID of the instance to get
   ///
   /// Returns the requested MCPLlm instance or null if not found
-  MCPLlm? getMcpLlmInstance(String instanceId) {
+  llm.MCPLlm? getMcpLlmInstance(String instanceId) {
     return _mcpLlmInstances[instanceId];
   }
 
@@ -676,10 +701,10 @@ class FlutterMCP {
   /// Returns ID of the created LLM
   Future<String> createLlm({
     required String providerName,
-    required LlmConfiguration config,
+    required llm.LlmConfiguration config,
     String mcpLlmInstanceId = 'default',
-    StorageManager? storageManager,
-    RetrievalManager? retrievalManager,
+    llm.StorageManager? storageManager,
+    llm.RetrievalManager? retrievalManager,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -692,7 +717,7 @@ class FlutterMCP {
       _validateLlmConfiguration(providerName, config);
 
       // Get MCPLlm instance, create if doesn't exist
-      MCPLlm mcpLlm;
+      llm.MCPLlm mcpLlm;
       if (!_mcpLlmInstances.containsKey(mcpLlmInstanceId)) {
         _logger.debug('Creating new MCPLlm instance: $mcpLlmInstanceId');
         mcpLlm = createMcpLlmInstance(mcpLlmInstanceId);
@@ -720,7 +745,7 @@ class FlutterMCP {
       _llmManager.registerLlm(llmId, mcpLlm, llmClient);
 
       // Register for resource cleanup
-      _resourceManager.register<LlmClient>(
+      _resourceManager.register<llm.LlmClient>(
           'llm_$llmId',
           llmClient,
               (client) async => await _llmManager.closeLlm(llmId)
@@ -749,7 +774,7 @@ class FlutterMCP {
   }
 
   /// Validate LLM configuration
-  void _validateLlmConfiguration(String providerName, LlmConfiguration config) {
+  void _validateLlmConfiguration(String providerName, llm.LlmConfiguration config) {
     final validationErrors = <String, String>{};
 
     // Check API key
@@ -810,8 +835,8 @@ class FlutterMCP {
   Future<void> integrateServerWithLlm({
     required String serverId,
     required String llmId,
-    StorageManager? storageManager,
-    RetrievalManager? retrievalManager,
+    llm.StorageManager? storageManager,
+    llm.RetrievalManager? retrievalManager,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -821,8 +846,8 @@ class FlutterMCP {
     final timer = PerformanceMonitor.instance.startTimer('llm.integrate_server');
 
     try {
-      final server = _serverManager.getServer(serverId);
-      if (server == null) {
+      final mcpServer = _serverManager.getServer(serverId);
+      if (mcpServer == null) {
         throw MCPResourceNotFoundException(serverId, 'Server not found');
       }
 
@@ -844,7 +869,7 @@ class FlutterMCP {
       final llmServer = await llmInfo.mcpLlm.createServer(
         providerName: providerName,
         config: null, // Using null as the LLM client is already configured
-        mcpServer: server,
+        mcpServer: mcpServer,
         storageManager: storageManager,
         retrievalManager: retrievalManager,
       );
@@ -853,7 +878,7 @@ class FlutterMCP {
       _serverManager.setLlmServer(serverId, llmServer);
 
       // Register server + LLM integration for cleanup
-      _resourceManager.register<LlmServer>(
+      _resourceManager.register<llm.LlmServer>(
           'llm_server_integration_$serverId',
           llmServer,
               (server) async => await server.close()
@@ -887,8 +912,8 @@ class FlutterMCP {
     final timer = PerformanceMonitor.instance.startTimer('llm.integrate_client');
 
     try {
-      final client = _clientManager.getClient(clientId);
-      if (client == null) {
+      final mcpClient = _clientManager.getClient(clientId);
+      if (mcpClient == null) {
         throw MCPResourceNotFoundException(clientId, 'Client not found');
       }
 
@@ -898,7 +923,7 @@ class FlutterMCP {
       }
 
       // Register client with LLM
-      await _llmManager.addClientToLlm(llmId, client);
+      await _llmManager.addClientToLlm(llmId, mcpClient);
 
       // No specific resource to register for cleanup as this is just a logical connection
 
@@ -997,7 +1022,7 @@ class FlutterMCP {
   /// [clientId]: Client ID
   /// [toolName]: Tool name
   /// [arguments]: Tool arguments
-  Future<CallToolResult> callTool(
+  Future<client.CallToolResult> callTool(
       String clientId,
       String toolName,
       Map<String, dynamic> arguments,
@@ -1048,7 +1073,7 @@ class FlutterMCP {
   /// [enableTools]: Whether to enable tools
   /// [parameters]: Additional parameters
   /// [useCache]: Whether to use memory-aware caching
-  Future<LlmResponse> chat(
+  Future<llm.LlmResponse> chat(
       String llmId,
       String message, {
         bool enableTools = false,
@@ -1076,12 +1101,12 @@ class FlutterMCP {
         PerformanceMonitor.instance.stopTimer(timer, success: true, metadata: {'cached': true});
 
         // Convert cached map to LlmResponse
-        return LlmResponse(
+        return llm.LlmResponse(
           text: cachedResponse['text'] as String,
           metadata: cachedResponse['metadata'] as Map<String, dynamic>? ?? {},
           toolCalls: cachedResponse['toolCalls'] != null
               ? (cachedResponse['toolCalls'] as List)
-              .map((tc) => LlmToolCall(
+              .map((tc) => llm.LlmToolCall(
             name: tc['name'] as String,
             arguments: tc['arguments'] as Map<String, dynamic>,
             id: tc['id'] as String?,
@@ -1120,8 +1145,16 @@ class FlutterMCP {
           _config?.highMemoryThresholdMB != null) {
         final cache = _getOrCreateResponseCache(llmId);
 
-        // Convert LlmResponse to Map
-        final responseMap = response.toJson();
+        // Convert LlmResponse to map
+        final responseMap = {
+          'text': response.text,
+          'metadata': response.metadata,
+          if (response.toolCalls != null) 'toolCalls': response.toolCalls!.map((tc) => {
+            'name': tc.name,
+            'arguments': tc.arguments,
+            if (tc.id != null) 'id': tc.id,
+          }).toList(),
+        };
 
         cache.put(message, responseMap);
       }
@@ -1160,7 +1193,7 @@ class FlutterMCP {
   }
 
   /// Get or create a memory-aware cache for LLM responses
-  MemoryAwareCache<String, Map<String, dynamic>> _getOrCreateResponseCache(String llmId) {
+  dynamic _getOrCreateResponseCache(String llmId) {
     if (!_llmResponseCaches.containsKey(llmId)) {
       _logger.debug('Creating response cache for LLM: $llmId');
       _llmResponseCaches[llmId] = MemoryAwareCache<String, Map<String, dynamic>>(
@@ -1177,7 +1210,7 @@ class FlutterMCP {
   /// [message]: Message content
   /// [enableTools]: Whether to enable tools
   /// [parameters]: Additional parameters
-  Stream<LlmResponseChunk> streamChat(
+  Stream<llm.LlmResponseChunk> streamChat(
       String llmId,
       String message, {
         bool enableTools = false,
@@ -1230,9 +1263,8 @@ class FlutterMCP {
         // Track chunk stats
         chunkCount++;
 
-        // Use textChunk property
+        // Calculate tokens (approximate by character count)
         if (chunk.textChunk.isNotEmpty) {
-          // Roughly convert character count to tokens (1 token ≈ 4 chars)
           totalTokens += chunk.textChunk.length ~/ 4;
         }
 
@@ -1275,15 +1307,15 @@ class FlutterMCP {
   }
 
   /// Process documents in memory-efficient chunks
-  Future<List<Document>> processDocumentsInChunks(
-      List<Document> documents,
-      Future<Document> Function(Document) processFunction, {
+  Future<List<llm.Document>> processDocumentsInChunks(
+      List<llm.Document> documents,
+      Future<llm.Document> Function(llm.Document) processFunction, {
         int chunkSize = 10,
         Duration? pauseBetweenChunks,
       }) async {
     _logger.debug('Processing ${documents.length} documents in chunks of $chunkSize');
 
-    return await MemoryManager.processInChunks<Document, Document>(
+    return await MemoryManager.processInChunks<llm.Document, llm.Document>(
       items: documents,
       chunkSize: chunkSize,
       pauseBetweenChunks: pauseBetweenChunks ?? Duration(milliseconds: 100),
@@ -1299,6 +1331,7 @@ class FlutterMCP {
         bool Function(Exception)? retryIf,
         required String operationName,
       }) async {
+    // Implementation uses ErrorRecovery utility from utils/error_recovery.dart
     return await ErrorRecovery.tryWithTimeout(
             () => ErrorRecovery.tryWithRetry(
             operation,
@@ -1352,7 +1385,7 @@ class FlutterMCP {
   ///
   /// [llmId]: LLM ID
   /// [document]: Document to add
-  Future<String> addDocument(String llmId, Document document) async {
+  Future<String> addDocument(String llmId, llm.Document document) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
     }
@@ -1386,7 +1419,7 @@ class FlutterMCP {
   /// [llmId]: LLM ID
   /// [query]: Query text
   /// [topK]: Number of results to return
-  Future<List<Document>> retrieveRelevantDocuments(
+  Future<List<llm.Document>> retrieveRelevantDocuments(
       String llmId,
       String query, {
         int topK = 5,
@@ -1535,11 +1568,11 @@ class FlutterMCP {
   /// [sessionId]: Optional session ID
   /// [title]: Optional session title
   /// [storageManager]: Optional storage manager for persisting chat history
-  Future<ChatSession> createChatSession(
+  Future<llm.ChatSession> createChatSession(
       String llmId, {
         String? sessionId,
         String? title,
-        StorageManager? storageManager,
+        llm.StorageManager? storageManager,
       }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -1554,8 +1587,8 @@ class FlutterMCP {
       }
 
       // Create a new chat session with storage
-      final storage = storageManager ?? MemoryStorage();
-      final session = ChatSession(
+      final storage = storageManager ?? llm.MemoryStorage();
+      final session = llm.ChatSession(
         llmProvider: llmInfo.client.llmProvider,
         storageManager: storage,
         id: sessionId ?? 'session_${DateTime.now().millisecondsSinceEpoch}',
@@ -1563,14 +1596,14 @@ class FlutterMCP {
       );
 
       // Register for resource cleanup
-      _resourceManager.register<ChatSession>(
+      _resourceManager.register<llm.ChatSession>(
           'chat_session_${session.id}',
           session,
               (s) async {
             // No explicit cleanup needed for ChatSession, but might want to
             // persist its state before cleanup
             if (storage is PersistentStorage) {
-              await (storage).persist();
+              await storage.persist();
             }
           }
       );
@@ -1594,11 +1627,11 @@ class FlutterMCP {
   /// [title]: Optional conversation title
   /// [topics]: Optional topics for the conversation
   /// [storageManager]: Optional storage manager for persisting conversation
-  Future<Conversation> createConversation(
+  Future<llm.Conversation> createConversation(
       String llmId, {
         String? title,
         List<String>? topics,
-        StorageManager? storageManager,
+        llm.StorageManager? storageManager,
       }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -1613,8 +1646,8 @@ class FlutterMCP {
       }
 
       // Create a new conversation
-      final storage = storageManager ?? MemoryStorage();
-      final conversation = Conversation(
+      final storage = storageManager ?? llm.MemoryStorage();
+      final conversation = llm.Conversation(
         id: 'conv_${DateTime.now().millisecondsSinceEpoch}',
         title: title ?? 'Conversation',
         llmProvider: llmInfo.client.llmProvider,
@@ -1623,14 +1656,14 @@ class FlutterMCP {
       );
 
       // Register for resource cleanup
-      _resourceManager.register<Conversation>(
+      _resourceManager.register<llm.Conversation>(
           'conversation_${conversation.id}',
           conversation,
               (c) async {
             // No explicit cleanup needed for Conversation, but might want to
             // persist its state before cleanup
             if (storage is PersistentStorage) {
-              await (storage).persist();
+              await storage.persist();
             }
           }
       );
@@ -1653,7 +1686,7 @@ class FlutterMCP {
   /// [query]: Query text
   /// [properties]: Properties to match
   /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
-  LlmClient? selectClient(
+  llm.LlmClient? selectClient(
       String query, {
         Map<String, dynamic>? properties,
         String mcpLlmInstanceId = 'default',
@@ -1670,8 +1703,7 @@ class FlutterMCP {
 
       PerformanceMonitor.instance.stopTimer(timer, success: true,
           metadata: {'selectedProvider': result?.runtimeType.toString()});
-      return result;
-    } catch (e, stackTrace) {
+      return result;    } catch (e, stackTrace) {
       PerformanceMonitor.instance.stopTimer(timer, success: false);
       _logger.error('Failed to select LLM client', e, stackTrace);
       throw MCPOperationFailedException(
@@ -1688,7 +1720,7 @@ class FlutterMCP {
   /// [enableTools]: Whether to enable tools
   /// [parameters]: Additional parameters
   /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
-  Future<Map<String, LlmResponse>> fanOutQuery(
+  Future<Map<String, llm.LlmResponse>> fanOutQuery(
       String query, {
         bool enableTools = false,
         Map<String, dynamic> parameters = const {},
@@ -1729,12 +1761,12 @@ class FlutterMCP {
   /// [enableTools]: Whether to enable tools
   /// [parameters]: Additional parameters
   /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
-  Future<LlmResponse> executeParallel(
+  Future<llm.LlmResponse> executeParallel(
       String query, {
         List<String>? providerNames,
-        ResultAggregator? aggregator,
+        llm.ResultAggregator? aggregator,
         Map<String, dynamic> parameters = const {},
-        LlmConfiguration? config,
+        llm.LlmConfiguration? config,
         String mcpLlmInstanceId = 'default',
       }) async {
     if (!_initialized) {
@@ -1768,7 +1800,7 @@ class FlutterMCP {
   }
 
   /// Helper method to get MCPLlm instance or throw if not found
-  MCPLlm _getMcpLlmInstanceOrThrow(String instanceId) {
+  llm.MCPLlm _getMcpLlmInstanceOrThrow(String instanceId) {
     final mcpLlm = _mcpLlmInstances[instanceId];
     if (mcpLlm == null) {
       throw MCPResourceNotFoundException(instanceId, 'MCPLlm instance not found');
@@ -1783,7 +1815,7 @@ class FlutterMCP {
   /// [mcpLlmInstanceId]: ID of the MCPLlm instance to register on (defaults to 'default')
   void registerLlmProvider(
       String name,
-      LlmProviderFactory factory, {
+      llm.LlmProviderFactory factory, {
         String mcpLlmInstanceId = 'default',
       }) {
     final mcpLlm = _getMcpLlmInstanceOrThrow(mcpLlmInstanceId);
@@ -1935,9 +1967,9 @@ class FlutterMCP {
   List<String> get allLlmIds => _llmManager.getAllLlmIds();
 
   /// Object access methods
-  Client? getClient(String clientId) => _clientManager.getClient(clientId);
-  Server? getServer(String serverId) => _serverManager.getServer(serverId);
-  LlmClient? getLlm(String llmId) => _llmManager.getLlm(llmId);
+  client.Client? getClient(String clientId) => _clientManager.getClient(clientId);
+  server.Server? getServer(String serverId) => _serverManager.getServer(serverId);
+  llm.LlmClient? getLlm(String llmId) => _llmManager.getLlm(llmId);
 
   /// Get system status with enhanced information
   Map<String, dynamic> getSystemStatus() {
@@ -1977,7 +2009,7 @@ class MCPRateLimitException extends MCPException {
 }
 
 /// Interface for persistent storage
-abstract class PersistentStorage implements StorageManager {
+abstract class PersistentStorage implements llm.StorageManager {
   /// Persist storage to disk
   Future<void> persist();
 

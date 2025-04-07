@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/utils/performance_monitor.dart';
 import 'package:flutter_mcp/src/utils/memory_manager.dart';
 import 'package:flutter_mcp/src/utils/logger.dart';
-import 'dart:async';
 
 void main() {
   // Set up logging for tests
@@ -18,14 +17,14 @@ void main() {
   });
 
   group('PerformanceMonitor Tests', () {
-    test('Basic timer operations', () {
+    test('Basic timer operations', () async {
       final monitor = PerformanceMonitor.instance;
 
       // Start a timer
       final timerId = monitor.startTimer('test_operation');
 
       // Introduce a small delay
-      Future.delayed(Duration(milliseconds: 10));
+      await Future.delayed(Duration(milliseconds: 10));
 
       // Stop the timer
       final duration = monitor.stopTimer(timerId, success: true);
@@ -34,9 +33,10 @@ void main() {
       expect(duration.inMilliseconds, greaterThan(0));
 
       // Get metrics report
-      final report = monitor.getMetricsReport();
-      expect(report['timers'].containsKey('test_operation'), true);
-      expect(report['timers']['test_operation']['success_rate'], 1.0);
+      final metrics = monitor.getTimerMetrics('test_operation');
+      expect(metrics != null, true);
+      expect(metrics?['count'], 1);
+      expect(metrics?['success_rate'], 1.0);
     });
 
     test('Counter operations', () {
@@ -88,7 +88,7 @@ void main() {
       expect(monitor.hasCachingEnabled('test_topic'), false);
     });
 
-    test('Metrics summary generation', () {
+    test('Metrics summary generation', () async {
       final monitor = PerformanceMonitor.instance;
 
       // Add various metrics
@@ -100,7 +100,7 @@ void main() {
       monitor.stopTimer(timer1, success: true);
 
       final timer2 = monitor.startTimer('operation2');
-      Future.delayed(Duration(milliseconds: 10));
+      await Future.delayed(Duration(milliseconds: 10));
       monitor.stopTimer(timer2, success: false);
 
       monitor.recordResourceUsage('cpu', 30.0, capacity: 100.0);

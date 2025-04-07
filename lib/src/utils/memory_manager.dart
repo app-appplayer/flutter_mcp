@@ -270,8 +270,7 @@ class MemoryManager {
 
 /// Cache with memory-aware eviction policies
 class MemoryAwareCache<K, V> {
-  final Map<K, V> _cache = {};
-  final Map<K, DateTime> _lastAccessed = {};
+  final Map<K, _CacheEntry<V>> _cache = {};
   final int _maxSize;
   final Duration? _entryTTL;
   final MemoryManager _memoryManager = MemoryManager.instance;
@@ -287,8 +286,12 @@ class MemoryAwareCache<K, V> {
 
   /// Put an item in the cache
   void put(K key, V value) {
-    _lastAccessed[key] = DateTime.now();
-    _cache[key] = value;
+    final now = DateTime.now();
+    _cache[key] = _CacheEntry(
+        value: value,
+        insertedAt: now,
+        lastAccessedAt: now
+    );
 
     // Check if we need to evict entries
     _checkEviction();
@@ -296,44 +299,39 @@ class MemoryAwareCache<K, V> {
 
   /// Get an item from the cache
   V? get(K key) {
-    final value = _cache[key];
+    final entry = _cache[key];
 
-    if (value != null) {
-      // Update access time
-      _lastAccessed[key] = DateTime.now();
+    if (entry != null) {
+      // Update last accessed time
+      entry.lastAccessedAt = DateTime.now();
 
       // Check if entry has expired
-      if (_isExpired(key)) {
+      if (_isExpired(entry)) {
         _cache.remove(key);
-        _lastAccessed.remove(key);
         return null;
       }
     }
 
-    return value;
+    return entry?.value;
   }
 
   /// Remove an item from the cache
   V? remove(K key) {
-    _lastAccessed.remove(key);
-    return _cache.remove(key);
+    final entry = _cache.remove(key);
+    return entry?.value;
   }
 
   /// Clear the entire cache
   void clear() {
     _cache.clear();
-    _lastAccessed.clear();
   }
 
   /// Check if an entry is expired
-  bool _isExpired(K key) {
+  bool _isExpired(_CacheEntry<V> entry) {
     if (_entryTTL == null) return false;
 
-    final accessTime = _lastAccessed[key];
-    if (accessTime == null) return true;
-
     final now = DateTime.now();
-    return now.difference(accessTime) > _entryTTL;
+    return now.difference(entry.insertedAt) > _entryTTL;
   }
 
   /// Check if we need to evict entries
@@ -346,23 +344,25 @@ class MemoryAwareCache<K, V> {
 
   /// Evict the oldest entries
   void _evictOldest() {
-    if (_lastAccessed.isEmpty) return;
+    if (_cache.isEmpty) return;
 
-    // Find the oldest entry
+    // Find the oldest entry based on insertion time
     K? oldestKey;
     DateTime? oldestTime;
 
-    for (final entry in _lastAccessed.entries) {
-      if (oldestTime == null || entry.value.isBefore(oldestTime)) {
-        oldestKey = entry.key;
-        oldestTime = entry.value;
+    for (final MapEntry(key: key, value: entry) in _cache.entries) {
+      if (oldestTime == null) {
+        oldestKey = key;
+        oldestTime = entry.insertedAt;
+      } else if (entry.insertedAt.isBefore(oldestTime)) {
+        oldestKey = key;
+        oldestTime = entry.insertedAt;
       }
     }
 
     // Remove the oldest entry
     if (oldestKey != null) {
       _cache.remove(oldestKey);
-      _lastAccessed.remove(oldestKey);
     }
   }
 
@@ -377,8 +377,8 @@ class MemoryAwareCache<K, V> {
     }
 
     // Remove older half of the cache
-    final keysToKeep = _lastAccessed.entries
-        .sorted((a, b) => b.value.compareTo(a.value)) // Sort by most recent first
+    final keysToKeep = _cache.entries
+        .sorted((a, b) => b.value.lastAccessedAt.compareTo(a.value.lastAccessedAt)) // Sort by most recent first
         .take((currentSize / 2).ceil()) // Keep the newer half
         .map((e) => e.key)
         .toSet();
@@ -388,7 +388,6 @@ class MemoryAwareCache<K, V> {
 
     for (final key in keysToRemove) {
       _cache.remove(key);
-      _lastAccessed.remove(key);
     }
 
     MCPLogger('mcp.memory_cache').info('Cache reduced from $currentSize to ${_cache.length} items due to high memory');
@@ -402,6 +401,19 @@ class MemoryAwareCache<K, V> {
 
   /// All keys in the cache
   Iterable<K> get keys => _cache.keys;
+}
+
+/// Internal cache entry to track insertion and access times
+class _CacheEntry<V> {
+  final V value;
+  final DateTime insertedAt;
+  DateTime lastAccessedAt;
+
+  _CacheEntry({
+    required this.value,
+    required this.insertedAt,
+    required this.lastAccessedAt,
+  });
 }
 
 /// Extension for sorted entries

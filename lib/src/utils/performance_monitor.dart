@@ -40,7 +40,7 @@ class PerformanceMonitor {
   /// Internal constructor
   PerformanceMonitor._internal({
     int maxRecentOperations = 100,
-    bool enableLogging = true,
+    bool enableLogging = false,
     bool enableMetricsExport = false,
     Duration autoExportInterval = const Duration(minutes: 5),
   }) :
@@ -102,7 +102,7 @@ class PerformanceMonitor {
 
   /// Start a timer for a specific operation
   String startTimer(String operation, {Map<String, dynamic>? metadata}) {
-    final operationId = '${operation}_${DateTime.now().millisecondsSinceEpoch}';
+    final operationId = '${operation}|${DateTime.now().millisecondsSinceEpoch}';
 
     // Create and start new stopwatch
     final stopwatch = Stopwatch()..start();
@@ -130,7 +130,7 @@ class PerformanceMonitor {
     final duration = stopwatch.elapsed;
 
     // Extract operation name from ID
-    final operationName = operationId.split('_').first;
+    final operationName = operationId.split('|').first;
 
     // Record operation
     _recordOperation(
@@ -210,6 +210,13 @@ class PerformanceMonitor {
   /// Check if a topic has caching enabled
   bool hasCachingEnabled(String topic) {
     return _cachingTopics.contains(topic);
+  }
+
+  /// Get timer metrics for a specific operation
+  Map<String, dynamic>? getTimerMetrics(String name) {
+    final timer = _timers[name];
+    if (timer == null) return null;
+    return timer.toJson();
   }
 
   /// Get metrics report

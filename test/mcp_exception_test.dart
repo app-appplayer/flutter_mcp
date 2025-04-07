@@ -112,17 +112,18 @@ void main() {
     test('Retry exhausts all attempts', () async {
       int attempts = 0;
 
-      expect(
-            () => ErrorRecovery.tryWithRetry<String>(
+      try {
+        await ErrorRecovery.tryWithRetry<String>(
               () async {
             attempts++;
             throw Exception('Always fails');
           },
           maxRetries: 3,
           initialDelay: Duration(milliseconds: 10),
-        ),
-        throwsA(isA<MCPOperationFailedException>()),
-      );
+        );
+      } catch (e) {
+        expect(e, isA<MCPOperationFailedException>());
+      }
 
       expect(attempts, 4); // Initial attempt + 3 retries
     });

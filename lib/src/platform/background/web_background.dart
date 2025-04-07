@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
-import 'package:web/web.dart' as web;
+import 'dart:convert';
+import 'package:universal_html/html.dart';
+import 'package:universal_html/js_util.dart';
 
 import '../../config/background_config.dart';
 import '../../utils/logger.dart';
@@ -11,7 +11,7 @@ import 'background_service.dart';
 /// Web background service implementation using Web Workers
 class WebBackgroundService implements BackgroundService {
   bool _isRunning = false;
-  web.Worker? _worker;
+  Worker? _worker;
   Timer? _periodicTimer;
   final MCPLogger _logger = MCPLogger('mcp.web_background');
 
@@ -88,7 +88,7 @@ class WebBackgroundService implements BackgroundService {
           if (_worker != null) {
             // Send stop command to worker first
             if (_workerInitialized) {
-              _worker!.postMessage({'command': 'stop'}.jsify());
+              _worker!.postMessage(jsonEncode({'command': 'stop'}));
               // Wait a short period for worker to process the stop command
               await Future.delayed(Duration(milliseconds: 100));
             }
@@ -131,7 +131,7 @@ class WebBackgroundService implements BackgroundService {
       // Handle incoming messages
       self.onmessage = function(e) {
         try {
-          const data = e.data;
+          const data = JSON.parse(e.data);
           
           if (data.command === 'start') {
             interval = data.interval || 5000;
@@ -144,25 +144,25 @@ class WebBackgroundService implements BackgroundService {
             
             // Set up the interval
             intervalId = setInterval(() => {
-              self.postMessage({ type: 'task', timestamp: Date.now() });
+              self.postMessage(JSON.stringify({ type: 'task', timestamp: Date.now() }));
             }, interval);
             
-            self.postMessage({ 
+            self.postMessage(JSON.stringify({ 
               type: 'started', 
               timestamp: Date.now(),
               config: { interval, keepAlive }
-            });
+            }));
           } 
           else if (data.command === 'stop') {
             if (intervalId) {
               clearInterval(intervalId);
               intervalId = null;
             }
-            self.postMessage({ type: 'stopped', timestamp: Date.now() });
+            self.postMessage(JSON.stringify({ type: 'stopped', timestamp: Date.now() }));
           }
           else if (data.command === 'ping') {
             // Health check
-            self.postMessage({ type: 'pong', timestamp: Date.now() });
+            self.postMessage(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
           }
           else if (data.command === 'updateInterval') {
             interval = data.interval || interval;
@@ -171,69 +171,65 @@ class WebBackgroundService implements BackgroundService {
             if (intervalId) {
               clearInterval(intervalId);
               intervalId = setInterval(() => {
-                self.postMessage({ type: 'task', timestamp: Date.now() });
+                self.postMessage(JSON.stringify({ type: 'task', timestamp: Date.now() }));
               }, interval);
             }
             
-            self.postMessage({ 
+            self.postMessage(JSON.stringify({ 
               type: 'intervalUpdated', 
               timestamp: Date.now(),
               interval: interval
-            });
+            }));
           }
         } catch (error) {
-          self.postMessage({ 
+          self.postMessage(JSON.stringify({ 
             type: 'error', 
             error: error.toString(), 
             timestamp: Date.now() 
-          });
+          }));
         }
       };
       
       // Send an initialization message
-      self.postMessage({ type: 'initialized', timestamp: Date.now() });
+      self.postMessage(JSON.stringify({ type: 'initialized', timestamp: Date.now() }));
       
       // Error handler
       self.onerror = function(event) {
-        self.postMessage({ 
+        self.postMessage(JSON.stringify({ 
           type: 'error', 
           error: event.message,
           lineno: event.lineno,
           filename: event.filename,
           timestamp: Date.now()
-        });
+        }));
       };
     ''';
 
     // Create a blob URL with the worker script
-    final blob = web.Blob(
-        [workerScript.toJS].toJS as JSArray<web.BlobPart>,
-        web.BlobPropertyBag(type: 'application/javascript')
-    );
-
-    final url = web.URL.createObjectURL(blob);
+    final blob = Blob([workerScript]);
+    final url = Url.createObjectUrlFromBlob(blob);
 
     try {
       // Create the worker
-      _worker = web.Worker(url.toString().toJS);
+      _worker = Worker(url);
 
       // Set up message handler
       final completer = Completer<void>();
 
       // Use addEventListener for better compatibility
-      _worker!.addEventListener('message', ((event) {
-        final messageEvent = event as web.MessageEvent;
-        final data = messageEvent.data.dartify();
+      _worker!.onMessage.listen((MessageEvent event) {
+        String dataStr = event.data as String;
+        Map<String, dynamic> data = jsonDecode(dataStr);
 
-        if (data != null && data is Map && data.containsKey('type') && data['type'] == 'initialized') {
+        if (data.containsKey('type') && data['type'] == 'initialized') {
           _workerInitialized = true;
 
           // Send the start command
-          _worker!.postMessage({
+          _worker!.postMessage(jsonEncode({
             'command': 'start',
             'interval': _intervalMs,
             'keepAlive': _config?.keepAlive ?? true
-          }.jsify());
+          }));
 
           // Process any pending callbacks
           for (final callback in _pendingCallbacks) {
@@ -251,17 +247,17 @@ class WebBackgroundService implements BackgroundService {
         } else {
           _handleWorkerMessage(data);
         }
-      }).toJS);
+      });
 
       // Set up error handler
-      _worker!.addEventListener('error', ((event) {
-        final errorEvent = event as web.ErrorEvent;
+      _worker!.onError.listen((Event event) {
+        final errorEvent = event as ErrorEvent;
         _logger.error('Web Worker error: ${errorEvent.message}');
 
         if (!completer.isCompleted) {
           completer.completeError(Exception('Web Worker initialization failed: ${errorEvent.message}'));
         }
-      }).toJS);
+      });
 
       // Wait for worker to initialize or timeout
       return await ErrorRecovery.tryWithTimeout(
@@ -289,7 +285,7 @@ class WebBackgroundService implements BackgroundService {
       _startWithTimer();
 
       // Revoke the URL
-      web.URL.revokeObjectURL(url);
+      Url.revokeObjectUrl(url);
     }
   }
 
@@ -380,7 +376,7 @@ class WebBackgroundService implements BackgroundService {
   void _checkWorkerHealth() {
     if (_worker != null && _workerInitialized) {
       try {
-        _worker!.postMessage({'command': 'ping'}.jsify());
+        _worker!.postMessage(jsonEncode({'command': 'ping'}));
       } catch (e) {
         _logger.error('Failed to send ping to worker, it may be unresponsive', e);
 
@@ -419,10 +415,10 @@ class WebBackgroundService implements BackgroundService {
 
     if (_worker != null && _workerInitialized) {
       try {
-        _worker!.postMessage({
+        _worker!.postMessage(jsonEncode({
           'command': 'updateInterval',
           'interval': intervalMs
-        }.jsify());
+        }));
         return true;
       } catch (e, stackTrace) {
         _logger.error('Failed to update Web Worker interval', e, stackTrace);
@@ -442,7 +438,7 @@ class WebBackgroundService implements BackgroundService {
   /// Check if the browser supports Web Workers
   bool _supportsWebWorkers() {
     try {
-      return web.window.hasProperty('Worker'.toJS).toDart;
+      return hasProperty(window, 'Worker');
     } catch (e) {
       return false;
     }

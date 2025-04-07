@@ -1,23 +1,11 @@
 import 'dart:async';
-import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
-import 'package:web/web.dart' as web;
+import 'package:universal_html/html.dart';
+import 'package:universal_html/js_util.dart';
 
 import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
 import 'notification_manager.dart';
 import '../../utils/exceptions.dart';
-
-
-@JS()
-external Object newObject();
-
-@JS('Object.defineProperty')
-external Object defineProperty(
-    Object o,
-    String propertyKey,
-    Object attributes,
-    );
 
 /// Web notification manager implementation using modern Web APIs
 class WebNotificationManager implements NotificationManager {
@@ -25,16 +13,13 @@ class WebNotificationManager implements NotificationManager {
   bool _permissionGranted = false;
 
   /// Map of active notifications
-  final Map<String, web.Notification> _activeNotifications = {};
+  final Map<String, Notification> _activeNotifications = {};
 
   /// Notification click handlers
   final Map<String, Function(String id, Map<String, dynamic>? data)> _clickHandlers = {};
 
   /// Default notification icon
   String? _defaultIcon;
-
-  /// Default notification duration in seconds
-  //int _defaultDurationSeconds = 5;
 
   @override
   Future<void> initialize(NotificationConfig? config) async {
@@ -52,7 +37,7 @@ class WebNotificationManager implements NotificationManager {
     }
 
     // Check permission status
-    final permission = web.Notification.permission;
+    final permission = Notification.permission;
 
     if (permission == 'granted') {
       _permissionGranted = true;
@@ -85,8 +70,8 @@ class WebNotificationManager implements NotificationManager {
     if (!_permissionGranted) {
       _logger.debug('Requesting notification permission');
 
-      final permission = await web.Notification.requestPermission().toDart;
-      _permissionGranted = permission == 'granted'.toJS;
+      final permission = await Notification.requestPermission();
+      _permissionGranted = permission == 'granted';
 
       if (!_permissionGranted) {
         _logger.warning('Notification permission not granted');
@@ -98,38 +83,34 @@ class WebNotificationManager implements NotificationManager {
     await hideNotification(id);
 
     // Create notification options
-    final options = <String, Object?>{
+    final options = <String, dynamic>{
       'body': body,
       'tag': id,
       'requireInteraction': true,
     };
-    final jsOptions = newObject();
-    options.forEach((key, value) {
-      if (value != null) {
-        defineProperty(jsOptions, key, <String, Object?>{'value': value});
-      }
-    });
 
     // Set icon (use default if not provided)
     if (icon != null) {
-      defineProperty(jsOptions, 'icon', <String, Object?>{'value': icon});
+      options['icon'] = icon;
     } else if (_defaultIcon != null) {
-      defineProperty(jsOptions, 'icon', <String, Object?>{'value': _defaultIcon!});
+      options['icon'] = _defaultIcon!;
     }
-
-    // Store additional data for later retrieval
-    //final notificationData = additionalData ?? {};
 
     try {
       // Create and display the notification
-      final notification = web.Notification(title, jsOptions as web.NotificationOptions);
+      final notification = Notification(
+        title,
+        body: options['body'] as String?,
+        tag: options['tag'] as String?,
+        icon: options['icon'] as String?,
+      );
       _activeNotifications[id] = notification;
 
       // Set up click handler
-      notification.onclick = ((event) {
+      notification.onClick.listen((_) {
         _logger.debug('Notification clicked: $id');
         _handleNotificationTap(id);
-      }).toJS;
+      });
 
       // Return immediately as the notification has been displayed
       return;
@@ -173,11 +154,6 @@ class WebNotificationManager implements NotificationManager {
     }
   }
 
-  /// Set the default auto-close duration
-  void setDefaultDuration(int seconds) {
-    //_defaultDurationSeconds = seconds;
-  }
-
   /// Request notification permission explicitly
   Future<bool> requestPermission() async {
     if (!_isSupported()) {
@@ -185,8 +161,8 @@ class WebNotificationManager implements NotificationManager {
     }
 
     _logger.debug('Explicitly requesting notification permission');
-    final permission = await web.Notification.requestPermission().toDart;
-    _permissionGranted = permission == 'granted'.toJS;
+    final permission = await Notification.requestPermission();
+    _permissionGranted = permission == 'granted';
 
     return _permissionGranted;
   }
@@ -194,7 +170,7 @@ class WebNotificationManager implements NotificationManager {
   /// Check if notifications are supported
   bool _isSupported() {
     try {
-      return web.window.hasProperty('Notification'.toJS).toDart;
+      return hasProperty(window, 'Notification');
     } catch (e) {
       return false;
     }
@@ -207,7 +183,7 @@ class WebNotificationManager implements NotificationManager {
 
     // Try focusing the window when notification is clicked
     try {
-      web.window.focus();
+      callMethod(window, 'focus', []);
     } catch (e) {
       _logger.warning('Window focus failed: $e');
     }
@@ -225,7 +201,7 @@ class WebNotificationManager implements NotificationManager {
   }
 
   /// Convert Notification to a map for easier data handling
-  Map<String, dynamic>? _convertNotificationToMap(web.Notification? notification) {
+  Map<String, dynamic>? _convertNotificationToMap(Notification? notification) {
     if (notification == null) return null;
 
     return {

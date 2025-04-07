@@ -8,7 +8,8 @@ import 'package:flutter_mcp/src/platform/tray/tray_manager.dart';
 import 'package:flutter_mcp/src/platform/platform_services.dart';
 import 'package:flutter_mcp/src/platform/storage/secure_storage.dart';
 
-import 'mcp_mock_tests.mocks.dart';
+import 'mcp_mock_test.mocks.dart';
+
 
 // Generate mocks for platform-specific implementations
 @GenerateMocks([

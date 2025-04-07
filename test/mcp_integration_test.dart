@@ -5,7 +5,7 @@ import 'package:flutter_mcp/flutter_mcp.dart';
 import 'package:flutter_mcp/src/platform/platform_services.dart';
 import 'package:mcp_llm/mcp_llm.dart' as llm;
 
-import 'mcp_integration_tests.mocks.dart';
+import 'mcp_integration_test.mocks.dart';
 
 // Generate mock for dependencies
 @GenerateMocks([PlatformServices])

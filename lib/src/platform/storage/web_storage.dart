@@ -1,4 +1,4 @@
-import 'package:web/web.dart' as web;
+import 'package:universal_html/html.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -78,7 +78,8 @@ class WebStorageManager implements SecureStorageManager {
       };
 
       // Store as JSON
-      _getStorage().setItem('$_prefix$key', jsonEncode(entry));
+      final storage = _getStorage();
+      storage[_prefix + key] = jsonEncode(entry);
     } catch (e, stackTrace) {
       _logger.error('Failed to save string to web storage', e, stackTrace);
       throw MCPException(
@@ -93,7 +94,8 @@ class WebStorageManager implements SecureStorageManager {
     _logger.debug('Reading string from web storage: $key');
 
     try {
-      final value = _getStorage().getItem('$_prefix$key');
+      final storage = _getStorage();
+      final value = storage[_prefix + key];
       if (value == null) {
         return null;
       }
@@ -134,7 +136,8 @@ class WebStorageManager implements SecureStorageManager {
     _logger.debug('Deleting key from web storage: $key');
 
     try {
-      _getStorage().removeItem('$_prefix$key');
+      final storage = _getStorage();
+      storage.remove(_prefix + key);
       return true;
     } catch (e, stackTrace) {
       _logger.error('Failed to delete key from web storage', e, stackTrace);
@@ -148,8 +151,8 @@ class WebStorageManager implements SecureStorageManager {
   @override
   Future<bool> containsKey(String key) async {
     try {
-      final value = _getStorage().getItem('$_prefix$key');
-      return value != null;
+      final storage = _getStorage();
+      return storage.containsKey(_prefix + key);
     } catch (e, stackTrace) {
       _logger.error(
           'Failed to check if key exists in web storage', e, stackTrace);
@@ -185,7 +188,8 @@ class WebStorageManager implements SecureStorageManager {
       };
 
       // Store as JSON
-      _getStorage().setItem('$_prefix$key', jsonEncode(entry));
+      final storage = _getStorage();
+      storage[_prefix + key] = jsonEncode(entry);
     } catch (e, stackTrace) {
       _logger.error('Failed to save map to web storage', e, stackTrace);
       throw MCPException(
@@ -201,7 +205,8 @@ class WebStorageManager implements SecureStorageManager {
     _logger.debug('Reading map from web storage: $key');
 
     try {
-      final value = _getStorage().getItem('$_prefix$key');
+      final storage = _getStorage();
+      final value = storage[_prefix + key];
       if (value == null) {
         return null;
       }
@@ -264,16 +269,15 @@ class WebStorageManager implements SecureStorageManager {
 
       // Collect keys first to avoid modification during iteration
       // Need to iterate through all keys
-      for (int i = 0; i < storage.length; i++) {
-        final key = storage.key(i);
-        if (key != null && key.startsWith(_prefix)) {
+      for (var key in storage.keys) {
+        if (key.startsWith(_prefix)) {
           keysToRemove.add(key);
         }
       }
 
       // Remove collected keys
       for (final key in keysToRemove) {
-        storage.removeItem(key);
+        storage.remove(key);
       }
     } catch (e, stackTrace) {
       _logger.error('Failed to clear web storage', e, stackTrace);
@@ -289,9 +293,8 @@ class WebStorageManager implements SecureStorageManager {
       final storage = _getStorage();
 
       // Iterate through all keys
-      for (int i = 0; i < storage.length; i++) {
-        final key = storage.key(i);
-        if (key != null && key.startsWith(_prefix)) {
+      for (var key in storage.keys) {
+        if (key.startsWith(_prefix)) {
           allKeys.add(key.substring(_prefix.length));
         }
       }
@@ -309,11 +312,11 @@ class WebStorageManager implements SecureStorageManager {
     final storage = _getStorage();
 
     // Check if we already have encryption materials
-    final encryptionKey = storage.getItem('${_prefix}__encryption_key');
+    final encryptionKey = storage['${_prefix}__encryption_key'];
     if (encryptionKey != null) {
       _encryptionKey = encryptionKey;
-      _encryptionSalt = base64Decode(storage.getItem('${_prefix}__encryption_salt')!);
-      _encryptionIV = base64Decode(storage.getItem('${_prefix}__encryption_iv')!);
+      _encryptionSalt = base64Decode(storage['${_prefix}__encryption_salt']!);
+      _encryptionIV = base64Decode(storage['${_prefix}__encryption_iv']!);
     } else {
       // Generate new encryption materials
       _encryptionKey = _generateRandomString(32);
@@ -321,19 +324,19 @@ class WebStorageManager implements SecureStorageManager {
       _encryptionIV = _getRandomBytes(16);
 
       // Store encryption materials
-      storage.setItem('${_prefix}__encryption_key', _encryptionKey);
-      storage.setItem('${_prefix}__encryption_salt', base64Encode(_encryptionSalt));
-      storage.setItem('${_prefix}__encryption_iv', base64Encode(_encryptionIV));
+      storage['${_prefix}__encryption_key'] = _encryptionKey;
+      storage['${_prefix}__encryption_salt'] = base64Encode(_encryptionSalt);
+      storage['${_prefix}__encryption_iv'] = base64Encode(_encryptionIV);
 
       // Store the version
-      storage.setItem('${_prefix}__storage_version', _storageVersion.toString());
+      storage['${_prefix}__storage_version'] = _storageVersion.toString();
     }
   }
 
   /// Check if we need to migrate from legacy storage format
   bool _checkIfMigrationNeeded() {
     final storage = _getStorage();
-    final versionString = storage.getItem('${_prefix}__storage_version');
+    final versionString = storage['${_prefix}__storage_version'];
 
     if (versionString != null) {
       final version = int.tryParse(versionString) ?? 1;
@@ -341,22 +344,22 @@ class WebStorageManager implements SecureStorageManager {
     }
 
     // Check for legacy keys - iterate through all keys
-    for (int i = 0; i < storage.length; i++) {
-      final key = storage.key(i);
-      if (key != null && key.startsWith(_prefix) &&
+    bool hasLegacyKeys = false;
+    for (var key in storage.keys) {
+      if (key.startsWith(_prefix) &&
           key != '${_prefix}__encryption_key' &&
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
 
-        final value = storage.getItem(key);
+        final value = storage[key];
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
-          return true;
+          hasLegacyKeys = true;
         }
       }
     }
 
-    return false;
+    return hasLegacyKeys;
   }
 
   /// Migrate data from legacy storage format
@@ -367,15 +370,14 @@ class WebStorageManager implements SecureStorageManager {
     final legacyKeys = <String>[];
 
     // Collect legacy keys
-    for (int i = 0; i < storage.length; i++) {
-      final key = storage.key(i);
-      if (key != null && key.startsWith(_prefix) &&
+    for (var key in storage.keys) {
+      if (key.startsWith(_prefix) &&
           key != '${_prefix}__encryption_key' &&
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
 
-        final value = storage.getItem(key);
+        final value = storage[key];
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
           legacyKeys.add(key);
         }
@@ -385,7 +387,7 @@ class WebStorageManager implements SecureStorageManager {
     // Migrate each legacy key
     for (final key in legacyKeys) {
       try {
-        final value = storage.getItem(key);
+        final value = storage[key];
         if (value != null) {
           final decrypted = _decryptLegacy(value);
           if (decrypted != null) {
@@ -397,14 +399,14 @@ class WebStorageManager implements SecureStorageManager {
       }
     }
 
-    storage.setItem('${_prefix}__storage_version', _storageVersion.toString());
+    storage['${_prefix}__storage_version'] = _storageVersion.toString();
   }
 
   /// Get the appropriate storage based on settings
-  web.Storage _getStorage() {
+  Storage _getStorage() {
     return _useLocalStorage
-        ? web.window.localStorage
-        : web.window.sessionStorage;
+        ? window.localStorage
+        : window.sessionStorage;
   }
 
   /// Generate a random string of specified length

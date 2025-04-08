@@ -48,8 +48,10 @@ class PlatformServices {
     //_config = config;
 
     try {
-      // Initialize secure storage (always initialize)
-      await _initializeSecureStorage(config);
+      // Initialize secure storage
+      if(config.secure) {
+        await _initializeSecureStorage(config);
+      }
 
       // Initialize platform-specific services
       if (config.useBackgroundService && PlatformUtils.supportsBackgroundService) {

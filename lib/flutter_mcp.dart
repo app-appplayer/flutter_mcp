@@ -37,9 +37,6 @@ MCPBackgroundPlugin, MCPNotificationPlugin, MCPClientPlugin, MCPServerPlugin;
 // Re-export tray menu classes
 export 'src/platform/tray/tray_manager.dart' show TrayMenuItem;
 
-// Re-export platform services
-export 'src/platform/platform_services.dart';
-
 // Re-export model classes from original packages (with type aliases)
 // This way apps using flutter_mcp don't need to import the original packages
 

@@ -131,6 +131,9 @@ class FlutterMCP {
     }
 
     try {
+      // Initialize platform services
+      await _platformServices.initialize(config);
+
       // Register shutdown hook for proper cleanup
       _registerShutdownHook();
 
@@ -145,9 +148,6 @@ class FlutterMCP {
 
       // Register default LLM providers on the default instance
       _registerDefaultProviders(defaultLlm);
-
-      // Initialize platform services
-      await _platformServices.initialize(config);
 
       // Initialize resource manager with platform services
       _resourceManager.registerCallback('platform_services', () => _platformServices.shutdown());

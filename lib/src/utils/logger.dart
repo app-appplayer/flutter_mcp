@@ -27,7 +27,7 @@ class MCPLogger {
   LogLevel _level = LogLevel.info;
 
   /// Default log level
-  static LogLevel _defaultLevel = LogLevel.info;
+  static LogLevel _defaultLevel = LogLevel.none;
 
   /// Log file path
   static String? _logFilePath;

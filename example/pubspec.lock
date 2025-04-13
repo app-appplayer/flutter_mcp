@@ -341,7 +341,7 @@ packages:
       path: "../../mcp_client"
       relative: true
     source: path
-    version: "0.1.6"
+    version: "0.1.7"
   mcp_llm:
     dependency: transitive
     description:
@@ -355,7 +355,7 @@ packages:
       path: "../../mcp_server"
       relative: true
     source: path
-    version: "0.1.7"
+    version: "0.1.8"
   menu_base:
     dependency: transitive
     description:

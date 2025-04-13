@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter_mcp/src/utils/error_recovery.dart';
-import 'package:mcp_client/mcp_client.dart' as client hide LogLevel;
-import 'package:mcp_server/mcp_server.dart' as server hide LogLevel;
-import 'package:mcp_llm/mcp_llm.dart' as llm hide LogLevel;
+import 'package:mcp_client/mcp_client.dart' as client;
+import 'package:mcp_server/mcp_server.dart' as server;
+import 'package:mcp_llm/mcp_llm.dart' as llm;
 
 import 'src/config/mcp_config.dart';
 import 'src/config/job.dart';
@@ -130,6 +130,8 @@ class FlutterMCP {
   ///
   /// [config] specifies the configuration for necessary components.
   Future<void> init(MCPConfig config) async {
+    llm.Logger.setAllLevels(llm.LogLevel.debug);
+    MCPLogger.setAllLevels(LogLevel.debug);
     // Prevent multiple parallel initializations
     if (_initialized) {
       _logger.warning('Flutter MCP is already initialized');
@@ -644,11 +646,15 @@ class FlutterMCP {
         String llmId;
 
         if (clientConfig.integrateLlm!.existingLlmId != null) {
+          // Use existing LLM ID
           llmId = clientConfig.integrateLlm!.existingLlmId!;
         } else {
-          llmId = await createLlm(
+          // Create new LLM client and use its llmId
+          final (newLlmId, _) = await createLlmClient(
             providerName: clientConfig.integrateLlm!.providerName!,
+            config: clientConfig.integrateLlm!.config!,
           );
+          llmId = newLlmId;
         }
 
         await integrateClientWithLlm(
@@ -700,11 +706,15 @@ class FlutterMCP {
         String llmId;
 
         if (serverConfig.integrateLlm!.existingLlmId != null) {
+          // Use existing LLM ID
           llmId = serverConfig.integrateLlm!.existingLlmId!;
         } else {
-          llmId = await createLlm(
+          // Create new LLM server and use its llmId
+          final (newLlmId, _) = await createLlmServer(
             providerName: serverConfig.integrateLlm!.providerName!,
+            config: serverConfig.integrateLlm!.config!,
           );
+          llmId = newLlmId;
         }
 
         await integrateServerWithLlm(
@@ -735,7 +745,6 @@ class FlutterMCP {
       rethrow;
     }
   }
-
 
   /// Create MCP client with improved error handling
   Future<String> createClient({
@@ -885,14 +894,20 @@ class FlutterMCP {
     }
   }
 
-  /// Create LLM instance and register it (without clients or servers)
+  /// Create LLM client directly without needing to call createLlm first
   ///
-  /// [providerName]: Optional - only used for logging/identification purposes
+  /// [providerName]: Provider name to use for client creation
+  /// [config]: LLM configuration for the client
+  /// [storageManager]: Optional storage manager
+  /// [retrievalManager]: Optional retrieval manager for RAG capabilities
   /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
   ///
-  /// Returns ID of the created LLM
-  Future<String> createLlm({
-    String? providerName,
+  /// Returns a Map with llmId and llmClientId
+  Future<(String llmId, String llmClientId)> createLlmClient({
+    required String providerName,
+    required llm.LlmConfiguration config,
+    llm.StorageManager? storageManager,
+    llm.RetrievalManager? retrievalManager,
     String mcpLlmInstanceId = 'default',
   }) async {
     if (!_initialized) {
@@ -901,7 +916,7 @@ class FlutterMCP {
 
     final stopwatch = _stopwatchPool.acquire();
     stopwatch.start();
-    final operationId = 'llm.create_instance';
+    final operationId = 'llm.create_with_client';
 
     try {
       // Get MCPLlm instance, create if doesn't exist (lazy initialization)
@@ -912,7 +927,7 @@ class FlutterMCP {
 
       final mcpLlm = _mcpLlmInstances[mcpLlmInstanceId]!.value;
 
-      _logger.info('Creating LLM instance${providerName != null ? " for $providerName" : ""} on MCPLlm instance $mcpLlmInstanceId');
+      _logger.info('Creating LLM instance with client for $providerName on MCPLlm instance $mcpLlmInstanceId');
 
       // Generate and register LLM ID
       final llmId = _llmManager.generateId();
@@ -927,72 +942,6 @@ class FlutterMCP {
               (id) async => await _llmManager.closeLlm(id),
           priority: ResourceManager.MEDIUM_PRIORITY
       );
-
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: true,
-          metadata: {
-            'providerName': providerName ?? 'unspecified',
-            'id': llmId,
-            'mcpLlmInstanceId': mcpLlmInstanceId,
-          }
-      );
-
-      _stopwatchPool.release(stopwatch);
-      return llmId;
-    } catch (e, stackTrace) {
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: false,
-          metadata: {'error': e.toString()}
-      );
-
-      _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create LLM instance', e, stackTrace);
-
-      throw MCPOperationFailedException(
-          'Failed to create LLM instance',
-          e,
-          stackTrace
-      );
-    }
-  }
-
-  /// Create and add a client to an existing LLM
-  ///
-  /// [llmId]: The LLM ID to create a client for
-  /// [providerName]: Provider name to use for client creation
-  /// [config]: LLM configuration for the client
-  /// [storageManager]: Optional storage manager
-  /// [retrievalManager]: Optional retrieval manager for RAG capabilities
-  ///
-  /// Returns the ID of the created LLM client
-  Future<String> createLlmClient(
-      String llmId,
-      {
-        required String providerName,
-        required llm.LlmConfiguration config,
-        llm.StorageManager? storageManager,
-        llm.RetrievalManager? retrievalManager,
-      }
-      ) async {
-    if (!_initialized) {
-      throw MCPException('Flutter MCP is not initialized');
-    }
-
-    final stopwatch = _stopwatchPool.acquire();
-    stopwatch.start();
-    final operationId = 'llm.create_client';
-
-    try {
-      final llmInfo = _llmManager.getLlmInfo(llmId);
-      if (llmInfo == null) {
-        throw MCPResourceNotFoundException(llmId, 'LLM not found');
-      }
-
-      final mcpLlm = llmInfo.mcpLlm;
 
       // Verify provider is registered
       if (!mcpLlm.getProviderCapabilities().containsKey(providerName)) {
@@ -1019,38 +968,40 @@ class FlutterMCP {
       // Add to LLM manager
       final llmClientId = await _llmManager.addLlmClient(llmId, llmClient);
 
-      // Create semantic cache for this client if needed
-      if (llmInfo.llmClients.isEmpty) {
-        // First client for this LLM, create a semantic cache
-        _llmResponseCaches[llmId] = SemanticCache(
-          maxSize: 100,
-          ttl: Duration(hours: 1),
-          embeddingFunction: (text) async => await llmClient.generateEmbeddings(text),
-          similarityThreshold: 0.85,
-        );
-      }
+      // Create semantic cache for this client
+      _llmResponseCaches[llmId] = SemanticCache(
+        maxSize: 100,
+        ttl: Duration(hours: 1),
+        embeddingFunction: (text) async => await llmClient.generateEmbeddings(text),
+        similarityThreshold: 0.85,
+      );
 
       PerformanceMonitor.instance.recordMetric(
           operationId,
           stopwatch.elapsedMilliseconds,
           success: true,
-          metadata: {'llmId': llmId, 'llmClientId': llmClientId, 'provider': providerName}
+          metadata: {
+            'llmId': llmId,
+            'llmClientId': llmClientId,
+            'provider': providerName,
+            'mcpLlmInstanceId': mcpLlmInstanceId
+          }
       );
 
-      _logger.info('Created LLM client $llmClientId using provider $providerName for LLM $llmId');
+      _logger.info('Created LLM $llmId with client $llmClientId using provider $providerName');
 
       _stopwatchPool.release(stopwatch);
-      return llmClientId;
+      return (llmId, llmClientId);
     } catch (e, stackTrace) {
       PerformanceMonitor.instance.recordMetric(
           operationId,
           stopwatch.elapsedMilliseconds,
           success: false,
-          metadata: {'llmId': llmId, 'error': e.toString()}
+          metadata: {'error': e.toString(), 'provider': providerName}
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create LLM client for LLM: $llmId', e, stackTrace);
+      _logger.error('Failed to create LLM with client', e, stackTrace);
 
       // Categorize errors better for clearer debugging
       if (e.toString().contains('API key')) {
@@ -1061,46 +1012,61 @@ class FlutterMCP {
       }
 
       throw MCPOperationFailedException(
-          'Failed to create LLM client for LLM: $llmId',
+          'Failed to create LLM with client for provider: $providerName',
           e,
           stackTrace
       );
     }
   }
 
-  /// Create and add a server to an existing LLM
+  /// Create LLM server directly without needing to call createLlm first
   ///
-  /// [llmId]: The LLM ID to create a server for
   /// [providerName]: Provider name to use for server creation
   /// [config]: LLM configuration for the server
   /// [storageManager]: Optional storage manager
   /// [retrievalManager]: Optional retrieval manager for RAG capabilities
+  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
   ///
-  /// Returns the ID of the created LLM server
-  Future<String> createLlmServer(
-      String llmId,
-      {
-        required String providerName,
-        required llm.LlmConfiguration config,
-        llm.StorageManager? storageManager,
-        llm.RetrievalManager? retrievalManager,
-      }
-      ) async {
+  /// Returns a Map with llmId and llmServerId
+  Future<(String llmId, String llmServerId)> createLlmServer({
+    required String providerName,
+    required llm.LlmConfiguration config,
+    llm.StorageManager? storageManager,
+    llm.RetrievalManager? retrievalManager,
+    String mcpLlmInstanceId = 'default',
+  }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
     }
 
     final stopwatch = _stopwatchPool.acquire();
     stopwatch.start();
-    final operationId = 'llm.create_server';
+    final operationId = 'llm.create_with_server';
 
     try {
-      final llmInfo = _llmManager.getLlmInfo(llmId);
-      if (llmInfo == null) {
-        throw MCPResourceNotFoundException(llmId, 'LLM not found');
+      // Get MCPLlm instance, create if doesn't exist (lazy initialization)
+      if (!_mcpLlmInstances.containsKey(mcpLlmInstanceId)) {
+        _logger.debug('Creating new MCPLlm instance: $mcpLlmInstanceId');
+        createMcpLlmInstance(mcpLlmInstanceId);
       }
 
-      final mcpLlm = llmInfo.mcpLlm;
+      final mcpLlm = _mcpLlmInstances[mcpLlmInstanceId]!.value;
+
+      _logger.info('Creating LLM instance with server for $providerName on MCPLlm instance $mcpLlmInstanceId');
+
+      // Generate and register LLM ID
+      final llmId = _llmManager.generateId();
+
+      // Register with the LLM manager (no clients or servers yet)
+      _llmManager.registerLlm(llmId, mcpLlm);
+
+      // Register for resource cleanup
+      _resourceManager.register<String>(
+          'llm_$llmId',
+          llmId,
+              (id) async => await _llmManager.closeLlm(id),
+          priority: ResourceManager.MEDIUM_PRIORITY
+      );
 
       // Verify provider is registered
       if (!mcpLlm.getProviderCapabilities().containsKey(providerName)) {
@@ -1131,23 +1097,28 @@ class FlutterMCP {
           operationId,
           stopwatch.elapsedMilliseconds,
           success: true,
-          metadata: {'llmId': llmId, 'llmServerId': llmServerId, 'provider': providerName}
+          metadata: {
+            'llmId': llmId,
+            'llmServerId': llmServerId,
+            'provider': providerName,
+            'mcpLlmInstanceId': mcpLlmInstanceId
+          }
       );
 
-      _logger.info('Created LLM server $llmServerId using provider $providerName for LLM $llmId');
+      _logger.info('Created LLM $llmId with server $llmServerId using provider $providerName');
 
       _stopwatchPool.release(stopwatch);
-      return llmServerId;
+      return (llmId, llmServerId);
     } catch (e, stackTrace) {
       PerformanceMonitor.instance.recordMetric(
           operationId,
           stopwatch.elapsedMilliseconds,
           success: false,
-          metadata: {'llmId': llmId, 'error': e.toString()}
+          metadata: {'error': e.toString(), 'provider': providerName}
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create LLM server for LLM: $llmId', e, stackTrace);
+      _logger.error('Failed to create LLM with server', e, stackTrace);
 
       // Categorize errors better for clearer debugging
       if (e.toString().contains('API key')) {
@@ -1158,278 +1129,7 @@ class FlutterMCP {
       }
 
       throw MCPOperationFailedException(
-          'Failed to create LLM server for LLM: $llmId',
-          e,
-          stackTrace
-      );
-    }
-  }
-
-  /// Convenience method to create an LLM with a client in one step
-  /// (For backward compatibility or simpler usage)
-  ///
-  /// [providerName]: Provider name
-  /// [config]: LLM configuration
-  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use
-  /// [storageManager]: Optional storage manager
-  /// [retrievalManager]: Optional retrieval manager
-  ///
-  /// Returns a Map with llmId and llmClientId
-  Future<Map<String, String>> createLlmWithClient({
-    required String providerName,
-    required llm.LlmConfiguration config,
-    String mcpLlmInstanceId = 'default',
-    llm.StorageManager? storageManager,
-    llm.RetrievalManager? retrievalManager,
-  }) async {
-    // Create LLM instance
-    final llmId = await createLlm(
-      providerName: providerName,
-      mcpLlmInstanceId: mcpLlmInstanceId,
-    );
-
-    // Create client
-    final llmClientId = await createLlmClient(
-      llmId,
-      providerName: providerName,
-      config: config,
-      storageManager: storageManager,
-      retrievalManager: retrievalManager,
-    );
-
-    return {
-      'llmId': llmId,
-      'llmClientId': llmClientId,
-    };
-  }
-
-  /// Convenience method to create an LLM with a server in one step
-  ///
-  /// [providerName]: Provider name
-  /// [config]: LLM configuration
-  /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use
-  /// [storageManager]: Optional storage manager
-  /// [retrievalManager]: Optional retrieval manager
-  ///
-  /// Returns a Map with llmId and llmServerId
-  Future<Map<String, String>> createLlmWithServer({
-    required String providerName,
-    required llm.LlmConfiguration config,
-    String mcpLlmInstanceId = 'default',
-    llm.StorageManager? storageManager,
-    llm.RetrievalManager? retrievalManager,
-  }) async {
-    // Create LLM instance
-    final llmId = await createLlm(
-      providerName: providerName,
-      mcpLlmInstanceId: mcpLlmInstanceId,
-    );
-
-    // Create server
-    final llmServerId = await createLlmServer(
-      llmId,
-      providerName: providerName,
-      config: config,
-      storageManager: storageManager,
-      retrievalManager: retrievalManager,
-    );
-
-    return {
-      'llmId': llmId,
-      'llmServerId': llmServerId,
-    };
-  }
-
-  /// Create and add a client to an existing LLM
-  ///
-  /// [llmId]: The LLM ID to create a client for
-  /// [providerName]: Optional provider name (if not provided, uses same provider as existing client/server)
-  /// [config]: Optional LLM configuration (if not provided, uses default settings)
-  ///
-  /// Returns the ID of the created LLM client
-  Future<String> createAndAddLlmClient(
-      String llmId,
-      {String? providerName, llm.LlmConfiguration? config}
-      ) async {
-    if (!_initialized) {
-      throw MCPException('Flutter MCP is not initialized');
-    }
-
-    final stopwatch = _stopwatchPool.acquire();
-    stopwatch.start();
-    final operationId = 'llm.create_and_add_client';
-
-    try {
-      final llmInfo = _llmManager.getLlmInfo(llmId);
-      if (llmInfo == null) {
-        throw MCPResourceNotFoundException(llmId, 'LLM not found');
-      }
-
-      final mcpLlm = llmInfo.mcpLlm;
-
-      // Determine provider name based on existing components
-      String effectiveProviderName;
-      if (providerName != null) {
-        effectiveProviderName = providerName;
-      } else if (llmInfo.hasClients()) {
-        // Use the first client's provider type
-        final existingClient = llmInfo.primaryClient!;
-        final providerType = existingClient.llmProvider.runtimeType.toString();
-
-        // Extract provider name from type (this is a simplification)
-        effectiveProviderName = providerType.contains('OpenAi') ? 'openai' :
-        providerType.contains('Claude') ? 'claude' : 'default';
-      } else if (llmInfo.hasServers()) {
-        // Use the first server's provider type
-        final existingServer = llmInfo.primaryServer!;
-        final providerType = existingServer.llmProvider.runtimeType.toString();
-
-        // Extract provider name from type (this is a simplification)
-        effectiveProviderName = providerType.contains('OpenAi') ? 'openai' :
-        providerType.contains('Claude') ? 'claude' : 'default';
-      } else {
-        throw MCPException('Cannot determine provider name for LLM: $llmId. ' +
-            'Please specify a provider name.');
-      }
-
-      // Use provided configuration or create default
-      final effectiveConfig = config ?? llm.LlmConfiguration();
-
-      // Create a new LLM client
-      final llmClient = await _retryWithTimeout(
-              () => mcpLlm.createClient(
-            providerName: effectiveProviderName,
-            config: effectiveConfig,
-          ),
-          timeout: Duration(seconds: 30),
-          maxRetries: 2,
-          retryIf: (e) => _isTransientError(e),
-          operationName: 'Create LLM client for $effectiveProviderName'
-      );
-
-      // Add to LLM manager
-      final llmClientId = await _llmManager.addLlmClient(llmId, llmClient);
-
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: true,
-          metadata: {'llmId': llmId, 'llmClientId': llmClientId, 'provider': effectiveProviderName}
-      );
-
-      _stopwatchPool.release(stopwatch);
-      return llmClientId;
-    } catch (e, stackTrace) {
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: false,
-          metadata: {'llmId': llmId, 'error': e.toString()}
-      );
-
-      _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create and add LLM client for LLM: $llmId', e, stackTrace);
-
-      throw MCPOperationFailedException(
-          'Failed to create and add LLM client for LLM: $llmId',
-          e,
-          stackTrace
-      );
-    }
-  }
-
-  /// Create and add a server to an existing LLM
-  ///
-  /// [llmId]: The LLM ID to create a server for
-  /// [providerName]: Optional provider name (if not provided, uses same provider as existing client/server)
-  /// [config]: Optional LLM configuration (if not provided, uses default settings)
-  ///
-  /// Returns the ID of the created LLM server
-  Future<String> createAndAddLlmServer(
-      String llmId,
-      {String? providerName, llm.LlmConfiguration? config}
-      ) async {
-    if (!_initialized) {
-      throw MCPException('Flutter MCP is not initialized');
-    }
-
-    final stopwatch = _stopwatchPool.acquire();
-    stopwatch.start();
-    final operationId = 'llm.create_and_add_server';
-
-    try {
-      final llmInfo = _llmManager.getLlmInfo(llmId);
-      if (llmInfo == null) {
-        throw MCPResourceNotFoundException(llmId, 'LLM not found');
-      }
-
-      final mcpLlm = llmInfo.mcpLlm;
-
-      // Determine provider name based on existing components
-      String effectiveProviderName;
-      if (providerName != null) {
-        effectiveProviderName = providerName;
-      } else if (llmInfo.hasClients()) {
-        // Use the first client's provider type
-        final existingClient = llmInfo.primaryClient!;
-        final providerType = existingClient.llmProvider.runtimeType.toString();
-
-        // Extract provider name from type (this is a simplification)
-        effectiveProviderName = providerType.contains('OpenAi') ? 'openai' :
-        providerType.contains('Claude') ? 'claude' : 'default';
-      } else if (llmInfo.hasServers()) {
-        // Use the first server's provider type
-        final existingServer = llmInfo.primaryServer!;
-        final providerType = existingServer.llmProvider.runtimeType.toString();
-
-        // Extract provider name from type (this is a simplification)
-        effectiveProviderName = providerType.contains('OpenAi') ? 'openai' :
-        providerType.contains('Claude') ? 'claude' : 'default';
-      } else {
-        throw MCPException('Cannot determine provider name for LLM: $llmId. ' +
-            'Please specify a provider name.');
-      }
-
-      // Use provided configuration or create default
-      final effectiveConfig = config ?? llm.LlmConfiguration();
-
-      // Create a new LLM server
-      final llmServer = await _retryWithTimeout(
-              () => mcpLlm.createServer(
-            providerName: effectiveProviderName,
-            config: effectiveConfig,
-          ),
-          timeout: Duration(seconds: 30),
-          maxRetries: 2,
-          retryIf: (e) => _isTransientError(e),
-          operationName: 'Create LLM server for $effectiveProviderName'
-      );
-
-      // Add to LLM manager
-      final llmServerId = await _llmManager.addLlmServer(llmId, llmServer);
-
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: true,
-          metadata: {'llmId': llmId, 'llmServerId': llmServerId, 'provider': effectiveProviderName}
-      );
-
-      _stopwatchPool.release(stopwatch);
-      return llmServerId;
-    } catch (e, stackTrace) {
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: false,
-          metadata: {'llmId': llmId, 'error': e.toString()}
-      );
-
-      _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create and add LLM server for LLM: $llmId', e, stackTrace);
-
-      throw MCPOperationFailedException(
-          'Failed to create and add LLM server for LLM: $llmId',
+          'Failed to create LLM with server for provider: $providerName',
           e,
           stackTrace
       );
@@ -2362,14 +2062,14 @@ class FlutterMCP {
         bool noHistory = false,
       }) async {
     // Logger instance
-    final _logger = MCPLogger('mcp.llm_service');
-    _logger.debug('Processing chat request: $userInput');
+    final logger = MCPLogger('mcp.llm_service');
+    logger.debug('Processing chat request: $userInput');
 
     try {
       // Get LLM client from manager
       final llmClient = _llmManager.getLlmClient(llmId);
       if (llmClient == null) {
-        _logger.error('LLM client not found: $llmId');
+        logger.error('LLM client not found: $llmId');
         return llm.LlmResponse(
           text: 'Error: LLM client not found: $llmId',
           metadata: {'error': 'client_not_found'},
@@ -2391,7 +2091,7 @@ class FlutterMCP {
       return response;
     } catch (e, stackTrace) {
       // Handle and log errors
-      _logger.error('Error in chat: $e', e, stackTrace);
+      logger.error('Error in chat: $e', e, stackTrace);
 
       // Return error response
       return llm.LlmResponse(
@@ -2428,7 +2128,7 @@ class FlutterMCP {
         bool useRetrieval = false,
         bool enhanceSystemPrompt = true,
         bool noHistory = false,
-      }) async* {
+      }) {
     // Logger instance
     final logger = MCPLogger('mcp.llm_service');
     logger.debug('Processing stream chat request: $userInput');
@@ -2439,18 +2139,16 @@ class FlutterMCP {
       if (llmClient == null) {
         logger.error('LLM client not found: $llmId');
 
-        yield llm.LlmResponseChunk(
+        return Stream.value(llm.LlmResponseChunk(
           textChunk: 'Error: LLM client not found: $llmId',
           isDone: true,
           metadata: {'error': 'client_not_found'},
-        );
-
-        return;
+        ));
       }
 
       // Stream the response from LlmClient's streamChat method
       // Note: LlmClient.streamChat already includes performance monitoring
-      await for (final chunk in llmClient.streamChat(
+      return llmClient.streamChat(
         userInput,
         enableTools: enableTools,
         enablePlugins: enablePlugins,
@@ -2459,20 +2157,17 @@ class FlutterMCP {
         useRetrieval: useRetrieval,
         enhanceSystemPrompt: enhanceSystemPrompt,
         noHistory: noHistory,
-      )) {
-        // Forward the chunk directly
-        yield chunk;
-      }
+      );
     } catch (e, stackTrace) {
       // Handle and log errors
       logger.error('Error in stream chat: $e', e, stackTrace);
 
       // Return error response
-      yield llm.LlmResponseChunk(
+    return Stream.value(llm.LlmResponseChunk(
         textChunk: 'Error processing stream chat request: $e',
         isDone: true,
         metadata: {'error': e.toString()},
-      );
+      ));
     }
   }
 

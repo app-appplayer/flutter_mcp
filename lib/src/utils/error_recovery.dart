@@ -17,6 +17,7 @@ class ErrorRecovery {
         Duration? maxDelay,
         String? operationName,
         bool Function(Exception)? retryIf,
+        void Function(int attempt, Exception error)? onRetry, // 추가된 부분
       }) async {
     final name = operationName ?? 'operation';
     int attempt = 0;
@@ -46,6 +47,11 @@ class ErrorRecovery {
         // Check if we should retry this exception
         if (e is Exception) {
           lastException = e;
+
+          // 추가된 onRetry 콜백
+          if (onRetry != null) {
+            onRetry(attempt - 1, lastException);
+          }
 
           if (retryIf != null && !retryIf(e)) {
             _logger.error('$name failed with non-retryable exception', e, stackTrace);
@@ -214,19 +220,110 @@ class ErrorRecovery {
     }
   }
 
+  /// Try an operation with detailed exponential backoff and retry strategy
+  static Future<T> tryWithExponentialBackoff<T>(
+      Future<T> Function() operation, {
+        int maxRetries = 3,
+        Duration initialDelay = const Duration(milliseconds: 500),
+        double backoffFactor = 2.0,  // 추가된 부분
+        Duration? maxDelay,
+        Duration? timeout,
+        bool Function(Exception)? retryIf,
+        String? operationName,
+        void Function(int attempt, Exception e, Duration nextDelay)? onRetry,
+      }) async {
+    final name = operationName ?? 'operation';
+    int attempt = 0;
+    Exception? lastException;
+
+    while (true) {
+      attempt++;
+
+      try {
+        // Apply timeout if specified
+        if (timeout != null) {
+          return await tryWithTimeout(
+              operation,
+              timeout,
+              operationName: name
+          );
+        }
+
+        // Execute the operation
+        return await operation();
+      } catch (e, stackTrace) {
+        // If we've reached max retries, rethrow
+        if (attempt > maxRetries) {
+          _logger.error('$name failed after $maxRetries attempts', e, stackTrace);
+          if (e is Exception) {
+            throw MCPOperationFailedException(
+              'Failed to complete $name after $maxRetries attempts',
+              e,
+              stackTrace,
+            );
+          } else {
+            rethrow;
+          }
+        }
+
+        // Check if we should retry this exception
+        if (e is Exception) {
+          lastException = e;
+
+          if (retryIf != null && !retryIf(e)) {
+            _logger.error('$name failed with non-retryable exception', e, stackTrace);
+            throw MCPOperationFailedException(
+              'Failed to complete $name with non-retryable exception',
+              e,
+              stackTrace,
+            );
+          }
+        } else {
+          // For non-Exception errors (like Error types), don't retry
+          _logger.error('$name failed with non-Exception error', e, stackTrace);
+          rethrow;
+        }
+
+        // Calculate delay for next retry
+        final delay = _calculateDelay(
+          attempt: attempt,
+          initialDelay: initialDelay,
+          useExponentialBackoff: true,
+          maxDelay: maxDelay,
+          backoffFactor: backoffFactor,
+        );
+
+        // Invoke onRetry callback if provided
+        if (onRetry != null) {
+          onRetry(attempt, lastException, delay);
+        }
+
+        _logger.warning(
+          '$name failed, retrying in ${delay.inMilliseconds}ms '
+              '(attempt $attempt of $maxRetries)',
+          lastException,
+        );
+
+        // Wait before retry
+        await Future.delayed(delay);
+      }
+    }
+  }
+
   /// Calculate delay for retry with optional exponential backoff
   static Duration _calculateDelay({
     required int attempt,
     required Duration initialDelay,
     required bool useExponentialBackoff,
     Duration? maxDelay,
+    double backoffFactor = 2.0,
   }) {
     if (!useExponentialBackoff) {
       return initialDelay;
     }
 
     // Exponential backoff with jitter
-    final exponentialPart = initialDelay.inMilliseconds * (1 << (attempt - 1));
+    final exponentialPart = (initialDelay.inMilliseconds * math.pow(backoffFactor, attempt - 1)).toInt();
 
     // Add jitter (±10%)
     final random = math.Random();
@@ -302,126 +399,4 @@ class ErrorRecovery {
 /// Exception for CircuitBreaker open state
 class MCPCircuitBreakerOpenException extends MCPException {
   MCPCircuitBreakerOpenException(super.message, [super.originalError, super.stackTrace]);
-}
-
-/// Circuit breaker states
-enum CircuitBreakerState {
-  closed,
-  open,
-  halfOpen,
-}
-
-/// Circuit breaker implementation
-class CircuitBreaker {
-  final String name;
-  final int failureThreshold;
-  final Duration resetTimeout;
-  final int successThreshold;
-
-  CircuitBreakerState _state = CircuitBreakerState.closed;
-  int _failureCount = 0;
-  int _successCount = 0;
-  DateTime? _lastStateChange;
-
-  final MCPLogger _logger = MCPLogger('mcp.circuit_breaker');
-
-  CircuitBreaker({
-    required this.name,
-    this.failureThreshold = 5,
-    this.resetTimeout = const Duration(seconds: 30),
-    this.successThreshold = 3,
-  }) {
-    _lastStateChange = DateTime.now();
-  }
-
-  /// Current circuit breaker state
-  CircuitBreakerState get state => _state;
-
-  /// Whether requests are allowed to proceed
-  bool get allowRequest {
-    // If closed, always allow
-    if (_state == CircuitBreakerState.closed) {
-      return true;
-    }
-
-    // If half-open, allow trials
-    if (_state == CircuitBreakerState.halfOpen) {
-      return true;
-    }
-
-    // If open, check if reset timeout has elapsed
-    final now = DateTime.now();
-    if (_state == CircuitBreakerState.open &&
-        _lastStateChange != null &&
-        now.difference(_lastStateChange!) >= resetTimeout) {
-      _transitionToHalfOpen();
-      return true;
-    }
-
-    // In open state and timeout not elapsed
-    return false;
-  }
-
-  /// Record a successful operation
-  void recordSuccess() {
-    if (_state == CircuitBreakerState.halfOpen) {
-      _successCount++;
-      if (_successCount >= successThreshold) {
-        _transitionToClosed();
-      }
-    } else if (_state == CircuitBreakerState.open) {
-      // This shouldn't happen normally, but handle it anyway
-      _transitionToHalfOpen();
-      _successCount = 1;
-    } else {
-      // Reset failure count on success in closed state
-      _failureCount = 0;
-    }
-  }
-
-  /// Record a failed operation
-  void recordFailure() {
-    if (_state == CircuitBreakerState.closed) {
-      _failureCount++;
-      if (_failureCount >= failureThreshold) {
-        _transitionToOpen();
-      }
-    } else if (_state == CircuitBreakerState.halfOpen) {
-      _transitionToOpen();
-    }
-  }
-
-  /// Reset the circuit breaker to closed state
-  void reset() {
-    _state = CircuitBreakerState.closed;
-    _failureCount = 0;
-    _successCount = 0;
-    _lastStateChange = DateTime.now();
-    _logger.info('Circuit breaker $name manually reset to CLOSED');
-  }
-
-  /// Transition to open state
-  void _transitionToOpen() {
-    _state = CircuitBreakerState.open;
-    _lastStateChange = DateTime.now();
-    _successCount = 0;
-    _logger.warning('Circuit breaker $name transitioned to OPEN');
-  }
-
-  /// Transition to half-open state
-  void _transitionToHalfOpen() {
-    _state = CircuitBreakerState.halfOpen;
-    _lastStateChange = DateTime.now();
-    _successCount = 0;
-    _logger.info('Circuit breaker $name transitioned to HALF-OPEN');
-  }
-
-  /// Transition to closed state
-  void _transitionToClosed() {
-    _state = CircuitBreakerState.closed;
-    _lastStateChange = DateTime.now();
-    _failureCount = 0;
-    _successCount = 0;
-    _logger.info('Circuit breaker $name transitioned to CLOSED');
-  }
 }

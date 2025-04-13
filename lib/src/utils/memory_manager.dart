@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import '../utils/logger.dart';
@@ -219,6 +220,44 @@ class MemoryManager {
     return results;
   }
 
+  /// Process large data in parallel chunks with controlled concurrency
+  static Future<List<R>> processInParallelChunks<T, R>({
+    required List<T> items,
+    required Future<R> Function(T item) processItem,
+    int maxConcurrent = 3,
+    int chunkSize = 10,
+    Duration? pauseBetweenChunks,
+  }) async {
+    final results = <R>[];
+    final semaphore = Semaphore(maxConcurrent);
+
+    for (int i = 0; i < items.length; i += chunkSize) {
+      final end = math.min(i + chunkSize, items.length);
+      final chunk = items.sublist(i, end);
+
+      // Process chunk in parallel
+      final chunkFutures = chunk.map((item) async {
+        await semaphore.acquire();
+        try {
+          return await processItem(item);
+        } finally {
+          semaphore.release();
+        }
+      });
+
+      // Wait for chunk to complete
+      final chunkResults = await Future.wait(chunkFutures);
+      results.addAll(chunkResults);
+
+      // Pause between chunks if requested
+      if (pauseBetweenChunks != null && end < items.length) {
+        await Future.delayed(pauseBetweenChunks);
+      }
+    }
+
+    return results;
+  }
+
   /// Stream large data in chunks
   static Stream<R> streamInChunks<T, R>({
     required List<T> items,
@@ -422,5 +461,33 @@ extension SortedEntries<K, V> on Iterable<MapEntry<K, V>> {
     final list = toList();
     list.sort(compare);
     return list;
+  }
+}
+
+class Semaphore {
+  final int _maxConcurrent;
+  int _currentCount = 0;
+  final _queue = Queue<Completer<void>>();
+
+  Semaphore(this._maxConcurrent);
+
+  Future<void> acquire() async {
+    if (_currentCount < _maxConcurrent) {
+      _currentCount++;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _queue.add(completer);
+    await completer.future;
+  }
+
+  void release() {
+    if (_queue.isNotEmpty) {
+      final next = _queue.removeFirst();
+      next.complete();
+    } else {
+      _currentCount--;
+    }
   }
 }

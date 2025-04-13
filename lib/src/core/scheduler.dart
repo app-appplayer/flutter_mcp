@@ -32,6 +32,9 @@ class MCPScheduler {
   /// Number of registered jobs
   int get jobCount => _jobs.length;
 
+  /// Number of running jobs
+  int get activeJobCount => _runningJobs.length;
+
   /// Initialize the scheduler
   void initialize() {
     _logger.debug('Scheduler initialization');

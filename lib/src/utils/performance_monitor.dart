@@ -182,6 +182,41 @@ class PerformanceMonitor {
     }
   }
 
+  /// Record a generic metric with optional metadata
+  void recordMetric(
+      String name,
+      int duration,
+      {
+        bool success = true,
+        Map<String, dynamic>? metadata
+      }
+      ) {
+    // Record as a timer metric
+    _timers.putIfAbsent(name, () => _MetricTimer(name));
+    _timers[name]!.record(Duration(milliseconds: duration), success);
+
+    // Add to recent operations
+    _recentOperations.add(_OperationRecord(
+      name: name,
+      duration: Duration(milliseconds: duration),
+      timestamp: DateTime.now(),
+      success: success,
+      metadata: metadata,
+    ));
+
+    // Trim recent operations queue if needed
+    while (_recentOperations.length > _maxRecentOperations) {
+      _recentOperations.removeFirst();
+    }
+
+    // Optional logging if enabled
+    if (_enableLogging) {
+      _logger.debug(
+          'Metric $name: ${duration}ms (success: $success, metadata: $metadata)'
+      );
+    }
+  }
+
   /// Record an operation
   void _recordOperation(
       String operation,

@@ -22,7 +22,9 @@ class MCPServerManager {
   /// Generate new server ID
   String generateId() {
     _counter++;
-    return 'server_${DateTime.now().millisecondsSinceEpoch}_$_counter';
+    return 'server_${DateTime
+        .now()
+        .millisecondsSinceEpoch}_$_counter';
   }
 
   /// Register server
@@ -84,14 +86,21 @@ class MCPServerManager {
   Map<String, dynamic> getStatus() {
     return {
       'total': _servers.length,
-      'servers': _servers.map((key, value) => MapEntry(key, {
-        'name': value.server.name,
-        'version': value.server.version,
-        'tools': value.server.getTools().length,
-        'resources': value.server.getResources().length,
-        'prompts': value.server.getPrompts().length,
-        'hasLlmServer': value.llmServer != null,
-      })),
+      'servers': _servers.map((key, value) =>
+          MapEntry(key, {
+            'name': value.server.name,
+            'version': value.server.version,
+            'tools': value.server
+                .getTools()
+                .length,
+            'resources': value.server
+                .getResources()
+                .length,
+            'prompts': value.server
+                .getPrompts()
+                .length,
+            'hasLlmServer': value.llmServer != null,
+          })),
     };
   }
 }

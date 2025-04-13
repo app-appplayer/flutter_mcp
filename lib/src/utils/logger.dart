@@ -333,9 +333,6 @@ class MCPLogger {
       buffer.write('[$timestamp] ');
     }
 
-    // Add logger name
-    buffer.write('[$name] ');
-
     // Add level with optional coloring
     if (_useColor) {
       final color = _getLevelColor(levelStr);
@@ -344,6 +341,9 @@ class MCPLogger {
     } else {
       buffer.write('[$levelStr] ');
     }
+
+    // Add logger name
+    buffer.write('[$name] ');
 
     // Add message
     buffer.write(message);

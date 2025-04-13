@@ -17,7 +17,10 @@ class ResourceManager {
   final Map<int, Set<String>> _priorityGroups = {};
 
   /// Default cleanup priority
+  static const int HIGH_PRIORITY = 300;
+  static const int MEDIUM_PRIORITY = 200;
   static const int DEFAULT_PRIORITY = 100;
+  static const int LOW_PRIORITY = 50;
 
   /// Resource cleanup statistics
   int _totalResourcesRegistered = 0;

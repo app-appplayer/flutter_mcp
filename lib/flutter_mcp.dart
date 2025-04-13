@@ -2590,7 +2590,7 @@ class FlutterMCP {
         message.contains('429') ||
         message.contains('too many requests');
   }
-
+/*
   /// Check if an error is a rate limit error
   bool _isRateLimitError(dynamic e) {
     final message = e.toString().toLowerCase();
@@ -2628,7 +2628,7 @@ class FlutterMCP {
         message.contains('dns') ||
         message.contains('refused');
   }
-
+*/
   /// Adds a document to the LLM's document store for retrieval
   ///
   /// Parameters:

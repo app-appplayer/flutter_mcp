@@ -250,7 +250,7 @@ class MCPConfig {
   final bool autoStart;
 
   /// Logging level
-  final LogLevel? loggingLevel;
+  final MCPLogLevel? loggingLevel;
 
   /// Whether to enable performance monitoring
   final bool? enablePerformanceMonitoring;
@@ -380,7 +380,7 @@ class MCPConfig {
     bool? secure,
     bool? lifecycleManaged,
     bool? autoStart,
-    LogLevel? loggingLevel,
+    MCPLogLevel? loggingLevel,
     bool? enablePerformanceMonitoring,
     bool? enableMetricsExport,
     String? metricsExportPath,
@@ -433,7 +433,7 @@ class MCPConfig {
     return MCPConfig(
       appName: appName,
       appVersion: appVersion,
-      loggingLevel: LogLevel.debug,
+      loggingLevel: MCPLogLevel.debug,
       enablePerformanceMonitoring: true,
       background: BackgroundConfig.defaultConfig(),
     );
@@ -447,7 +447,7 @@ class MCPConfig {
     return MCPConfig(
       appName: appName,
       appVersion: appVersion,
-      loggingLevel: LogLevel.info,
+      loggingLevel: MCPLogLevel.info,
       enablePerformanceMonitoring: false,
       background: BackgroundConfig(
         notificationChannelId: 'production_${appName.toLowerCase()}_channel',

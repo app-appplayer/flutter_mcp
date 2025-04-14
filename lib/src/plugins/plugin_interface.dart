@@ -1,148 +1,100 @@
-import 'package:tray_manager/tray_manager.dart' as native_tray;
-import 'dart:ui' show Rect;
+import '../../flutter_mcp.dart';
 
-import '../config/tray_config.dart';
-import '../platform/tray/tray_manager.dart';
-import '../utils/logger.dart';
+/// Base plugin interface
+abstract class MCPPlugin {
+  /// Plugin name
+  String get name;
 
-/// Linux tray manager implementation
-class LinuxTrayManager implements TrayManager {
-  final MCPLogger _logger = MCPLogger('mcp.linux_tray');
+  /// Plugin version
+  String get version;
 
-  @override
-  Future<void> initialize(TrayConfig? config) async {
-    _logger.debug('Linux tray manager initialization');
+  /// Plugin description
+  String get description;
 
-    // Initial setup
-    if (config != null) {
-      if (config.iconPath != null) {
-        await setIcon(config.iconPath!);
-      }
+  /// Initialize the plugin
+  Future<void> initialize(Map<String, dynamic> config);
 
-      if (config.tooltip != null) {
-        await setTooltip(config.tooltip!);
-      }
+  /// Shutdown the plugin
+  Future<void> shutdown();
+}
 
-      if (config.menuItems != null) {
-        await setContextMenu(config.menuItems!);
-      }
-    }
-  }
+/// MCP Tool plugin interface
+abstract class MCPToolPlugin extends MCPPlugin {
+  /// Execute the tool with arguments
+  Future<Map<String, dynamic>> execute(Map<String, dynamic> arguments);
 
-  @override
-  Future<void> setIcon(String path) async {
-    _logger.debug('Setting Linux tray icon: $path');
+  /// Get tool metadata including input schema
+  Map<String, dynamic> getToolMetadata();
 
-    try {
-      await native_tray.TrayManager.instance.setIcon(path);
-    } catch (e) {
-      _logger.error('Failed to set Linux tray icon', e);
-    }
-  }
+  /// Register tool with an MCP server
+  Future<void> registerWithServer(Server server);
+}
 
-  @override
-  Future<void> setTooltip(String tooltip) async {
-    _logger.debug('Setting Linux tray tooltip: $tooltip');
+/// MCP Resource plugin interface
+abstract class MCPResourcePlugin extends MCPPlugin {
+  /// Get resource content
+  Future<Map<String, dynamic>> getResource(String resourceUri, Map<String, dynamic> params);
 
-    try {
-      await native_tray.TrayManager.instance.setToolTip(tooltip);
-    } catch (e) {
-      _logger.error('Failed to set Linux tray tooltip', e);
-    }
-  }
+  /// Get resource metadata
+  Map<String, dynamic> getResourceMetadata();
 
-  @override
-  Future<void> setContextMenu(List<TrayMenuItem> items) async {
-    _logger.debug('Setting Linux tray context menu');
+  /// Register resource with an MCP server
+  Future<void> registerWithServer(Server server);
+}
 
-    try {
-      // Convert to native menu items
-      final nativeItems = _convertToNativeMenuItems(items);
+/// MCP Background plugin interface
+abstract class MCPBackgroundPlugin extends MCPPlugin {
+  /// Start the background task
+  Future<bool> start();
 
-      // Create menu directly with items
-      final menu = native_tray.Menu(
-        items: nativeItems,
-      );
+  /// Stop the background task
+  Future<bool> stop();
 
-      // Set tray menu
-      await native_tray.TrayManager.instance.setContextMenu(menu);
-    } catch (e) {
-      _logger.error('Failed to set Linux tray context menu', e);
-    }
-  }
+  /// Check if the background task is running
+  bool get isRunning;
 
-  @override
-  Future<void> dispose() async {
-    _logger.debug('Disposing Linux tray manager');
+  /// Register a background task handler
+  void registerTaskHandler(Future<void> Function() handler);
+}
 
-    try {
-      await native_tray.TrayManager.instance.destroy();
-    } catch (e) {
-      _logger.error('Failed to dispose Linux tray manager', e);
-    }
-  }
+/// MCP Notification plugin interface
+abstract class MCPNotificationPlugin extends MCPPlugin {
+  /// Show a notification
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? id,
+    String? icon,
+    Map<String, dynamic>? additionalData,
+  });
 
-  // Additional required methods from TrayManager interface
-  void addListener(native_tray.TrayListener listener) {
-    _logger.debug('Adding tray listener');
-    native_tray.TrayManager.instance.addListener(listener);
-  }
+  /// Hide a notification
+  Future<void> hideNotification(String id);
 
-  Future<void> destroy() async {
-    _logger.debug('Destroying tray');
-    await native_tray.TrayManager.instance.destroy();
-  }
+  /// Register a notification click handler
+  void registerClickHandler(Function(String id, Map<String, dynamic>? data) handler);
+}
 
-  Future<Rect?> getBounds() async {
-    _logger.debug('Getting tray bounds');
-    return await native_tray.TrayManager.instance.getBounds();
-  }
+/// MCP Client plugin interface
+abstract class MCPClientPlugin extends MCPPlugin {
+  /// Initialize with a client
+  Future<void> initializeWithClient(Client client);
 
-  Future<void> popUpContextMenu() async {
-    _logger.debug('Popping up context menu');
-    await native_tray.TrayManager.instance.popUpContextMenu();
-  }
+  /// Handle connection state changes
+  void handleConnectionStateChange(bool connected);
 
-  void removeListener(native_tray.TrayListener listener) {
-    _logger.debug('Removing tray listener');
-    native_tray.TrayManager.instance.removeListener(listener);
-  }
+  /// Get client extensions
+  Map<String, dynamic> getClientExtensions();
+}
 
-  Future<void> setImage(String image) async {
-    _logger.debug('Setting tray image: $image');
-    await native_tray.TrayManager.instance.setIcon(image);
-  }
+/// MCP Server plugin interface
+abstract class MCPServerPlugin extends MCPPlugin {
+  /// Initialize with a server
+  Future<void> initializeWithServer(Server server);
 
-  Future<void> setPressedImage(String image) async {
-    _logger.debug('Setting tray pressed image: $image');
-    // This feature is not supported in the native TrayManager
-    // Using setIcon as fallback or just log that this is unsupported
-    _logger.warning('setPressedImage is not supported in the current tray implementation');
-  }
+  /// Handle connection state changes
+  void handleConnectionStateChange(bool connected);
 
-  Future<void> setTitle(String title) async {
-    _logger.debug('Setting tray title: $title');
-    await native_tray.TrayManager.instance.setTitle(title);
-  }
-
-  /// Convert menu items
-  List<native_tray.MenuItem> _convertToNativeMenuItems(List<TrayMenuItem> items) {
-    final nativeItems = <native_tray.MenuItem>[];
-
-    for (final item in items) {
-      if (item.isSeparator) {
-        nativeItems.add(native_tray.MenuItem.separator());
-      } else {
-        nativeItems.add(
-          native_tray.MenuItem(
-            label: item.label ?? '',
-            disabled: item.disabled,
-            onClick: item.onTap != null ? (_) => item.onTap!() : null,
-          ),
-        );
-      }
-    }
-
-    return nativeItems;
-  }
+  /// Get server extensions
+  Map<String, dynamic> getServerExtensions();
 }

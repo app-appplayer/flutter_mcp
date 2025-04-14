@@ -60,9 +60,7 @@ class LlmInfo {
   /// Add an LLM client
   void addLlmClient(String clientId, LlmClient client) {
     llmClients[clientId] = client;
-    if (defaultLlmClientId == null) {
-      defaultLlmClientId = clientId;
-    }
+    defaultLlmClientId ??= clientId;
   }
 
   /// Remove an LLM client
@@ -82,9 +80,7 @@ class LlmInfo {
   /// Add an LLM server
   void addLlmServer(String serverId, LlmServer server) {
     llmServers[serverId] = server;
-    if (defaultLlmServerId == null) {
-      defaultLlmServerId = serverId;
-    }
+    defaultLlmServerId ??= serverId;
   }
 
   /// Remove an LLM server

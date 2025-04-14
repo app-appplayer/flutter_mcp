@@ -138,7 +138,7 @@ class ConfigLoader {
     final autoStart = json['autoStart'] as bool? ?? true;
 
     // Parse logging level
-    final LogLevel? loggingLevel = json.containsKey('loggingLevel')
+    final MCPLogLevel? loggingLevel = json.containsKey('loggingLevel')
         ? _parseLogLevel(json['loggingLevel'] as String)
         : null;
 
@@ -193,15 +193,15 @@ class ConfigLoader {
   }
 
   /// Parse LogLevel from string
-  static LogLevel _parseLogLevel(String level) {
+  static MCPLogLevel _parseLogLevel(String level) {
     switch (level.toLowerCase()) {
-      case 'trace': return LogLevel.trace;
-      case 'debug': return LogLevel.debug;
-      case 'info': return LogLevel.info;
-      case 'warning': return LogLevel.warning;
-      case 'error': return LogLevel.error;
-      case 'none': return LogLevel.none;
-      default: return LogLevel.info;
+      case 'trace': return MCPLogLevel.trace;
+      case 'debug': return MCPLogLevel.debug;
+      case 'info': return MCPLogLevel.info;
+      case 'warning': return MCPLogLevel.warning;
+      case 'error': return MCPLogLevel.error;
+      case 'none': return MCPLogLevel.none;
+      default: return MCPLogLevel.info;
     }
   }
 

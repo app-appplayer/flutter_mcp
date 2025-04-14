@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:path/path.dart' as path;
 
 /// Log level
-enum LogLevel {
+enum MCPLogLevel {
   trace,
   debug,
   info,
@@ -13,7 +13,7 @@ enum LogLevel {
 }
 
 /// Log format
-enum LogFormat {
+enum MCPLogFormat {
   text,
   json,
 }
@@ -24,10 +24,10 @@ class MCPLogger {
   final String name;
 
   /// Log level
-  LogLevel _level = LogLevel.info;
+  MCPLogLevel _level = MCPLogLevel.info;
 
   /// Default log level
-  static LogLevel _defaultLevel = LogLevel.none;
+  static MCPLogLevel _defaultLevel = MCPLogLevel.none;
 
   /// Log file path
   static String? _logFilePath;
@@ -57,7 +57,7 @@ class MCPLogger {
   static int _currentLogFileSize = 0;
 
   /// Log format
-  static LogFormat _logFormat = LogFormat.text;
+  static MCPLogFormat _logFormat = MCPLogFormat.text;
 
   /// Logger instances map
   static final Map<String, MCPLogger> _loggers = {};
@@ -65,7 +65,7 @@ class MCPLogger {
   final IOSink _output = stderr;
 
   /// Set default log level
-  static void setDefaultLevel(LogLevel level) {
+  static void setDefaultLevel(MCPLogLevel level) {
     _defaultLevel = level;
     // Update existing loggers
     for (final logger in _loggers.values) {
@@ -79,7 +79,7 @@ class MCPLogger {
     String prefix = 'mcp',
     int maxSizeBytes = 10 * 1024 * 1024, // 10 MB
     int maxFiles = 5,
-    LogFormat format = LogFormat.text,
+    MCPLogFormat format = MCPLogFormat.text,
   }) async {
     _maxLogFileSize = maxSizeBytes;
     _maxLogFiles = maxFiles;
@@ -150,12 +150,12 @@ class MCPLogger {
 
   /// Configure logger
   static void configure({
-    LogLevel? level,
+    MCPLogLevel? level,
     bool? includeTimestamp,
     bool? useColor,
     String? logFilePath,
     bool? logToFile,
-    LogFormat? logFormat,
+    MCPLogFormat? logFormat,
   }) {
     if (level != null) {
       setDefaultLevel(level);
@@ -259,37 +259,37 @@ class MCPLogger {
   }
 
   /// Set log level
-  void setLevel(LogLevel level) {
+  void setLevel(MCPLogLevel level) {
     _level = level;
   }
 
   /// Trace log
   void trace(String message, [Object? error, StackTrace? stackTrace]) {
-    _log(LogLevel.trace, message, error, stackTrace);
+    _log(MCPLogLevel.trace, message, error, stackTrace);
   }
 
   /// Debug log
   void debug(String message, [Object? error, StackTrace? stackTrace]) {
-    _log(LogLevel.debug, message, error, stackTrace);
+    _log(MCPLogLevel.debug, message, error, stackTrace);
   }
 
   /// Info log
   void info(String message, [Object? error, StackTrace? stackTrace]) {
-    _log(LogLevel.info, message, error, stackTrace);
+    _log(MCPLogLevel.info, message, error, stackTrace);
   }
 
   /// Warning log
   void warning(String message, [Object? error, StackTrace? stackTrace]) {
-    _log(LogLevel.warning, message, error, stackTrace);
+    _log(MCPLogLevel.warning, message, error, stackTrace);
   }
 
   /// Error log
   void error(String message, [Object? error, StackTrace? stackTrace]) {
-    _log(LogLevel.error, message, error, stackTrace);
+    _log(MCPLogLevel.error, message, error, stackTrace);
   }
 
   /// Log record
-  void _log(LogLevel level, String message, [Object? error, StackTrace? stackTrace]) async {
+  void _log(MCPLogLevel level, String message, [Object? error, StackTrace? stackTrace]) async {
     if (level.index < _level.index) {
       return;
     }
@@ -304,7 +304,7 @@ class MCPLogger {
 
     // File logging with rotation check
     if (_logToFile && _logFileSink != null) {
-      final fileContent = _logFormat == LogFormat.json
+      final fileContent = _logFormat == MCPLogFormat.json
           ? _buildJsonLogEntry(timestamp, levelStr, message, error, stackTrace)
           : _buildTextLogEntry(timestamp, levelStr, message, error, stackTrace);
 
@@ -458,7 +458,7 @@ class MCPLogger {
   }
 
   /// Set log level for all loggers matching a pattern
-  static void setLevelByPattern(String pattern, LogLevel level) {
+  static void setLevelByPattern(String pattern, MCPLogLevel level) {
     for (final entry in _loggers.entries) {
       if (entry.key.contains(pattern)) {
         entry.value.setLevel(level);
@@ -467,7 +467,7 @@ class MCPLogger {
   }
 
   /// Set log level for all loggers
-  static void setAllLevels(LogLevel level) {
+  static void setAllLevels(MCPLogLevel level) {
     for (final logger in _loggers.values) {
       logger.setLevel(level);
     }

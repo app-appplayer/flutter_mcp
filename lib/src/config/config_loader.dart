@@ -2,9 +2,9 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:mcp_client/mcp_client.dart' hide LogLevel, ServerCapabilities;
-import 'package:mcp_server/mcp_server.dart' hide LogLevel;
-import 'package:mcp_llm/mcp_llm.dart' hide LogLevel;
+import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
+import 'package:mcp_server/mcp_server.dart';
+import 'package:mcp_llm/mcp_llm.dart';
 import 'package:yaml/yaml.dart';
 
 import 'mcp_config.dart';
@@ -130,9 +130,9 @@ class ConfigLoader {
     final appVersion = json['appVersion'] as String;
 
     // Parse boolean flags
-    final useBackgroundService = json['useBackgroundService'] as bool? ?? true;
-    final useNotification = json['useNotification'] as bool? ?? true;
-    final useTray = json['useTray'] as bool? ?? true;
+    final useBackgroundService = json['useBackgroundService'] as bool? ?? false;
+    final useNotification = json['useNotification'] as bool? ?? false;
+    final useTray = json['useTray'] as bool? ?? false;
     final secure = json['secure'] as bool? ?? true;
     final lifecycleManaged = json['lifecycleManaged'] as bool? ?? true;
     final autoStart = json['autoStart'] as bool? ?? true;
@@ -141,6 +141,24 @@ class ConfigLoader {
     final MCPLogLevel? loggingLevel = json.containsKey('loggingLevel')
         ? _parseLogLevel(json['loggingLevel'] as String)
         : null;
+
+    // Parse performance monitoring settings
+    final bool? enablePerformanceMonitoring = json['enablePerformanceMonitoring'] as bool?;
+    final bool? enableMetricsExport = json['enableMetricsExport'] as bool?;
+    final String? metricsExportPath = json['metricsExportPath'] as String?;
+
+    // Parse plugin settings
+    final bool? autoLoadPlugins = json['autoLoadPlugins'] as bool?;
+    final Map<String, Map<String, dynamic>>? pluginConfigurations =
+    json.containsKey('pluginConfigurations')
+        ? _parsePluginConfigurations(json['pluginConfigurations'])
+        : null;
+
+    // Parse resource management settings
+    final int? highMemoryThresholdMB = json['highMemoryThresholdMB'] as int?;
+    final int? lowBatteryWarningThreshold = json['lowBatteryWarningThreshold'] as int?;
+    final int? maxConnectionRetries = json['maxConnectionRetries'] as int?;
+    final int? llmRequestTimeoutMs = json['llmRequestTimeoutMs'] as int?;
 
     // Parse BackgroundConfig
     final BackgroundConfig? background = json.containsKey('background')
@@ -172,6 +190,16 @@ class ConfigLoader {
         ? _parseAutoStartClient(json['autoStartClient'] as List<dynamic>)
         : null;
 
+    // Parse auto-start LLM client configurations
+    final List<MCPLlmClientConfig>? autoStartLlmClient = json.containsKey('autoStartLlmClient')
+        ? _parseAutoStartLlmClient(json['autoStartLlmClient'] as List<dynamic>)
+        : null;
+
+    // Parse auto-start LLM server configurations
+    final List<MCPLlmServerConfig>? autoStartLlmServer = json.containsKey('autoStartLlmServer')
+        ? _parseAutoStartLlmServer(json['autoStartLlmServer'] as List<dynamic>)
+        : null;
+
     // Create and return the config
     return MCPConfig(
       appName: appName,
@@ -183,12 +211,23 @@ class ConfigLoader {
       lifecycleManaged: lifecycleManaged,
       autoStart: autoStart,
       loggingLevel: loggingLevel,
+      enablePerformanceMonitoring: enablePerformanceMonitoring,
+      enableMetricsExport: enableMetricsExport,
+      metricsExportPath: metricsExportPath,
+      autoLoadPlugins: autoLoadPlugins,
+      pluginConfigurations: pluginConfigurations,
+      highMemoryThresholdMB: highMemoryThresholdMB,
+      lowBatteryWarningThreshold: lowBatteryWarningThreshold,
+      maxConnectionRetries: maxConnectionRetries,
+      llmRequestTimeoutMs: llmRequestTimeoutMs,
       background: background,
       notification: notification,
       tray: tray,
       schedule: schedule,
       autoStartServer: autoStartServer,
       autoStartClient: autoStartClient,
+      autoStartLlmClient: autoStartLlmClient,
+      autoStartLlmServer: autoStartLlmServer,
     );
   }
 
@@ -203,6 +242,21 @@ class ConfigLoader {
       case 'none': return MCPLogLevel.none;
       default: return MCPLogLevel.info;
     }
+  }
+
+  /// Parse plugin configurations
+  static Map<String, Map<String, dynamic>> _parsePluginConfigurations(dynamic json) {
+    final Map<String, Map<String, dynamic>> result = {};
+
+    if (json is Map) {
+      json.forEach((key, value) {
+        if (value is Map) {
+          result[key.toString()] = Map<String, dynamic>.from(value);
+        }
+      });
+    }
+
+    return result;
   }
 
   /// Parse BackgroundConfig from JSON
@@ -298,11 +352,13 @@ class ConfigLoader {
       final job = MCPJob(
         id: jobJson['id'] as String?,
         interval: interval,
-        runOnce: jobJson['runOnce'] as bool? ?? false,
         task: () {
           // Placeholder task
           _logger.warning('Task not implemented for job from config');
         },
+        runOnce: jobJson['runOnce'] as bool? ?? false,
+        name: jobJson['name'] as String?,
+        description: jobJson['description'] as String?,
       );
 
       jobs.add(job);
@@ -335,38 +391,12 @@ class ConfigLoader {
         );
       }
 
-      // Parse LLM integration
-      MCPLlmIntegration? integrateLlm;
-      if (serverJson.containsKey('integrateLlm')) {
-        final Map<String, dynamic> llmJson = serverJson['integrateLlm'] as Map<String, dynamic>;
-
-        // We need either existingLlmId or (providerName + config)
-        final String? existingLlmId = llmJson['existingLlmId'] as String?;
-
-        if (existingLlmId != null) {
-          integrateLlm = MCPLlmIntegration(
-            existingLlmId: existingLlmId,
-          );
-        } else if (llmJson.containsKey('providerName') && llmJson.containsKey('config')) {
-          final Map<String, dynamic> configJson = llmJson['config'] as Map<String, dynamic>;
-
-          // Parse LLM configuration - note that the apiKey should be provided elsewhere for security
-          integrateLlm = MCPLlmIntegration(
-            providerName: llmJson['providerName'] as String,
-            config: LlmConfiguration(
-              apiKey: configJson['apiKey'] as String? ?? 'placeholder-key',
-              model: configJson['model'] as String,
-              baseUrl: configJson['baseUrl'] as String?,
-              retryOnFailure: configJson['retryOnFailure'] as bool? ?? true,
-              maxRetries: configJson['maxRetries'] as int? ?? 3,
-              timeout: Duration(
-                milliseconds: configJson.containsKey('timeoutMs')
-                    ? configJson['timeoutMs'] as int
-                    : 10000,
-              ),
-            ),
-          );
-        }
+      // Parse fallback ports if present
+      List<int>? fallbackPorts;
+      if (serverJson.containsKey('fallbackPorts')) {
+        fallbackPorts = (serverJson['fallbackPorts'] as List<dynamic>)
+            .map((port) => port as int)
+            .toList();
       }
 
       // Create MCPServerConfig
@@ -376,7 +406,8 @@ class ConfigLoader {
         capabilities: capabilities,
         useStdioTransport: serverJson['useStdioTransport'] as bool? ?? true,
         ssePort: serverJson['ssePort'] as int?,
-        integrateLlm: integrateLlm,
+        fallbackPorts: fallbackPorts,
+        authToken: serverJson['authToken'] as String?,
       ));
     }
 
@@ -409,40 +440,6 @@ class ConfigLoader {
             .toList();
       }
 
-      // Parse LLM integration
-      MCPLlmIntegration? integrateLlm;
-      if (clientJson.containsKey('integrateLlm')) {
-        final Map<String, dynamic> llmJson = clientJson['integrateLlm'] as Map<String, dynamic>;
-
-        // We need either existingLlmId or (providerName + config)
-        final String? existingLlmId = llmJson['existingLlmId'] as String?;
-
-        if (existingLlmId != null) {
-          integrateLlm = MCPLlmIntegration(
-            existingLlmId: existingLlmId,
-          );
-        } else if (llmJson.containsKey('providerName') && llmJson.containsKey('config')) {
-          final Map<String, dynamic> configJson = llmJson['config'] as Map<String, dynamic>;
-
-          // Parse LLM configuration - note that the apiKey should be provided elsewhere for security
-          integrateLlm = MCPLlmIntegration(
-            providerName: llmJson['providerName'] as String,
-            config: LlmConfiguration(
-              apiKey: configJson['apiKey'] as String? ?? 'placeholder-key',
-              model: configJson['model'] as String,
-              baseUrl: configJson['baseUrl'] as String?,
-              retryOnFailure: configJson['retryOnFailure'] as bool? ?? true,
-              maxRetries: configJson['maxRetries'] as int? ?? 3,
-              timeout: Duration(
-                milliseconds: configJson.containsKey('timeoutMs')
-                    ? configJson['timeoutMs'] as int
-                    : 10000,
-              ),
-            ),
-          );
-        }
-      }
-
       // Create MCPClientConfig
       configs.add(MCPClientConfig(
         name: clientJson['name'] as String,
@@ -451,7 +448,85 @@ class ConfigLoader {
         transportCommand: clientJson['transportCommand'] as String?,
         transportArgs: transportArgs,
         serverUrl: clientJson['serverUrl'] as String?,
-        integrateLlm: integrateLlm,
+        authToken: clientJson['authToken'] as String?,
+      ));
+    }
+
+    return configs;
+  }
+
+  /// Parse auto-start LLM client configurations from JSON
+  static List<MCPLlmClientConfig> _parseAutoStartLlmClient(List<dynamic> json) {
+    final List<MCPLlmClientConfig> configs = [];
+
+    for (final item in json) {
+      final Map<String, dynamic> llmClientJson = item as Map<String, dynamic>;
+
+      // Parse config
+      final Map<String, dynamic> configJson = llmClientJson['config'] as Map<String, dynamic>;
+      final llmConfig = LlmConfiguration(
+        apiKey: configJson['apiKey'] ?? 'placeholder-key', // apiKey should be provided securely elsewhere
+        model: configJson['model'] as String,
+        baseUrl: configJson['baseUrl'] as String?,
+        retryOnFailure: configJson['retryOnFailure'] as bool? ?? true,
+        maxRetries: configJson['maxRetries'] as int? ?? 3,
+        timeout: Duration(
+          milliseconds: configJson.containsKey('timeoutMs')
+              ? configJson['timeoutMs'] as int
+              : 10000,
+        ),
+      );
+
+      // Parse MCP client IDs
+      final List<String> mcpClientIds = llmClientJson.containsKey('mcpClientIds')
+          ? (llmClientJson['mcpClientIds'] as List<dynamic>).map((id) => id.toString()).toList()
+          : [];
+
+      // Create LLM client config
+      configs.add(MCPLlmClientConfig(
+        providerName: llmClientJson['providerName'] as String,
+        config: llmConfig,
+        isDefault: llmClientJson['isDefault'] as bool? ?? false,
+        mcpClientIds: mcpClientIds,
+      ));
+    }
+
+    return configs;
+  }
+
+  /// Parse auto-start LLM server configurations from JSON
+  static List<MCPLlmServerConfig> _parseAutoStartLlmServer(List<dynamic> json) {
+    final List<MCPLlmServerConfig> configs = [];
+
+    for (final item in json) {
+      final Map<String, dynamic> llmServerJson = item as Map<String, dynamic>;
+
+      // Parse config
+      final Map<String, dynamic> configJson = llmServerJson['config'] as Map<String, dynamic>;
+      final llmConfig = LlmConfiguration(
+        apiKey: configJson['apiKey'] ?? 'placeholder-key', // apiKey should be provided securely elsewhere
+        model: configJson['model'] as String,
+        baseUrl: configJson['baseUrl'] as String?,
+        retryOnFailure: configJson['retryOnFailure'] as bool? ?? true,
+        maxRetries: configJson['maxRetries'] as int? ?? 3,
+        timeout: Duration(
+          milliseconds: configJson.containsKey('timeoutMs')
+              ? configJson['timeoutMs'] as int
+              : 10000,
+        ),
+      );
+
+      // Parse MCP server IDs
+      final List<String> mcpServerIds = llmServerJson.containsKey('mcpServerIds')
+          ? (llmServerJson['mcpServerIds'] as List<dynamic>).map((id) => id.toString()).toList()
+          : [];
+
+      // Create LLM server config
+      configs.add(MCPLlmServerConfig(
+        providerName: llmServerJson['providerName'] as String,
+        config: llmConfig,
+        isDefault: llmServerJson['isDefault'] as bool? ?? false,
+        mcpServerIds: mcpServerIds,
       ));
     }
 
@@ -460,15 +535,7 @@ class ConfigLoader {
 
   /// Export configuration to JSON
   static Map<String, dynamic> exportToJson(MCPConfig config) {
-    // This method would convert an MCPConfig object to a JSON map
-    // Implementation details omitted for brevity
-
-    // Return a placeholder map
-    return {
-      'appName': config.appName,
-      'appVersion': config.appVersion,
-      // Other fields would be included here
-    };
+    return config.toJson();
   }
 
   /// Save configuration to a JSON file

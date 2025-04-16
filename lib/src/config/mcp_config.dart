@@ -1,172 +1,37 @@
-import 'package:mcp_client/mcp_client.dart' as client hide LogLevel;
-import 'package:mcp_server/mcp_server.dart' as server hide LogLevel;
-import 'package:mcp_llm/mcp_llm.dart'  hide LogLevel;
+import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
+import 'package:mcp_server/mcp_server.dart';
+import 'package:mcp_llm/mcp_llm.dart';
 
+import '../utils/logger.dart';
 import 'background_config.dart';
 import 'notification_config.dart';
 import 'tray_config.dart';
 import 'job.dart';
-import '../utils/logger.dart';
 
-/// MCP LLM Integration Configuration
-class MCPLlmIntegration {
-  /// Existing LLM ID (when using an existing LLM)
-  final String? existingLlmId;
-
-  /// LLM provider name (when creating a new LLM)
-  final String? providerName;
-
-  /// LLM configuration (when creating a new LLM)
-  final LlmConfiguration? config;
-
-  MCPLlmIntegration({
-    this.existingLlmId,
-    this.providerName,
-    this.config,
-  }) : assert(existingLlmId != null || (providerName != null && config != null),
-  'Either existingLlmId or (providerName and config) must be provided');
-
-  /// Validate configuration
-  void validate() {
-    if (existingLlmId == null && (providerName == null || config == null)) {
-      throw ArgumentError('Either existingLlmId or both providerName and config must be provided');
-    }
-
-    if (config != null) {
-      // Validate API key
-      if (config!.apiKey == null || config!.apiKey!.isEmpty || config!.apiKey == 'placeholder-key') {
-        throw ArgumentError('API key is missing or invalid in LLM configuration');
-      }
-
-      // Validate model
-      if (config!.model == null || config!.model!.isEmpty) {
-        throw ArgumentError('Model name is required in LLM configuration');
-      }
-    }
-  }
-
-  /// Create a copy with modified values
-  MCPLlmIntegration copyWith({
-    String? existingLlmId,
-    String? providerName,
-    LlmConfiguration? config,
-  }) {
-    return MCPLlmIntegration(
-      existingLlmId: existingLlmId ?? this.existingLlmId,
-      providerName: providerName ?? this.providerName,
-      config: config ?? this.config,
-    );
-  }
-}
-
-/// MCP Server Auto Start Configuration
-class MCPServerConfig {
-  /// Server name
-  final String name;
-
-  /// Server version
-  final String version;
-
-  /// Server capabilities
-  final server.ServerCapabilities? capabilities;
-
-  /// Whether to use stdio transport
-  final bool useStdioTransport;
-
-  /// SSE transport port
-  final int? ssePort;
-
-  /// SSE fallback ports
-  final List<int>? fallbackPorts;
-
-  /// SSE authentication token
-  final String? authToken;
-
-  /// LLM integration settings
-  final MCPLlmIntegration? integrateLlm;
-
-  MCPServerConfig({
-    required this.name,
-    required this.version,
-    this.capabilities,
-    this.useStdioTransport = true,
-    this.ssePort,
-    this.fallbackPorts,
-    this.authToken,
-    this.integrateLlm,
-  }) {
-    validate();
-  }
-
-  /// Validate configuration
-  void validate() {
-    if (name.isEmpty) {
-      throw ArgumentError('Server name cannot be empty');
-    }
-
-    if (version.isEmpty) {
-      throw ArgumentError('Server version cannot be empty');
-    }
-
-    if (!useStdioTransport && ssePort == null) {
-      throw ArgumentError('SSE port must be provided when using SSE transport');
-    }
-
-    if (integrateLlm != null) {
-      integrateLlm!.validate();
-    }
-  }
-
-  /// Create a copy with modified values
-  MCPServerConfig copyWith({
-    String? name,
-    String? version,
-    server.ServerCapabilities? capabilities,
-    bool? useStdioTransport,
-    int? ssePort,
-    List<int>? fallbackPorts,
-    String? authToken,
-    MCPLlmIntegration? integrateLlm,
-  }) {
-    return MCPServerConfig(
-      name: name ?? this.name,
-      version: version ?? this.version,
-      capabilities: capabilities ?? this.capabilities,
-      useStdioTransport: useStdioTransport ?? this.useStdioTransport,
-      ssePort: ssePort ?? this.ssePort,
-      fallbackPorts: fallbackPorts ?? this.fallbackPorts,
-      authToken: authToken ?? this.authToken,
-      integrateLlm: integrateLlm ?? this.integrateLlm,
-    );
-  }
-}
-
-/// MCP Client Auto Start Configuration
+/// Configuration for MCP clients
 class MCPClientConfig {
-  /// Client name
+  /// Name of the client
   final String name;
 
-  /// Client version
+  /// Version of the client
   final String version;
 
   /// Client capabilities
-  final client.ClientCapabilities? capabilities;
+  final ClientCapabilities? capabilities;
 
-  /// stdio transport command
+  /// Transport command for subprocess transport
   final String? transportCommand;
 
-  /// stdio transport arguments
+  /// Transport command arguments
   final List<String>? transportArgs;
 
-  /// SSE transport URL
+  /// Server URL for SSE transport
   final String? serverUrl;
 
-  /// SSE authentication token
+  /// Authentication token for the transport
   final String? authToken;
 
-  /// LLM integration settings
-  final MCPLlmIntegration? integrateLlm;
-
+  /// Creates a new MCP client configuration
   MCPClientConfig({
     required this.name,
     required this.version,
@@ -175,55 +40,164 @@ class MCPClientConfig {
     this.transportArgs,
     this.serverUrl,
     this.authToken,
-    this.integrateLlm,
-  }) {
-    validate();
-  }
+  });
 
-  /// Validate configuration
-  void validate() {
-    if (name.isEmpty) {
-      throw ArgumentError('Client name cannot be empty');
+  /// Converts this configuration to JSON
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = {
+      'name': name,
+      'version': version,
+    };
+
+    if (capabilities != null) {
+      json['capabilities'] = capabilities!.toJson();
     }
 
-    if (version.isEmpty) {
-      throw ArgumentError('Client version cannot be empty');
+    if (transportCommand != null) {
+      json['transportCommand'] = transportCommand;
     }
 
-    if (transportCommand == null && serverUrl == null) {
-      throw ArgumentError('Either transportCommand or serverUrl must be provided');
+    if (transportArgs != null) {
+      json['transportArgs'] = transportArgs;
     }
 
-    if (integrateLlm != null) {
-      integrateLlm!.validate();
+    if (serverUrl != null) {
+      json['serverUrl'] = serverUrl;
     }
-  }
 
-  /// Create a copy with modified values
-  MCPClientConfig copyWith({
-    String? name,
-    String? version,
-    client.ClientCapabilities? capabilities,
-    String? transportCommand,
-    List<String>? transportArgs,
-    String? serverUrl,
-    String? authToken,
-    MCPLlmIntegration? integrateLlm,
-  }) {
-    return MCPClientConfig(
-      name: name ?? this.name,
-      version: version ?? this.version,
-      capabilities: capabilities ?? this.capabilities,
-      transportCommand: transportCommand ?? this.transportCommand,
-      transportArgs: transportArgs ?? this.transportArgs,
-      serverUrl: serverUrl ?? this.serverUrl,
-      authToken: authToken ?? this.authToken,
-      integrateLlm: integrateLlm ?? this.integrateLlm,
-    );
+    if (authToken != null) {
+      json['authToken'] = authToken;
+    }
+
+    return json;
   }
 }
 
-/// MCP Main Configuration Class
+/// Configuration for MCP servers
+class MCPServerConfig {
+  /// Name of the server
+  final String name;
+
+  /// Version of the server
+  final String version;
+
+  /// Server capabilities
+  final ServerCapabilities? capabilities;
+
+  /// Whether to use stdio transport
+  final bool useStdioTransport;
+
+  /// SSE port for SSE transport
+  final int? ssePort;
+
+  /// Fallback ports for SSE transport
+  final List<int>? fallbackPorts;
+
+  /// Authentication token for the transport
+  final String? authToken;
+
+  /// Creates a new MCP server configuration
+  MCPServerConfig({
+    required this.name,
+    required this.version,
+    this.capabilities,
+    this.useStdioTransport = true,
+    this.ssePort,
+    this.fallbackPorts,
+    this.authToken,
+  });
+
+  /// Converts this configuration to JSON
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = {
+      'name': name,
+      'version': version,
+      'useStdioTransport': useStdioTransport,
+    };
+
+    if (capabilities != null) {
+      json['capabilities'] = capabilities!.toJson();
+    }
+
+    if (ssePort != null) {
+      json['ssePort'] = ssePort;
+    }
+
+    if (fallbackPorts != null) {
+      json['fallbackPorts'] = fallbackPorts;
+    }
+
+    if (authToken != null) {
+      json['authToken'] = authToken;
+    }
+
+    return json;
+  }
+}
+
+/// Configuration for LLM clients with explicit MCP client relationships
+class MCPLlmClientConfig {
+  /// LLM provider name (e.g., 'openai', 'claude', 'together')
+  final String providerName;
+
+  /// Configuration for the LLM provider
+  final LlmConfiguration config;
+
+  /// Whether this client should be set as the default LLM client
+  final bool isDefault;
+
+  /// List of MCP client references (either by index "client_0" or by name "ClientName")
+  final List<String> mcpClientIds;
+
+  /// Creates a new LLM client configuration
+  MCPLlmClientConfig({
+    required this.providerName,
+    required this.config,
+    this.isDefault = false,
+    this.mcpClientIds = const [],
+  });
+
+  /// Converts this configuration to JSON
+  Map<String, dynamic> toJson() => {
+    'providerName': providerName,
+    'config': config.toJson(),
+    'isDefault': isDefault,
+    'mcpClientIds': mcpClientIds,
+  };
+}
+
+/// Configuration for LLM servers with explicit MCP server relationships
+class MCPLlmServerConfig {
+  /// LLM provider name (e.g., 'openai', 'claude', 'together')
+  final String providerName;
+
+  /// Configuration for the LLM provider
+  final LlmConfiguration config;
+
+  /// Whether this server should be set as the default LLM server
+  final bool isDefault;
+
+  /// List of MCP server references (either by index "server_0" or by name "ServerName")
+  final List<String> mcpServerIds;
+
+  /// Creates a new LLM server configuration
+  MCPLlmServerConfig({
+    required this.providerName,
+    required this.config,
+    this.isDefault = false,
+    this.mcpServerIds = const [],
+  });
+
+  /// Converts this configuration to JSON
+  Map<String, dynamic> toJson() => {
+    'providerName': providerName,
+    'config': config.toJson(),
+    'isDefault': isDefault,
+    'mcpServerIds': mcpServerIds,
+  };
+}
+
+/// Main configuration class for Flutter MCP
 class MCPConfig {
   /// App name
   final String appName;
@@ -297,80 +271,171 @@ class MCPConfig {
   /// Auto start client configuration
   final List<MCPClientConfig>? autoStartClient;
 
+  /// Auto-start LLM client configurations (new field)
+  final List<MCPLlmClientConfig>? autoStartLlmClient;
+
+  /// Auto-start LLM server configurations (new field)
+  final List<MCPLlmServerConfig>? autoStartLlmServer;
+
+  /// Creates a new MCP configuration
   MCPConfig({
     required this.appName,
     required this.appVersion,
-    this.useBackgroundService = true,
-    this.useNotification = true,
-    this.useTray = true,
+    this.useBackgroundService = false,
+    this.useNotification = false,
+    this.useTray = false,
     this.secure = true,
     this.lifecycleManaged = true,
     this.autoStart = true,
     this.loggingLevel,
-    this.enablePerformanceMonitoring = false,
-    this.enableMetricsExport = false,
+    this.enablePerformanceMonitoring,
+    this.enableMetricsExport,
     this.metricsExportPath,
-    this.autoLoadPlugins = true,
+    this.autoLoadPlugins,
     this.pluginConfigurations,
-    this.highMemoryThresholdMB = 1024,  // 1GB
-    this.lowBatteryWarningThreshold = 20,  // 20%
-    this.maxConnectionRetries = 3,
-    this.llmRequestTimeoutMs = 60000,  // 60 seconds
+    this.highMemoryThresholdMB,
+    this.lowBatteryWarningThreshold,
+    this.maxConnectionRetries,
+    this.llmRequestTimeoutMs,
     this.background,
     this.notification,
     this.tray,
     this.schedule,
     this.autoStartServer,
     this.autoStartClient,
-  }) {
-    validate();
-  }
+    this.autoStartLlmClient,  // New parameter
+    this.autoStartLlmServer,  // New parameter
+  });
 
-  /// Validate the configuration
-  void validate() {
-    if (appName.isEmpty) {
-      throw ArgumentError('App name cannot be empty');
+  /// Converts this configuration to JSON map
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = {
+      'appName': appName,
+      'appVersion': appVersion,
+      'useBackgroundService': useBackgroundService,
+      'useNotification': useNotification,
+      'useTray': useTray,
+      'secure': secure,
+      'lifecycleManaged': lifecycleManaged,
+      'autoStart': autoStart,
+    };
+
+    if (loggingLevel != null) {
+      json['loggingLevel'] = loggingLevel.toString();
     }
 
-    if (appVersion.isEmpty) {
-      throw ArgumentError('App version cannot be empty');
+    if (enablePerformanceMonitoring != null) {
+      json['enablePerformanceMonitoring'] = enablePerformanceMonitoring;
     }
 
-    if (enableMetricsExport == true && metricsExportPath == null) {
-      throw ArgumentError('Metrics export path must be provided when metrics export is enabled');
+    if (enableMetricsExport != null) {
+      json['enableMetricsExport'] = enableMetricsExport;
+    }
+
+    if (metricsExportPath != null) {
+      json['metricsExportPath'] = metricsExportPath;
+    }
+
+    if (autoLoadPlugins != null) {
+      json['autoLoadPlugins'] = autoLoadPlugins;
+    }
+
+    if (pluginConfigurations != null) {
+      json['pluginConfigurations'] = pluginConfigurations;
+    }
+
+    if (highMemoryThresholdMB != null) {
+      json['highMemoryThresholdMB'] = highMemoryThresholdMB;
+    }
+
+    if (lowBatteryWarningThreshold != null) {
+      json['lowBatteryWarningThreshold'] = lowBatteryWarningThreshold;
+    }
+
+    if (maxConnectionRetries != null) {
+      json['maxConnectionRetries'] = maxConnectionRetries;
+    }
+
+    if (llmRequestTimeoutMs != null) {
+      json['llmRequestTimeoutMs'] = llmRequestTimeoutMs;
+    }
+
+    if (background != null) {
+      // Background doesn't have toJson, we create it manually
+      json['background'] = {
+        'notificationChannelId': background!.notificationChannelId,
+        'notificationChannelName': background!.notificationChannelName,
+        'notificationDescription': background!.notificationDescription,
+        'notificationIcon': background!.notificationIcon,
+        'autoStartOnBoot': background!.autoStartOnBoot,
+        'intervalMs': background!.intervalMs,
+        'keepAlive': background!.keepAlive,
+      };
+    }
+
+    if (notification != null) {
+      // Notification doesn't have toJson, we create it manually
+      json['notification'] = {
+        'channelId': notification!.channelId,
+        'channelName': notification!.channelName,
+        'channelDescription': notification!.channelDescription,
+        'icon': notification!.icon,
+        'enableSound': notification!.enableSound,
+        'enableVibration': notification!.enableVibration,
+        'priority': notification!.priority.toString(),
+      };
+    }
+
+    if (tray != null) {
+      // Tray doesn't have toJson, we create it manually
+      final Map<String, dynamic> trayJson = {
+        'iconPath': tray!.iconPath,
+        'tooltip': tray!.tooltip,
+      };
+
+      if (tray!.menuItems != null) {
+        // We can't serialize menu item callbacks, so we just save basic info
+        trayJson['menuItems'] = tray!.menuItems!.map((item) {
+          if (item.isSeparator) {
+            return {'separator': true};
+          }
+          return {
+            'label': item.label,
+            'disabled': item.disabled,
+          };
+        }).toList();
+      }
+
+      json['tray'] = trayJson;
+    }
+
+    if (schedule != null && schedule!.isNotEmpty) {
+      // We can't serialize job tasks, so we just store basic properties
+      json['schedule'] = schedule!.map((job) => job.toMap()).toList();
     }
 
     if (autoStartServer != null) {
-      for (final config in autoStartServer!) {
-        config.validate();
-      }
+      // Convert to JSON using existing methods
+      json['autoStartServer'] = autoStartServer!.map((server) => server.toJson()).toList();
     }
 
     if (autoStartClient != null) {
-      for (final config in autoStartClient!) {
-        config.validate();
-      }
+      // Convert to JSON using existing methods
+      json['autoStartClient'] = autoStartClient!.map((client) => client.toJson()).toList();
     }
 
-    if (highMemoryThresholdMB != null && highMemoryThresholdMB! <= 0) {
-      throw ArgumentError('High memory threshold must be positive');
+    if (autoStartLlmClient != null) {
+      json['autoStartLlmClient'] = autoStartLlmClient!.map((e) => e.toJson()).toList();
     }
 
-    if (lowBatteryWarningThreshold != null &&
-        (lowBatteryWarningThreshold! < 0 || lowBatteryWarningThreshold! > 100)) {
-      throw ArgumentError('Low battery warning threshold must be between 0 and 100');
+    if (autoStartLlmServer != null) {
+      json['autoStartLlmServer'] = autoStartLlmServer!.map((e) => e.toJson()).toList();
     }
 
-    if (maxConnectionRetries != null && maxConnectionRetries! < 0) {
-      throw ArgumentError('Max connection retries must be non-negative');
-    }
-
-    if (llmRequestTimeoutMs != null && llmRequestTimeoutMs! <= 0) {
-      throw ArgumentError('LLM request timeout must be positive');
-    }
+    return json;
   }
 
-  /// Create a copy of this configuration with modified values
+  /// Creates a copy of this configuration with the specified fields replaced
   MCPConfig copyWith({
     String? appName,
     String? appVersion,
@@ -396,6 +461,8 @@ class MCPConfig {
     List<MCPJob>? schedule,
     List<MCPServerConfig>? autoStartServer,
     List<MCPClientConfig>? autoStartClient,
+    List<MCPLlmClientConfig>? autoStartLlmClient,
+    List<MCPLlmServerConfig>? autoStartLlmServer,
   }) {
     return MCPConfig(
       appName: appName ?? this.appName,
@@ -422,72 +489,8 @@ class MCPConfig {
       schedule: schedule ?? this.schedule,
       autoStartServer: autoStartServer ?? this.autoStartServer,
       autoStartClient: autoStartClient ?? this.autoStartClient,
+      autoStartLlmClient: autoStartLlmClient ?? this.autoStartLlmClient,
+      autoStartLlmServer: autoStartLlmServer ?? this.autoStartLlmServer,
     );
-  }
-
-  /// Create a configuration for development environments
-  factory MCPConfig.development({
-    required String appName,
-    required String appVersion,
-  }) {
-    return MCPConfig(
-      appName: appName,
-      appVersion: appVersion,
-      loggingLevel: MCPLogLevel.debug,
-      enablePerformanceMonitoring: true,
-      background: BackgroundConfig.defaultConfig(),
-    );
-  }
-
-  /// Create a configuration for production environments
-  factory MCPConfig.production({
-    required String appName,
-    required String appVersion,
-  }) {
-    return MCPConfig(
-      appName: appName,
-      appVersion: appVersion,
-      loggingLevel: MCPLogLevel.info,
-      enablePerformanceMonitoring: false,
-      background: BackgroundConfig(
-        notificationChannelId: 'production_${appName.toLowerCase()}_channel',
-        notificationChannelName: '$appName Service',
-        notificationDescription: '$appName Background Service',
-        autoStartOnBoot: true,
-        intervalMs: 30000, // 30 seconds for production
-        keepAlive: true,
-      ),
-    );
-  }
-
-  /// Convert configuration to a map for storage/debugging
-  Map<String, dynamic> toMap() {
-    return {
-      'appName': appName,
-      'appVersion': appVersion,
-      'useBackgroundService': useBackgroundService,
-      'useNotification': useNotification,
-      'useTray': useTray,
-      'secure': secure,
-      'lifecycleManaged': lifecycleManaged,
-      'autoStart': autoStart,
-      'loggingLevel': loggingLevel?.toString().split('.').last,
-      'enablePerformanceMonitoring': enablePerformanceMonitoring,
-      'enableMetricsExport': enableMetricsExport,
-      'metricsExportPath': metricsExportPath,
-      'autoLoadPlugins': autoLoadPlugins,
-      'highMemoryThresholdMB': highMemoryThresholdMB,
-      'lowBatteryWarningThreshold': lowBatteryWarningThreshold,
-      'maxConnectionRetries': maxConnectionRetries,
-      'llmRequestTimeoutMs': llmRequestTimeoutMs,
-      'background': background != null ? {
-        'notificationChannelId': background!.notificationChannelId,
-        'autoStartOnBoot': background!.autoStartOnBoot,
-        'intervalMs': background!.intervalMs,
-        'keepAlive': background!.keepAlive,
-      } : null,
-      'autoStartServerCount': autoStartServer?.length,
-      'autoStartClientCount': autoStartClient?.length,
-    };
   }
 }

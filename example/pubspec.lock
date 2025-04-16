@@ -348,7 +348,7 @@ packages:
       path: "../../mcp_llm"
       relative: true
     source: path
-    version: "0.2.0"
+    version: "0.2.2"
   mcp_server:
     dependency: transitive
     description:

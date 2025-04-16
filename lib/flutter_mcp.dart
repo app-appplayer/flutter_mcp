@@ -86,6 +86,9 @@ class FlutterMCP {
   // Optimized memory cache for LLM responses with semantic support
   final Map<String, SemanticCache> _llmResponseCaches = {};
 
+  String? _defaultLlmClientId;
+  String? _defaultLlmServerId;
+
   // Optimized object pools
   final ObjectPool<Stopwatch> _stopwatchPool = ObjectPool<Stopwatch>(
     create: () => Stopwatch(),
@@ -122,6 +125,9 @@ class FlutterMCP {
 
   /// Get Platform Services
   PlatformServices get platformServices => _platformServices;
+
+  String? get defaultLlmClientId => _defaultLlmClientId;
+  String? get defaultLlmServerId => _defaultLlmServerId;
 
   /// Initialize the plugin with improved concurrency handling
   ///
@@ -556,189 +562,203 @@ class FlutterMCP {
     }
   }
 
-  /// Start configured components with improved error handling and parallelism
-  Future<Map<String, dynamic>> _startConfiguredComponents() async {
-    final config = _config!;
-    final startErrors = <String, dynamic>{};
-    final startTasks = <Future<void>>[];
-
-    // Start auto-start servers
-    if (config.autoStartServer != null && config.autoStartServer!.isNotEmpty) {
-      for (final serverConfig in config.autoStartServer!) {
-        startTasks.add(_startServerWithErrorHandling(serverConfig, startErrors));
-      }
-    }
-
-    // Start auto-start clients
-    if (config.autoStartClient != null && config.autoStartClient!.isNotEmpty) {
-      for (final clientConfig in config.autoStartClient!) {
-        startTasks.add(_startClientWithErrorHandling(clientConfig, startErrors));
-      }
-    }
-
-    // Wait for all tasks to complete
-    await Future.wait(startTasks);
-
-    // Report any errors that occurred during startup
-    if (startErrors.isNotEmpty) {
-      // Publish start errors event
-      _eventSystem.publish('mcp.startup.errors', startErrors);
-    }
-
-    return startErrors;
+  void setDefaultLlmClientId(String llmClientId) {
+    _defaultLlmClientId = llmClientId;
+    _logger.info('Default LLM client ID set to: $llmClientId');
   }
 
-  /// Start server with error handling without blocking other components
-  Future<void> _startServerWithErrorHandling(
-      MCPServerConfig serverConfig,
-      Map<String, dynamic> startErrors
-      ) async {
-    try {
-      await _startServer(serverConfig);
-    } catch (e, stackTrace) {
-      _logger.error('Failed to start server: ${serverConfig.name}', e, stackTrace);
-      startErrors['server.${serverConfig.name}'] = e;
-
-      // Track failure
-      PerformanceMonitor.instance.incrementCounter('server.start.failure');
-    }
+  void setDefaultLlmServerId(String llmServerId) {
+    _defaultLlmServerId = llmServerId;
+    _logger.info('Default LLM server ID set to: $llmServerId');
   }
 
-  /// Start client with error handling without blocking other components
-  Future<void> _startClientWithErrorHandling(
-      MCPClientConfig clientConfig,
-      Map<String, dynamic> startErrors
-      ) async {
-    try {
-      await _startClient(clientConfig);
-    } catch (e, stackTrace) {
-      _logger.error('Failed to start client: ${clientConfig.name}', e, stackTrace);
-      startErrors['client.${clientConfig.name}'] = e;
-
-      // Track failure
-      PerformanceMonitor.instance.incrementCounter('client.start.failure');
-    }
-  }
 
   /// Start a client from configuration with improved error handling
   Future<String> _startClient(MCPClientConfig clientConfig) async {
-    final stopwatch = _stopwatchPool.acquire();
-    stopwatch.start();
-    final operationId = 'client.start.${clientConfig.name}';
+    // 클라이언트와 Transport 생성
+    final clientId = await createClient(
+      name: clientConfig.name,
+      version: clientConfig.version,
+      capabilities: clientConfig.capabilities,
+      transportCommand: clientConfig.transportCommand,
+      transportArgs: clientConfig.transportArgs,
+      serverUrl: clientConfig.serverUrl,
+      authToken: clientConfig.authToken,
+    );
 
-    try {
-      final clientId = await createClient(
-        name: clientConfig.name,
-        version: clientConfig.version,
-        capabilities: clientConfig.capabilities,
-        transportCommand: clientConfig.transportCommand,
-        transportArgs: clientConfig.transportArgs,
-        serverUrl: clientConfig.serverUrl,
-      );
-
-      // Integrate with LLM if configured
-      if (clientConfig.integrateLlm != null) {
-        String llmId;
-
-        if (clientConfig.integrateLlm!.existingLlmId != null) {
-          // Use existing LLM ID
-          llmId = clientConfig.integrateLlm!.existingLlmId!;
-        } else {
-          // Create new LLM client and use its llmId
-          final (newLlmId, _) = await createLlmClient(
-            providerName: clientConfig.integrateLlm!.providerName!,
-            config: clientConfig.integrateLlm!.config!,
-          );
-          llmId = newLlmId;
-        }
-
-        await addMcpClientToLlmClient(
-          mcpClientId: clientId,
-          llmClientId: llmId,
-        );
-      }
-
-      // Connect client
-      await connectClient(clientId);
-
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: true
-      );
-
-      _stopwatchPool.release(stopwatch);
-      return clientId;
-    } catch (e) {
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: false
-      );
-
-      _stopwatchPool.release(stopwatch);
-      rethrow;
-    }
+    // ID만 반환하고 연결은 하지 않음
+    _logger.debug('Created MCP client: ${clientConfig.name} with ID $clientId');
+    return clientId;
   }
 
   /// Start a server from configuration with improved error handling
   Future<String> _startServer(MCPServerConfig serverConfig) async {
-    final stopwatch = _stopwatchPool.acquire();
-    stopwatch.start();
-    final operationId = 'server.start.${serverConfig.name}';
+    // 서버와 Transport 생성
+    final serverId = await createServer(
+      name: serverConfig.name,
+      version: serverConfig.version,
+      capabilities: serverConfig.capabilities,
+      useStdioTransport: serverConfig.useStdioTransport,
+      ssePort: serverConfig.ssePort,
+      fallbackPorts: serverConfig.fallbackPorts,
+      authToken: serverConfig.authToken,
+    );
 
-    try {
-      final serverId = await createServer(
-        name: serverConfig.name,
-        version: serverConfig.version,
-        capabilities: serverConfig.capabilities,
-        useStdioTransport: serverConfig.useStdioTransport,
-        ssePort: serverConfig.ssePort,
-      );
+    // ID만 반환하고 연결은 하지 않음
+    _logger.debug('Created MCP server: ${serverConfig.name} with ID $serverId');
+    return serverId;
+  }
 
-      // Integrate with LLM if configured
-      if (serverConfig.integrateLlm != null) {
-        String llmId;
+  /// Start configured components with improved error handling and parallelism
+  Future<Map<String, dynamic>> _startConfiguredComponents() async {
+    final config = _config!;
+    final startErrors = <String, dynamic>{};
 
-        if (serverConfig.integrateLlm!.existingLlmId != null) {
-          // Use existing LLM ID
-          llmId = serverConfig.integrateLlm!.existingLlmId!;
-        } else {
-          // Create new LLM server and use its llmId
-          final (newLlmId, _) = await createLlmServer(
-            providerName: serverConfig.integrateLlm!.providerName!,
-            config: serverConfig.integrateLlm!.config!,
-          );
-          llmId = newLlmId;
+    // 1. MCP 서버 생성 (연결 없이)
+    final mcpServerMap = <String, String>{};  // 인덱스/이름 -> 실제 서버 ID 매핑
+
+    if (config.autoStartServer != null && config.autoStartServer!.isNotEmpty) {
+      for (int i = 0; i < config.autoStartServer!.length; i++) {
+        final serverConfig = config.autoStartServer![i];
+        try {
+          final serverId = await _startServer(serverConfig);
+          mcpServerMap['server_$i'] = serverId;  // 인덱스로 참조
+          mcpServerMap[serverConfig.name] = serverId;  // 이름으로 참조
+        } catch (e, stackTrace) {
+          _logger.error('Failed to create server: ${serverConfig.name}', e, stackTrace);
+          startErrors['server.${serverConfig.name}'] = e;
         }
-
-        await addMcpServerToLlmServer(
-          mcpServerId: serverId,
-          llmServerId: llmId,
-        );
       }
-
-      // Connect server
-      connectServer(serverId);
-
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: true
-      );
-
-      _stopwatchPool.release(stopwatch);
-      return serverId;
-    } catch (e) {
-      PerformanceMonitor.instance.recordMetric(
-          operationId,
-          stopwatch.elapsedMilliseconds,
-          success: false
-      );
-
-      _stopwatchPool.release(stopwatch);
-      rethrow;
     }
+
+    // 2. MCP 클라이언트 생성 (연결 없이)
+    final mcpClientMap = <String, String>{};  // 인덱스/이름 -> 실제 클라이언트 ID 매핑
+
+    if (config.autoStartClient != null && config.autoStartClient!.isNotEmpty) {
+      for (int i = 0; i < config.autoStartClient!.length; i++) {
+        final clientConfig = config.autoStartClient![i];
+        try {
+          final clientId = await _startClient(clientConfig);
+          mcpClientMap['client_$i'] = clientId;  // 인덱스로 참조
+          mcpClientMap[clientConfig.name] = clientId;  // 이름으로 참조
+        } catch (e, stackTrace) {
+          _logger.error('Failed to create client: ${clientConfig.name}', e, stackTrace);
+          startErrors['client.${clientConfig.name}'] = e;
+        }
+      }
+    }
+
+    // 3. LLM 서버 생성 및 MCP 서버 연결
+    if (config.autoStartLlmServer != null && config.autoStartLlmServer!.isNotEmpty) {
+      for (int i = 0; i < config.autoStartLlmServer!.length; i++) {
+        final llmConfig = config.autoStartLlmServer![i];
+        try {
+          // LLM 서버 생성
+          final (llmId, llmServerId) = await createLlmServer(
+            providerName: llmConfig.providerName,
+            config: llmConfig.config,
+          );
+
+          // MCP 서버 연결
+          for (final mcpServerRef in llmConfig.mcpServerIds) {
+            if (mcpServerMap.containsKey(mcpServerRef)) {
+              final mcpServerId = mcpServerMap[mcpServerRef]!;
+
+              // 연결 관계 추가
+              await addMcpServerToLlmServer(
+                mcpServerId: mcpServerId,
+                llmServerId: llmServerId,
+              );
+
+              _logger.debug('Associated MCP server $mcpServerId with LLM server $llmServerId');
+            } else {
+              _logger.warning('MCP server reference not found: $mcpServerRef');
+            }
+          }
+
+          // 기본값으로 설정 (필요한 경우)
+          if (llmConfig.isDefault) {
+            _defaultLlmServerId = llmServerId;
+            _logger.debug('Set default LLM server: $llmServerId');
+          }
+        } catch (e, stackTrace) {
+          _logger.error('Failed to create LLM server at index $i', e, stackTrace);
+          startErrors['llm.server.$i'] = e;
+        }
+      }
+    }
+
+    // 4. LLM 클라이언트 생성 및 MCP 클라이언트 연결
+    if (config.autoStartLlmClient != null && config.autoStartLlmClient!.isNotEmpty) {
+      for (int i = 0; i < config.autoStartLlmClient!.length; i++) {
+        final llmConfig = config.autoStartLlmClient![i];
+        try {
+          // LLM 클라이언트 생성
+          final (llmId, llmClientId) = await createLlmClient(
+            providerName: llmConfig.providerName,
+            config: llmConfig.config,
+          );
+
+          // MCP 클라이언트 연결
+          for (final mcpClientRef in llmConfig.mcpClientIds) {
+            if (mcpClientMap.containsKey(mcpClientRef)) {
+              final mcpClientId = mcpClientMap[mcpClientRef]!;
+
+              // 연결 관계 추가
+              await addMcpClientToLlmClient(
+                mcpClientId: mcpClientId,
+                llmClientId: llmClientId,
+              );
+
+              _logger.debug('Associated MCP client $mcpClientId with LLM client $llmClientId');
+            } else {
+              _logger.warning('MCP client reference not found: $mcpClientRef');
+            }
+          }
+
+          // 기본값으로 설정 (필요한 경우)
+          if (llmConfig.isDefault) {
+            _defaultLlmClientId = llmClientId;
+            _logger.debug('Set default LLM client: $llmClientId');
+          }
+        } catch (e, stackTrace) {
+          _logger.error('Failed to create LLM client at index $i', e, stackTrace);
+          startErrors['llm.client.$i'] = e;
+        }
+      }
+    }
+
+    // 5. 모든 MCP 서버 연결
+    for (final serverId in mcpServerMap.values.toSet()) {
+      try {
+        connectServer(serverId);
+        _logger.debug('Connected MCP server: $serverId');
+      } catch (e, stackTrace) {
+        _logger.error('Failed to connect server: $serverId', e, stackTrace);
+        startErrors['connect.server.$serverId'] = e;
+      }
+    }
+
+    // 6. 모든 MCP 클라이언트 연결
+    for (final clientId in mcpClientMap.values.toSet()) {
+      try {
+        await connectClient(clientId);
+        _logger.debug('Connected MCP client: $clientId');
+      } catch (e, stackTrace) {
+        _logger.error('Failed to connect client: $clientId', e, stackTrace);
+        startErrors['connect.client.$clientId'] = e;
+      }
+    }
+
+    // 오류 보고
+    if (startErrors.isNotEmpty) {
+      _logger.warning(
+          'Some components failed to start (${startErrors.length} errors). ' +
+              'First error: ${startErrors.values.first}'
+      );
+    }
+
+    return startErrors;
   }
 
   /// Create MCP client with improved error handling

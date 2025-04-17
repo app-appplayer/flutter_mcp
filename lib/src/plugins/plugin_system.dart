@@ -1,11 +1,11 @@
 import '../utils/error_recovery.dart';
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
-import 'package:mcp_server/mcp_server.dart';
-import 'package:mcp_client/mcp_client.dart';
+import 'package:mcp_llm/mcp_llm.dart' as mcp_llm;
 import 'dart:async';
+import 'dart:convert';
 
-/// Base plugin interface
+/// Base plugin interface for all MCP plugins
 abstract class MCPPlugin {
   /// Plugin name
   String get name;
@@ -30,9 +30,6 @@ abstract class MCPToolPlugin extends MCPPlugin {
 
   /// Get tool metadata including input schema
   Map<String, dynamic> getToolMetadata();
-
-  /// Register tool with an MCP server
-  Future<void> registerWithServer(Server server);
 }
 
 /// MCP Resource plugin interface
@@ -42,9 +39,15 @@ abstract class MCPResourcePlugin extends MCPPlugin {
 
   /// Get resource metadata
   Map<String, dynamic> getResourceMetadata();
+}
 
-  /// Register resource with an MCP server
-  Future<void> registerWithServer(Server server);
+/// MCP Prompt plugin interface
+abstract class MCPPromptPlugin extends MCPPlugin {
+  /// Execute the prompt with arguments
+  Future<Map<String, dynamic>> execute(Map<String, dynamic> arguments);
+
+  /// Get prompt metadata including arguments
+  Map<String, dynamic> getPromptMetadata();
 }
 
 /// MCP Background plugin interface
@@ -80,28 +83,47 @@ abstract class MCPNotificationPlugin extends MCPPlugin {
   void registerClickHandler(Function(String id, Map<String, dynamic>? data) handler);
 }
 
-/// MCP Client plugin interface
-abstract class MCPClientPlugin extends MCPPlugin {
-  /// Initialize with a client
-  Future<void> initializeWithClient(Client client);
+/// MCP Tray plugin interface
+abstract class MCPTrayPlugin extends MCPPlugin {
+  /// Set tray icon
+  Future<void> setIcon(String iconPath);
 
-  /// Handle connection state changes
-  void handleConnectionStateChange(bool connected);
+  /// Set tray tooltip
+  Future<void> setTooltip(String tooltip);
 
-  /// Get client extensions
-  Map<String, dynamic> getClientExtensions();
+  /// Set tray menu items
+  Future<void> setMenuItems(List<TrayMenuItem> items);
+
+  /// Show the tray icon
+  Future<void> show();
+
+  /// Hide the tray icon
+  Future<void> hide();
+
+  /// Check if tray is supported on current platform
+  bool get isSupported;
 }
 
-/// MCP Server plugin interface
-abstract class MCPServerPlugin extends MCPPlugin {
-  /// Initialize with a server
-  Future<void> initializeWithServer(Server server);
+/// Tray menu item for MCP Tray plugins
+class TrayMenuItem {
+  final String? label;
+  final bool disabled;
+  final bool isSeparator;
+  final Function()? onTap;
 
-  /// Handle connection state changes
-  void handleConnectionStateChange(bool connected);
+  /// Create a normal menu item
+  TrayMenuItem({
+    this.label,
+    this.disabled = false,
+    this.onTap,
+  }) : isSeparator = false;
 
-  /// Get server extensions
-  Map<String, dynamic> getServerExtensions();
+  /// Create a separator
+  TrayMenuItem.separator()
+      : label = null,
+        disabled = true,
+        isSeparator = true,
+        onTap = null;
 }
 
 /// MCP Plugin registry
@@ -119,12 +141,6 @@ class MCPPluginRegistry {
 
   /// Plugin load order
   final List<String> _loadOrder = [];
-
-  /// Registered servers for automatic plugin registration
-  final Map<String, Server> _servers = {};
-
-  /// Registered clients for automatic plugin registration
-  final Map<String, Client> _clients = {};
 
   /// Register a plugin
   Future<void> registerPlugin(MCPPlugin plugin, [Map<String, dynamic>? config]) async {
@@ -155,9 +171,6 @@ class MCPPluginRegistry {
       if (!_loadOrder.contains(pluginName)) {
         _loadOrder.add(pluginName);
       }
-
-      // Auto-register with servers/clients if applicable
-      await _autoRegisterPlugin(plugin);
 
       _logger.info('Plugin $pluginName successfully initialized');
     } catch (e, stackTrace) {
@@ -244,79 +257,6 @@ class MCPPluginRegistry {
     return result;
   }
 
-  /// Register a server for plugins to use
-  void registerServer(String id, Server server) {
-    _servers[id] = server;
-
-    // Auto-register existing plugins with this server
-    for (final typeMap in _plugins.values) {
-      for (final plugin in typeMap.values) {
-        if (plugin is MCPToolPlugin || plugin is MCPResourcePlugin ||
-            plugin is MCPServerPlugin) {
-          _autoRegisterPluginWithServer(plugin, server);
-        }
-      }
-    }
-  }
-
-  /// Register a client for plugins to use
-  void registerClient(String id, Client client) {
-    _clients[id] = client;
-
-    // Auto-register existing plugins with this client
-    for (final typeMap in _plugins.values) {
-      for (final plugin in typeMap.values) {
-        if (plugin is MCPClientPlugin) {
-          _autoRegisterPluginWithClient(plugin, client);
-        }
-      }
-    }
-  }
-
-  /// Auto-register a plugin with servers/clients
-  Future<void> _autoRegisterPlugin(MCPPlugin plugin) async {
-    // Register with servers if applicable
-    if (plugin is MCPToolPlugin || plugin is MCPResourcePlugin ||
-        plugin is MCPServerPlugin) {
-      for (final server in _servers.values) {
-        await _autoRegisterPluginWithServer(plugin, server);
-      }
-    }
-
-    // Register with clients if applicable
-    if (plugin is MCPClientPlugin) {
-      for (final client in _clients.values) {
-        await _autoRegisterPluginWithClient(plugin, client);
-      }
-    }
-  }
-
-  /// Auto-register a plugin with a server
-  Future<void> _autoRegisterPluginWithServer(MCPPlugin plugin, Server server) async {
-    try {
-      if (plugin is MCPToolPlugin) {
-        await plugin.registerWithServer(server);
-      } else if (plugin is MCPResourcePlugin) {
-        await plugin.registerWithServer(server);
-      } else if (plugin is MCPServerPlugin) {
-        await plugin.initializeWithServer(server);
-      }
-    } catch (e) {
-      _logger.error('Failed to auto-register plugin ${plugin.name} with server', e);
-    }
-  }
-
-  /// Auto-register a plugin with a client
-  Future<void> _autoRegisterPluginWithClient(MCPPlugin plugin, Client client) async {
-    try {
-      if (plugin is MCPClientPlugin) {
-        await plugin.initializeWithClient(client);
-      }
-    } catch (e) {
-      _logger.error('Failed to auto-register plugin ${plugin.name} with client', e);
-    }
-  }
-
   /// Execute a tool plugin
   Future<Map<String, dynamic>> executeTool(String name, Map<String, dynamic> arguments) async {
     final plugin = getPlugin<MCPToolPlugin>(name);
@@ -336,6 +276,31 @@ class MCPPluginRegistry {
       throw MCPPluginException(
         name,
         'Error executing tool plugin: ${e.toString()}',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Execute a prompt plugin
+  Future<Map<String, dynamic>> executePrompt(String name, Map<String, dynamic> arguments) async {
+    final plugin = getPlugin<MCPPromptPlugin>(name);
+
+    if (plugin == null) {
+      throw MCPPluginException(name, 'Prompt plugin not found');
+    }
+
+    try {
+      return await ErrorRecovery.tryWithRetry(
+            () => plugin.execute(arguments),
+        operationName: 'Execute prompt plugin $name',
+        maxRetries: 2,
+      );
+    } catch (e, stackTrace) {
+      _logger.error('Error executing prompt plugin $name', e, stackTrace);
+      throw MCPPluginException(
+        name,
+        'Error executing prompt plugin: ${e.toString()}',
         e,
         stackTrace,
       );
@@ -447,6 +412,48 @@ class MCPPluginRegistry {
     }
   }
 
+  /// Update tray icon using a tray plugin
+  Future<void> updateTrayIcon(String name, String iconPath) async {
+    final plugin = getPlugin<MCPTrayPlugin>(name);
+
+    if (plugin == null) {
+      throw MCPPluginException(name, 'Tray plugin not found');
+    }
+
+    try {
+      await plugin.setIcon(iconPath);
+    } catch (e, stackTrace) {
+      _logger.error('Error updating tray icon with plugin $name', e, stackTrace);
+      throw MCPPluginException(
+        name,
+        'Error updating tray icon: ${e.toString()}',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Set tray menu items using a tray plugin
+  Future<void> setTrayMenuItems(String name, List<TrayMenuItem> items) async {
+    final plugin = getPlugin<MCPTrayPlugin>(name);
+
+    if (plugin == null) {
+      throw MCPPluginException(name, 'Tray plugin not found');
+    }
+
+    try {
+      await plugin.setMenuItems(items);
+    } catch (e, stackTrace) {
+      _logger.error('Error setting tray menu items with plugin $name', e, stackTrace);
+      throw MCPPluginException(
+        name,
+        'Error setting tray menu items: ${e.toString()}',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
   /// Check plugin dependencies
   bool hasDependency(String plugin, String dependency) {
     if (!_dependencies.containsKey(plugin)) {
@@ -512,8 +519,6 @@ class MCPPluginRegistry {
     _configurations.clear();
     _dependencies.clear();
     _loadOrder.clear();
-    _servers.clear();
-    _clients.clear();
 
     if (errors.isNotEmpty) {
       throw MCPException('Errors occurred while shutting down plugins: $errors');
@@ -580,16 +585,161 @@ class MCPPluginRegistry {
       return 'Tool';
     } else if (plugin is MCPResourcePlugin) {
       return 'Resource';
+    } else if (plugin is MCPPromptPlugin) {
+      return 'Prompt';
     } else if (plugin is MCPBackgroundPlugin) {
       return 'Background';
     } else if (plugin is MCPNotificationPlugin) {
       return 'Notification';
-    } else if (plugin is MCPClientPlugin) {
-      return 'Client';
-    } else if (plugin is MCPServerPlugin) {
-      return 'Server';
+    } else if (plugin is MCPTrayPlugin) {
+      return 'Tray';
     } else {
       return 'Basic';
     }
+  }
+}
+
+/// Adapters for mcp_llm plugins to be used in flutter_mcp
+
+/// Adapter for mcp_llm.ToolPlugin to MCPToolPlugin
+class LlmToolPluginAdapter implements MCPToolPlugin {
+  final mcp_llm.ToolPlugin _llmToolPlugin;
+
+  LlmToolPluginAdapter(this._llmToolPlugin);
+
+  @override
+  String get name => _llmToolPlugin.name;
+
+  @override
+  String get version => _llmToolPlugin.version;
+
+  @override
+  String get description => _llmToolPlugin.description;
+
+  @override
+  Future<void> initialize(Map<String, dynamic> config) => _llmToolPlugin.initialize(config);
+
+  @override
+  Future<void> shutdown() => _llmToolPlugin.shutdown();
+
+  @override
+  Future<Map<String, dynamic>> execute(Map<String, dynamic> arguments) async {
+    final result = await _llmToolPlugin.execute(arguments);
+    return _convertToolResult(result);
+  }
+
+  @override
+  Map<String, dynamic> getToolMetadata() {
+    final toolDef = _llmToolPlugin.getToolDefinition();
+    return {
+      'name': toolDef.name,
+      'description': toolDef.description,
+      'inputSchema': toolDef.inputSchema,
+    };
+  }
+
+  Map<String, dynamic> _convertToolResult(mcp_llm.LlmCallToolResult result) {
+    if (result.content.isEmpty) return {};
+
+    if (result.content.first is mcp_llm.LlmTextContent) {
+      final textContent = result.content.first as mcp_llm.LlmTextContent;
+
+      try {
+        return jsonDecode(textContent.text);
+      } catch (_) {
+        return {'result': textContent.text};
+      }
+    }
+
+    return {'contents': result.content.map((c) => c.toJson()).toList()};
+  }
+}
+
+/// Adapter for mcp_llm.ResourcePlugin to MCPResourcePlugin
+class LlmResourcePluginAdapter implements MCPResourcePlugin {
+  final mcp_llm.ResourcePlugin _llmResourcePlugin;
+
+  LlmResourcePluginAdapter(this._llmResourcePlugin);
+
+  @override
+  String get name => _llmResourcePlugin.name;
+
+  @override
+  String get version => _llmResourcePlugin.version;
+
+  @override
+  String get description => _llmResourcePlugin.description;
+
+  @override
+  Future<void> initialize(Map<String, dynamic> config) => _llmResourcePlugin.initialize(config);
+
+  @override
+  Future<void> shutdown() => _llmResourcePlugin.shutdown();
+
+  @override
+  Future<Map<String, dynamic>> getResource(String resourceUri, Map<String, dynamic> params) async {
+    final result = await _llmResourcePlugin.read(params);
+    return {
+      'content': result.content,
+      'mimeType': result.mimeType,
+      'contents': result.contents.map((c) => c.toJson()).toList(),
+    };
+  }
+
+  @override
+  Map<String, dynamic> getResourceMetadata() {
+    final resourceDef = _llmResourcePlugin.getResourceDefinition();
+    return {
+      'name': resourceDef.name,
+      'description': resourceDef.description,
+      'uri': resourceDef.uri,
+      'mimeType': resourceDef.mimeType,
+    };
+  }
+}
+
+/// Adapter for mcp_llm.PromptPlugin to MCPPromptPlugin
+class LlmPromptPluginAdapter implements MCPPromptPlugin {
+  final mcp_llm.PromptPlugin _llmPromptPlugin;
+
+  LlmPromptPluginAdapter(this._llmPromptPlugin);
+
+  @override
+  String get name => _llmPromptPlugin.name;
+
+  @override
+  String get version => _llmPromptPlugin.version;
+
+  @override
+  String get description => _llmPromptPlugin.description;
+
+  @override
+  Future<void> initialize(Map<String, dynamic> config) => _llmPromptPlugin.initialize(config);
+
+  @override
+  Future<void> shutdown() => _llmPromptPlugin.shutdown();
+
+  @override
+  Future<Map<String, dynamic>> execute(Map<String, dynamic> arguments) async {
+    final result = await _llmPromptPlugin.execute(arguments);
+    return {
+      'description': result.description,
+      'messages': result.messages.map((m) => m.toJson()).toList(),
+    };
+  }
+
+  @override
+  Map<String, dynamic> getPromptMetadata() {
+    final promptDef = _llmPromptPlugin.getPromptDefinition();
+    return {
+      'name': promptDef.name,
+      'description': promptDef.description,
+      'arguments': promptDef.arguments.map((arg) => {
+        'name': arg.name,
+        'description': arg.description,
+        'required': arg.required,
+        'default': arg.defaultValue,
+      }).toList(),
+    };
   }
 }

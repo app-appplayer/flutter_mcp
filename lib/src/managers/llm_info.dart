@@ -1,18 +1,19 @@
-import 'package:mcp_llm/mcp_llm.dart';
+import 'package:mcp_llm/mcp_llm.dart' as llm;
 
 /// LLM information with support for multiple clients and servers
+/// Enhanced with plugin system support
 class LlmInfo {
   /// LLM ID
   final String id;
 
   /// MCP LLM instance
-  final MCPLlm mcpLlm;
+  final llm.MCPLlm mcpLlm;
 
   /// Map of LLM clients managed by this LLM (clientId -> LlmClient)
-  final Map<String, LlmClient> llmClients = {};
+  final Map<String, llm.LlmClient> llmClients = {};
 
   /// Map of LLM servers managed by this LLM (serverId -> LlmServer)
-  final Map<String, LlmServer> llmServers = {};
+  final Map<String, llm.LlmServer> llmServers = {};
 
   /// Connected client IDs (MCP client IDs -> LLM client IDs)
   final Map<String, Set<String>> mcpClientToLlmClientMap = {};
@@ -26,45 +27,70 @@ class LlmInfo {
   /// Default LLM server ID for this LLM
   String? defaultLlmServerId;
 
+  /// Plugin managers for LLM clients and servers
+  final Map<String, llm.PluginManager> llmClientPluginManagers = {};
+  final Map<String, llm.PluginManager> llmServerPluginManagers = {};
+
   /// Primary LLM client (if any)
-  LlmClient? get primaryClient =>
+  llm.LlmClient? get primaryClient =>
       defaultLlmClientId != null ? llmClients[defaultLlmClientId] :
       llmClients.isNotEmpty ? llmClients.values.first : null;
 
   /// Primary LLM server (if any)
-  LlmServer? get primaryServer =>
+  llm.LlmServer? get primaryServer =>
       defaultLlmServerId != null ? llmServers[defaultLlmServerId] :
       llmServers.isNotEmpty ? llmServers.values.first : null;
+
+  /// Default LLM client
+  llm.LlmClient? get defaultLlmClient =>
+      defaultLlmClientId != null ? llmClients[defaultLlmClientId] : null;
+
+  /// Default LLM server
+  llm.LlmServer? get defaultLlmServer =>
+      defaultLlmServerId != null ? llmServers[defaultLlmServerId] : null;
 
   LlmInfo({
     required this.id,
     required this.mcpLlm,
-    LlmClient? initialClient,
-    LlmServer? initialServer,
+    llm.LlmClient? initialClient,
+    llm.LlmServer? initialServer,
   }) {
     // Register the initial client if provided
     if (initialClient != null) {
       final clientId = 'primary_client_$id';
       llmClients[clientId] = initialClient;
       defaultLlmClientId = clientId;
-    }
+
+      // Store the plugin manager if available
+      llmClientPluginManagers[clientId] = initialClient.pluginManager;
+        }
 
     // Register the initial server if provided
     if (initialServer != null) {
       final serverId = 'primary_server_$id';
       llmServers[serverId] = initialServer;
       defaultLlmServerId = serverId;
-    }
+
+      // Store the plugin manager if available
+      llmServerPluginManagers[serverId] = initialServer.pluginManager;
+        }
   }
 
   /// Add an LLM client
-  void addLlmClient(String clientId, LlmClient client) {
+  void addLlmClient(String clientId, llm.LlmClient client) {
     llmClients[clientId] = client;
-    defaultLlmClientId ??= clientId;
-  }
+
+    // Set as default if this is the first client or no default is set
+    if (llmClients.length == 1 || defaultLlmClientId == null) {
+      defaultLlmClientId = clientId;
+    }
+
+    // Store the plugin manager if available
+    llmClientPluginManagers[clientId] = client.pluginManager;
+    }
 
   /// Remove an LLM client
-  LlmClient? removeLlmClient(String clientId) {
+  llm.LlmClient? removeLlmClient(String clientId) {
     final client = llmClients.remove(clientId);
 
     // If we removed the default client, set a new default if available
@@ -74,17 +100,27 @@ class LlmInfo {
       defaultLlmClientId = null;
     }
 
+    // Remove the plugin manager
+    llmClientPluginManagers.remove(clientId);
+
     return client;
   }
 
   /// Add an LLM server
-  void addLlmServer(String serverId, LlmServer server) {
+  void addLlmServer(String serverId, llm.LlmServer server) {
     llmServers[serverId] = server;
-    defaultLlmServerId ??= serverId;
-  }
+
+    // Set as default if this is the first server or no default is set
+    if (llmServers.length == 1 || defaultLlmServerId == null) {
+      defaultLlmServerId = serverId;
+    }
+
+    // Store the plugin manager if available
+    llmServerPluginManagers[serverId] = server.pluginManager;
+    }
 
   /// Remove an LLM server
-  LlmServer? removeLlmServer(String serverId) {
+  llm.LlmServer? removeLlmServer(String serverId) {
     final server = llmServers.remove(serverId);
 
     // If we removed the default server, set a new default if available
@@ -93,6 +129,9 @@ class LlmInfo {
     } else if (llmServers.isEmpty) {
       defaultLlmServerId = null;
     }
+
+    // Remove the plugin manager
+    llmServerPluginManagers.remove(serverId);
 
     return server;
   }
@@ -109,16 +148,6 @@ class LlmInfo {
     if (llmServers.containsKey(serverId)) {
       defaultLlmServerId = serverId;
     }
-  }
-
-  /// Get default LLM client
-  LlmClient? get defaultLlmClient {
-    return defaultLlmClientId != null ? llmClients[defaultLlmClientId] : null;
-  }
-
-  /// Get default LLM server
-  LlmServer? get defaultLlmServer {
-    return defaultLlmServerId != null ? llmServers[defaultLlmServerId] : null;
   }
 
   /// Associate an MCP client with an LLM client
@@ -191,5 +220,44 @@ class LlmInfo {
   /// Check if this LLM has any servers
   bool hasServers() {
     return llmServers.isNotEmpty;
+  }
+
+  /// Add a plugin manager for an LLM client
+  void setLlmClientPluginManager(String llmClientId, llm.PluginManager pluginManager) {
+    if (llmClients.containsKey(llmClientId)) {
+      llmClientPluginManagers[llmClientId] = pluginManager;
+    }
+  }
+
+  /// Add a plugin manager for an LLM server
+  void setLlmServerPluginManager(String llmServerId, llm.PluginManager pluginManager) {
+    if (llmServers.containsKey(llmServerId)) {
+      llmServerPluginManagers[llmServerId] = pluginManager;
+    }
+  }
+
+  /// Get a plugin manager for an LLM client
+  llm.PluginManager? getLlmClientPluginManager(String llmClientId) {
+    return llmClientPluginManagers[llmClientId];
+  }
+
+  /// Get a plugin manager for an LLM server
+  llm.PluginManager? getLlmServerPluginManager(String llmServerId) {
+    return llmServerPluginManagers[llmServerId];
+  }
+
+  /// Get all plugin managers across all LLM clients
+  List<llm.PluginManager> getAllClientPluginManagers() {
+    return llmClientPluginManagers.values.toList();
+  }
+
+  /// Get all plugin managers across all LLM servers
+  List<llm.PluginManager> getAllServerPluginManagers() {
+    return llmServerPluginManagers.values.toList();
+  }
+
+  /// Get all plugin managers (both client and server)
+  List<llm.PluginManager> getAllPluginManagers() {
+    return [...llmClientPluginManagers.values, ...llmServerPluginManagers.values];
   }
 }

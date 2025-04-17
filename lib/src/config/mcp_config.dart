@@ -277,6 +277,21 @@ class MCPConfig {
   /// Auto-start LLM server configurations (new field)
   final List<MCPLlmServerConfig>? autoStartLlmServer;
 
+  /// Whether to automatically register LLM plugins with the flutter_mcp system
+  final bool? autoRegisterLlmPlugins;
+
+  /// Whether to register MCP plugins with the LLM system
+  final bool? registerMcpPluginsWithLlm;
+
+  /// Whether to register core LLM plugins
+  final bool? registerCoreLlmPlugins;
+
+  /// Whether to enable retrieval capabilities
+  final bool? enableRetrieval;
+
+  /// Any extra configuration options
+  final Map<String, dynamic>? extraOptions;
+
   /// Creates a new MCP configuration
   MCPConfig({
     required this.appName,
@@ -303,8 +318,13 @@ class MCPConfig {
     this.schedule,
     this.autoStartServer,
     this.autoStartClient,
-    this.autoStartLlmClient,  // New parameter
-    this.autoStartLlmServer,  // New parameter
+    this.autoStartLlmClient,
+    this.autoStartLlmServer,
+    this.autoRegisterLlmPlugins = false,
+    this.registerMcpPluginsWithLlm = false,
+    this.registerCoreLlmPlugins = false,
+    this.enableRetrieval = false,
+    this.extraOptions,
   });
 
   /// Converts this configuration to JSON map
@@ -432,6 +452,32 @@ class MCPConfig {
       json['autoStartLlmServer'] = autoStartLlmServer!.map((e) => e.toJson()).toList();
     }
 
+    // Add new plugin-related options
+    if (autoRegisterLlmPlugins != null) {
+      json['autoRegisterLlmPlugins'] = autoRegisterLlmPlugins;
+    }
+
+    if (registerMcpPluginsWithLlm != null) {
+      json['registerMcpPluginsWithLlm'] = registerMcpPluginsWithLlm;
+    }
+
+    if (registerCoreLlmPlugins != null) {
+      json['registerCoreLlmPlugins'] = registerCoreLlmPlugins;
+    }
+
+    if (enableRetrieval != null) {
+      json['enableRetrieval'] = enableRetrieval;
+    }
+
+    // Add any extra options
+    if (extraOptions != null) {
+      extraOptions!.forEach((key, value) {
+        if (!json.containsKey(key)) {
+          json[key] = value;
+        }
+      });
+    }
+
     return json;
   }
 
@@ -463,6 +509,11 @@ class MCPConfig {
     List<MCPClientConfig>? autoStartClient,
     List<MCPLlmClientConfig>? autoStartLlmClient,
     List<MCPLlmServerConfig>? autoStartLlmServer,
+    bool? autoRegisterLlmPlugins,
+    bool? registerMcpPluginsWithLlm,
+    bool? registerCoreLlmPlugins,
+    bool? enableRetrieval,
+    Map<String, dynamic>? extraOptions,
   }) {
     return MCPConfig(
       appName: appName ?? this.appName,
@@ -491,6 +542,11 @@ class MCPConfig {
       autoStartClient: autoStartClient ?? this.autoStartClient,
       autoStartLlmClient: autoStartLlmClient ?? this.autoStartLlmClient,
       autoStartLlmServer: autoStartLlmServer ?? this.autoStartLlmServer,
+      autoRegisterLlmPlugins: autoRegisterLlmPlugins ?? this.autoRegisterLlmPlugins,
+      registerMcpPluginsWithLlm: registerMcpPluginsWithLlm ?? this.registerMcpPluginsWithLlm,
+      registerCoreLlmPlugins: registerCoreLlmPlugins ?? this.registerCoreLlmPlugins,
+      enableRetrieval: enableRetrieval ?? this.enableRetrieval,
+      extraOptions: extraOptions ?? this.extraOptions,
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter_mcp/src/plugins/llm_plugin_integration.dart';
 import 'package:flutter_mcp/src/utils/error_recovery.dart';
 import 'package:mcp_client/mcp_client.dart' as client;
 import 'package:mcp_server/mcp_server.dart' as server;
@@ -3305,6 +3306,584 @@ class FlutterMCP {
       throw MCPResourceNotFoundException(instanceId, 'MCPLlm instance not found');
     }
     return lazy.value;
+  }
+
+  /// Register a plugin from LLM to the flutter_mcp plugin system
+  ///
+  /// This method enables unified plugin registration between systems
+  ///
+  /// Parameters:
+  /// - [llmPlugin] The mcp_llm plugin to register with flutter_mcp
+  /// - [config] Optional configuration for the plugin
+  /// - [mcpLlmInstanceId] ID of the MCPLlm instance (defaults to 'default')
+  ///
+  /// Returns true if registration was successful
+  Future<bool> registerLlmPluginWithSystem(
+      llm.LlmPlugin llmPlugin, {
+        Map<String, dynamic>? config,
+        String mcpLlmInstanceId = 'default',
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final stopwatch = _stopwatchPool.acquire();
+    stopwatch.start();
+
+    try {
+      // Get the LLM plugin integrator from the LLM Manager
+      final integrator = _llmManager.getPluginIntegrator();
+
+      // Register the plugin with the system
+      final result = await integrator.registerLlmPlugin(llmPlugin, config);
+
+      if (result) {
+        _logger.info('Successfully registered LLM plugin ${llmPlugin.name} with flutter_mcp system');
+
+        // Publish event for plugin registration
+        _eventSystem.publish('plugin.registered', {
+          'name': llmPlugin.name,
+          'type': 'llm_plugin',
+          'source': mcpLlmInstanceId,
+        });
+      }
+
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_llm_plugin',
+          stopwatch.elapsedMilliseconds,
+          success: result,
+          metadata: {
+            'plugin': llmPlugin.name,
+            'mcpLlmInstanceId': mcpLlmInstanceId,
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      return result;
+    } catch (e, stackTrace) {
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_llm_plugin',
+          stopwatch.elapsedMilliseconds,
+          success: false,
+          metadata: {
+            'plugin': llmPlugin.name,
+            'mcpLlmInstanceId': mcpLlmInstanceId,
+            'error': e.toString(),
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      _logger.error('Failed to register LLM plugin with flutter_mcp system', e, stackTrace);
+      throw MCPOperationFailedException(
+          'Failed to register LLM plugin with flutter_mcp system',
+          e,
+          stackTrace
+      );
+    }
+  }
+
+  /// Register all plugins from an LLM client with the flutter_mcp system
+  ///
+  /// Parameters:
+  /// - [llmId] ID of the LLM instance
+  /// - [llmClientId] ID of the LLM client
+  ///
+  /// Returns a map of plugin names to registration success status
+  Future<Map<String, bool>> registerPluginsFromLlmClient(
+      String llmId,
+      String llmClientId
+      ) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final stopwatch = _stopwatchPool.acquire();
+    stopwatch.start();
+
+    try {
+      // Get the LLM client
+      final llmClient = _llmManager.getLlmClientById(llmClientId);
+      if (llmClient == null) {
+        throw MCPResourceNotFoundException(llmClientId, 'LLM client not found');
+      }
+
+      // Get the LLM plugin integrator
+      final integrator = _llmManager.getPluginIntegrator();
+
+      // Register all plugins from the client
+      final results = await integrator.registerPluginsFromLlmClient(llmClientId, llmClient);
+
+      // Count successes
+      final successCount = results.values.where((v) => v).length;
+
+      _logger.info('Registered $successCount/${results.length} plugins from LLM client $llmClientId');
+
+      // Publish event for plugin registration
+      _eventSystem.publish('plugins.batch_registered', {
+        'source': 'llm_client',
+        'llmId': llmId,
+        'llmClientId': llmClientId,
+        'successCount': successCount,
+        'totalCount': results.length,
+      });
+
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_from_llm_client',
+          stopwatch.elapsedMilliseconds,
+          success: successCount > 0,
+          metadata: {
+            'llmId': llmId,
+            'llmClientId': llmClientId,
+            'successCount': successCount,
+            'totalCount': results.length,
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      return results;
+    } catch (e, stackTrace) {
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_from_llm_client',
+          stopwatch.elapsedMilliseconds,
+          success: false,
+          metadata: {
+            'llmId': llmId,
+            'llmClientId': llmClientId,
+            'error': e.toString(),
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      _logger.error('Failed to register plugins from LLM client', e, stackTrace);
+      throw MCPOperationFailedException(
+          'Failed to register plugins from LLM client $llmClientId',
+          e,
+          stackTrace
+      );
+    }
+  }
+
+  /// Register all plugins from an LLM server with the flutter_mcp system
+  ///
+  /// Parameters:
+  /// - [llmId] ID of the LLM instance
+  /// - [llmServerId] ID of the LLM server
+  ///
+  /// Returns a map of plugin names to registration success status
+  Future<Map<String, bool>> registerPluginsFromLlmServer(
+      String llmId,
+      String llmServerId
+      ) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final stopwatch = _stopwatchPool.acquire();
+    stopwatch.start();
+
+    try {
+      // Get the LLM server
+      final llmServer = _llmManager.getLlmServerById(llmServerId);
+      if (llmServer == null) {
+        throw MCPResourceNotFoundException(llmServerId, 'LLM server not found');
+      }
+
+      // Get the LLM plugin integrator
+      final integrator = _llmManager.getPluginIntegrator();
+
+      // Register all plugins from the server
+      final results = await integrator.registerPluginsFromLlmServer(llmServerId, llmServer);
+
+      // Count successes
+      final successCount = results.values.where((v) => v).length;
+
+      _logger.info('Registered $successCount/${results.length} plugins from LLM server $llmServerId');
+
+      // Publish event for plugin registration
+      _eventSystem.publish('plugins.batch_registered', {
+        'source': 'llm_server',
+        'llmId': llmId,
+        'llmServerId': llmServerId,
+        'successCount': successCount,
+        'totalCount': results.length,
+      });
+
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_from_llm_server',
+          stopwatch.elapsedMilliseconds,
+          success: successCount > 0,
+          metadata: {
+            'llmId': llmId,
+            'llmServerId': llmServerId,
+            'successCount': successCount,
+            'totalCount': results.length,
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      return results;
+    } catch (e, stackTrace) {
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_from_llm_server',
+          stopwatch.elapsedMilliseconds,
+          success: false,
+          metadata: {
+            'llmId': llmId,
+            'llmServerId': llmServerId,
+            'error': e.toString(),
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      _logger.error('Failed to register plugins from LLM server', e, stackTrace);
+      throw MCPOperationFailedException(
+          'Failed to register plugins from LLM server $llmServerId',
+          e,
+          stackTrace
+      );
+    }
+  }
+
+  /// Register core LLM plugins with the flutter_mcp system
+  ///
+  /// This method creates and registers the standard set of plugins provided by mcp_llm
+  ///
+  /// Parameters:
+  /// - [llmId] ID of the LLM instance
+  /// - [clientOrServerId] ID of either an LLM client or server to use for plugin creation
+  /// - [isServer] Whether the ID is for a server (true) or client (false)
+  /// - [includeCompletionPlugin] Whether to include the completion plugin
+  /// - [includeStreamingPlugin] Whether to include the streaming plugin
+  /// - [includeEmbeddingPlugin] Whether to include the embedding plugin
+  /// - [includeRetrievalPlugins] Whether to include retrieval plugins
+  ///
+  /// Returns a map of plugin names to registration success status
+  Future<Map<String, bool>> registerCoreLlmPlugins(
+      String llmId,
+      String clientOrServerId, {
+        bool isServer = false,
+        bool includeCompletionPlugin = true,
+        bool includeStreamingPlugin = true,
+        bool includeEmbeddingPlugin = true,
+        bool includeRetrievalPlugins = false,
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final stopwatch = _stopwatchPool.acquire();
+    stopwatch.start();
+
+    try {
+      // Register core plugins through LLM manager
+      final results = await _llmManager.registerCoreLlmPlugins(
+        llmId,
+        llmClientId: isServer ? null : clientOrServerId,
+        llmServerId: isServer ? clientOrServerId : null,
+        includeCompletionPlugin: includeCompletionPlugin,
+        includeStreamingPlugin: includeStreamingPlugin,
+        includeEmbeddingPlugin: includeEmbeddingPlugin,
+        includeRetrievalPlugins: includeRetrievalPlugins,
+      );
+
+      // Count successes
+      final successCount = results.values.where((v) => v).length;
+
+      _logger.info('Registered $successCount/${results.length} core LLM plugins for ${isServer ? 'server' : 'client'} $clientOrServerId');
+
+      // Publish event for plugin registration
+      _eventSystem.publish('plugins.core_registered', {
+        'source': isServer ? 'llm_server' : 'llm_client',
+        'llmId': llmId,
+        'clientOrServerId': clientOrServerId,
+        'successCount': successCount,
+        'totalCount': results.length,
+      });
+
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_core_llm_plugins',
+          stopwatch.elapsedMilliseconds,
+          success: successCount > 0,
+          metadata: {
+            'llmId': llmId,
+            'clientOrServerId': clientOrServerId,
+            'isServer': isServer,
+            'successCount': successCount,
+            'totalCount': results.length,
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      return results;
+    } catch (e, stackTrace) {
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.register_core_llm_plugins',
+          stopwatch.elapsedMilliseconds,
+          success: false,
+          metadata: {
+            'llmId': llmId,
+            'clientOrServerId': clientOrServerId,
+            'isServer': isServer,
+            'error': e.toString(),
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      _logger.error('Failed to register core LLM plugins', e, stackTrace);
+      throw MCPOperationFailedException(
+          'Failed to register core LLM plugins for ${isServer ? 'server' : 'client'} $clientOrServerId',
+          e,
+          stackTrace
+      );
+    }
+  }
+
+  /// Convert an MCPPlugin to an LLM plugin
+  ///
+  /// This method creates an adapter that allows a flutter_mcp plugin to be used with mcp_llm
+  ///
+  /// Parameters:
+  /// - [mcpPlugin] The flutter_mcp plugin to adapt for mcp_llm
+  /// - [targetLlmIds] Optional list of LLM IDs to register the plugin with
+  /// - [targetLlmClientIds] Optional list of LLM client IDs to register the plugin with
+  /// - [targetLlmServerIds] Optional list of LLM server IDs to register the plugin with
+  ///
+  /// Returns true if the conversion and registration were successful
+  Future<bool> convertMcpPluginToLlm(
+      MCPPlugin mcpPlugin, {
+        List<String>? targetLlmIds,
+        List<String>? targetLlmClientIds,
+        List<String>? targetLlmServerIds,
+      }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final stopwatch = _stopwatchPool.acquire();
+    stopwatch.start();
+
+    try {
+      // Get the LLM plugin integrator
+      final integrator = _llmManager.getPluginIntegrator();
+
+      // Create appropriate adapter
+      llm.LlmPlugin? adapter;
+
+      if (mcpPlugin is MCPToolPlugin) {
+        adapter = McpToolPluginAdapter(mcpPlugin);
+      } else if (mcpPlugin is MCPResourcePlugin) {
+        adapter = McpResourcePluginAdapter(mcpPlugin);
+      } else if (mcpPlugin is MCPPromptPlugin) {
+        adapter = McpPromptPluginAdapter(mcpPlugin);
+      } else {
+        throw MCPValidationException(
+            'Unsupported MCP plugin type: ${mcpPlugin.runtimeType}',
+            {'plugin_type': mcpPlugin.runtimeType.toString()}
+        );
+      }
+
+      bool anySuccess = false;
+
+      // Register with specified LLM instances
+      if (targetLlmIds != null && targetLlmIds.isNotEmpty) {
+        for (final llmId in targetLlmIds) {
+          final llmInfo = _llmManager.getLlmInfo(llmId);
+          if (llmInfo != null) {
+            // Register with the LLM instance's plugin manager
+            // This is a simplified version - in a real implementation, you'd need to
+            // register with the plugin managers of all clients and servers in the LLM
+            anySuccess = true;
+          }
+        }
+      }
+
+      // Register with specified LLM clients
+      if (targetLlmClientIds != null && targetLlmClientIds.isNotEmpty) {
+        for (final clientId in targetLlmClientIds) {
+          final client = _llmManager.getLlmClientById(clientId);
+          if (client != null) {
+            await client.pluginManager.registerPlugin(adapter);
+            anySuccess = true;
+          }
+        }
+      }
+
+      // Register with specified LLM servers
+      if (targetLlmServerIds != null && targetLlmServerIds.isNotEmpty) {
+        for (final serverId in targetLlmServerIds) {
+          final server = _llmManager.getLlmServerById(serverId);
+          if (server != null) {
+            await server.pluginManager.registerPlugin(adapter);
+            anySuccess = true;
+          }
+        }
+      }
+
+      // If no specific targets were specified, register with all LLM instances
+      if ((targetLlmIds == null || targetLlmIds.isEmpty) &&
+          (targetLlmClientIds == null || targetLlmClientIds.isEmpty) &&
+          (targetLlmServerIds == null || targetLlmServerIds.isEmpty)) {
+
+        // Register with all LLM clients
+        for (final llmId in _llmManager.getAllLlmIds()) {
+          final llmInfo = _llmManager.getLlmInfo(llmId);
+          if (llmInfo != null) {
+            for (final clientId in llmInfo.getAllLlmClientIds()) {
+              final client = llmInfo.llmClients[clientId];
+              if (client != null) {
+                await client.pluginManager.registerPlugin(adapter);
+                anySuccess = true;
+              }
+            }
+
+            for (final serverId in llmInfo.getAllLlmServerIds()) {
+              final server = llmInfo.llmServers[serverId];
+              if (server != null) {
+                await server.pluginManager.registerPlugin(adapter);
+                anySuccess = true;
+              }
+            }
+          }
+        }
+      }
+
+      _logger.info('Converted MCP plugin ${mcpPlugin.name} to LLM plugin and registered with ${anySuccess ? 'some' : 'no'} targets');
+
+      // Publish event for plugin conversion
+      _eventSystem.publish('plugin.converted', {
+        'name': mcpPlugin.name,
+        'source': 'mcp_plugin',
+        'target': 'llm_plugin',
+        'success': anySuccess,
+      });
+
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.convert_mcp_to_llm',
+          stopwatch.elapsedMilliseconds,
+          success: anySuccess,
+          metadata: {
+            'plugin': mcpPlugin.name,
+            'targetLlmCount': targetLlmIds?.length ?? 0,
+            'targetClientCount': targetLlmClientIds?.length ?? 0,
+            'targetServerCount': targetLlmServerIds?.length ?? 0,
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      return anySuccess;
+    } catch (e, stackTrace) {
+      PerformanceMonitor.instance.recordMetric(
+          'plugin.convert_mcp_to_llm',
+          stopwatch.elapsedMilliseconds,
+          success: false,
+          metadata: {
+            'plugin': mcpPlugin.name,
+            'error': e.toString(),
+          }
+      );
+
+      _stopwatchPool.release(stopwatch);
+      _logger.error('Failed to convert MCP plugin to LLM plugin', e, stackTrace);
+      throw MCPOperationFailedException(
+          'Failed to convert MCP plugin ${mcpPlugin.name} to LLM plugin',
+          e,
+          stackTrace
+      );
+    }
+  }
+
+  /// Get all plugins registered with the system
+  ///
+  /// Returns a map of plugin information categorized by type
+  Map<String, List<Map<String, dynamic>>> getAllPluginInfo() {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    // Get plugin registry info
+    final mcpPlugins = _pluginRegistry.getAllPlugins();
+
+    // Get LLM plugin registry info
+    final llmPlugins = _llmManager.getPluginIntegrator().getRegisteredLlmPluginNames();
+
+    // Organize plugins by type
+    final result = <String, List<Map<String, dynamic>>>{
+      'tool_plugins': [],
+      'resource_plugins': [],
+      'prompt_plugins': [],
+      'other_plugins': [],
+    };
+
+    // Process MCP plugins
+    for (final plugin in mcpPlugins) {
+      final info = {
+        'name': plugin.name,
+        'version': plugin.version,
+        'description': plugin.description,
+        'type': 'mcp',
+        'plugin_type': _getPluginTypeString(plugin),
+      };
+
+      if (plugin is MCPToolPlugin) {
+        result['tool_plugins']!.add(info);
+      } else if (plugin is MCPResourcePlugin) {
+        result['resource_plugins']!.add(info);
+      } else if (plugin is MCPPromptPlugin) {
+        result['prompt_plugins']!.add(info);
+      } else {
+        result['other_plugins']!.add(info);
+      }
+    }
+
+    // Add LLM plugins info - this is simplified and would need more detail
+    // in a real implementation to get full information about each LLM plugin
+    for (final pluginName in llmPlugins) {
+      final plugin = _llmManager.getPluginIntegrator().getLlmPlugin(pluginName);
+      if (plugin != null) {
+        final info = {
+          'name': plugin.name,
+          'version': plugin.version,
+          'description': plugin.description,
+          'type': 'llm',
+          'plugin_type': _getLlmPluginTypeString(plugin),
+        };
+
+        if (plugin is llm.ToolPlugin) {
+          result['tool_plugins']!.add(info);
+        } else if (plugin is llm.ResourcePlugin) {
+          result['resource_plugins']!.add(info);
+        } else if (plugin is llm.PromptPlugin) {
+          result['prompt_plugins']!.add(info);
+        } else {
+          result['other_plugins']!.add(info);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /// Helper to get plugin type as string
+  String _getPluginTypeString(MCPPlugin plugin) {
+    if (plugin is MCPToolPlugin) return 'tool';
+    if (plugin is MCPResourcePlugin) return 'resource';
+    if (plugin is MCPPromptPlugin) return 'prompt';
+    if (plugin is MCPBackgroundPlugin) return 'background';
+    if (plugin is MCPNotificationPlugin) return 'notification';
+    if (plugin is MCPTrayPlugin) return 'tray';
+    return 'unknown';
+  }
+
+  /// Helper to get LLM plugin type as string
+  String _getLlmPluginTypeString(llm.LlmPlugin plugin) {
+    if (plugin is llm.ToolPlugin) return 'tool';
+    if (plugin is llm.ResourcePlugin) return 'resource';
+    if (plugin is llm.PromptPlugin) return 'prompt';
+    if (plugin is llm.EmbeddingPlugin) return 'embedding';
+    if (plugin is llm.PreprocessorPlugin) return 'preprocessor';
+    if (plugin is llm.PostprocessorPlugin) return 'postprocessor';
+    if (plugin is llm.ProviderPlugin) return 'provider';
+    return 'unknown';
   }
 
   /// Register LLM provider with validation

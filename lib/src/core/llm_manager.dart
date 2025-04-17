@@ -1,10 +1,14 @@
-import 'package:mcp_client/mcp_client.dart';
-import 'package:mcp_llm/mcp_llm.dart';
-import 'package:mcp_server/mcp_server.dart';
+import 'package:mcp_client/mcp_client.dart' as client;
+import 'package:mcp_llm/mcp_llm.dart' as llm;
+import 'package:mcp_server/mcp_server.dart' as server;
+
 import '../managers/llm_info.dart';
 import '../utils/logger.dart';
+import '../plugins/plugin_system.dart';
+import '../plugins/llm_plugin_integration.dart';
 
 /// MCP LLM Manager with improved multi-client and multi-server support
+/// and enhanced plugin system integration
 class MCPLlmManager {
   /// Registered LLMs (llmId -> LlmInfo)
   final Map<String, LlmInfo> _llms = {};
@@ -15,15 +19,36 @@ class MCPLlmManager {
   /// Map of MCP server IDs to LLM IDs
   final Map<String, Set<String>> _mcpServerToLlmMap = {};
 
+  /// Plugin integrator for connecting flutter_mcp and mcp_llm plugin systems
+  late final LlmPluginIntegrator _pluginIntegrator;
+
+  /// Registry of LLM client IDs
+  final Map<String, String> _llmClientIdToLlmId = {};
+
+  /// Registry of LLM server IDs
+  final Map<String, String> _llmServerIdToLlmId = {};
+
   /// LLM counter (for ID generation)
   int _counter = 0;
+  int _clientIdCounter = 0;
+  int _serverIdCounter = 0;
 
   /// Logger
   final MCPLogger _logger = MCPLogger('mcp.llm_manager');
 
+  /// Default plugin registry or provided one
+  final MCPPluginRegistry _pluginRegistry;
+
+  MCPLlmManager({MCPPluginRegistry? pluginRegistry})
+      : _pluginRegistry = pluginRegistry ?? MCPPluginRegistry() {
+    // Initialize plugin integrator with plugin registry
+    _pluginIntegrator = LlmPluginIntegrator(_pluginRegistry);
+  }
+
   /// Initialize
   Future<void> initialize() async {
     _logger.debug('LLM manager initialization');
+    // No additional initialization needed yet
   }
 
   /// Generate new LLM ID
@@ -34,17 +59,21 @@ class MCPLlmManager {
 
   /// Generate new LLM client ID
   String generateLlmClientId(String llmId) {
-    return 'llm_client_${llmId}_${DateTime.now().millisecondsSinceEpoch}';
+    final id = 'llm_client_${_clientIdCounter++}_${DateTime.now().millisecondsSinceEpoch}';
+    _llmClientIdToLlmId[id] = llmId;
+    return id;
   }
 
   /// Generate new LLM server ID
   String generateLlmServerId(String llmId) {
-    return 'llm_server_${llmId}_${DateTime.now().millisecondsSinceEpoch}';
+    final id = 'llm_server_${_serverIdCounter++}_${DateTime.now().millisecondsSinceEpoch}';
+    _llmServerIdToLlmId[id] = llmId;
+    return id;
   }
 
   /// Register LLM with flexible initialization
   /// Allows creation with client, server, both, or neither
-  void registerLlm(String id, MCPLlm mcpLlm, {LlmClient? initialClient, LlmServer? initialServer}) {
+  void registerLlm(String id, llm.MCPLlm mcpLlm, {llm.LlmClient? initialClient, llm.LlmServer? initialServer}) {
     _logger.debug('Registering LLM: $id${initialClient != null ? " with initial client" : ""}${initialServer != null ? " with initial server" : ""}');
 
     _llms[id] = LlmInfo(
@@ -56,7 +85,7 @@ class MCPLlmManager {
   }
 
   /// Add a new LLM client to an existing LLM
-  Future<String> addLlmClient(String llmId, String llmClientId, LlmClient client) async {
+  Future<String> addLlmClient(String llmId, String llmClientId, llm.LlmClient client) async {
     _logger.debug('Adding LLM client to LLM: $llmId');
     final llmInfo = _llms[llmId];
     if (llmInfo == null) {
@@ -65,12 +94,21 @@ class MCPLlmManager {
 
     llmInfo.addLlmClient(llmClientId, client);
 
+    // Register the client ID mapping
+    _llmClientIdToLlmId[llmClientId] = llmId;
+
     _logger.info('Added LLM client $llmClientId to LLM $llmId');
+
+    // Check for plugin integration capability
+    // Register plugins from the client
+    await _pluginIntegrator.registerPluginsFromLlmClient(llmClientId, client);
+    _logger.debug('Registered plugins from LLM client $llmClientId');
+
     return llmClientId;
   }
 
   /// Add a new LLM server to an existing LLM
-  Future<String> addLlmServer(String llmId, String llmServerId, LlmServer server) async {
+  Future<String> addLlmServer(String llmId, String llmServerId, llm.LlmServer server) async {
     _logger.debug('Adding LLM server to LLM: $llmId');
     final llmInfo = _llms[llmId];
     if (llmInfo == null) {
@@ -79,12 +117,30 @@ class MCPLlmManager {
 
     llmInfo.addLlmServer(llmServerId, server);
 
+    // Register the server ID mapping
+    _llmServerIdToLlmId[llmServerId] = llmId;
+
     _logger.info('Added LLM server $llmServerId to LLM $llmId');
+
+    // Check for plugin integration capability
+    // Register plugins from the server
+    await _pluginIntegrator.registerPluginsFromLlmServer(llmServerId, server);
+    _logger.debug('Registered plugins from LLM server $llmServerId');
+
     return llmServerId;
   }
 
   /// Find LLM info that contains the given LLM client ID
   (LlmInfo?, String?) _findLlmInfoByClientId(String llmClientId) {
+    final llmId = _llmClientIdToLlmId[llmClientId];
+    if (llmId != null) {
+      final llmInfo = _llms[llmId];
+      if (llmInfo != null) {
+        return (llmInfo, llmId);
+      }
+    }
+
+    // Legacy fallback search
     for (final entry in _llms.entries) {
       if (entry.value.llmClients.containsKey(llmClientId)) {
         return (entry.value, entry.key);
@@ -95,6 +151,15 @@ class MCPLlmManager {
 
   /// Find LLM info that contains the given LLM server ID
   (LlmInfo?, String?) _findLlmInfoByServerId(String llmServerId) {
+    final llmId = _llmServerIdToLlmId[llmServerId];
+    if (llmId != null) {
+      final llmInfo = _llms[llmId];
+      if (llmInfo != null) {
+        return (llmInfo, llmId);
+      }
+    }
+
+    // Legacy fallback search
     for (final entry in _llms.entries) {
       if (entry.value.llmServers.containsKey(llmServerId)) {
         return (entry.value, entry.key);
@@ -107,7 +172,7 @@ class MCPLlmManager {
   Future<void> addMcpClientToLlmClient(
       String llmClientId,
       String mcpClientId,
-      Client mcpClient
+      client.Client mcpClient
       ) async {
     _logger.debug('Adding MCP client $mcpClientId to LLM client $llmClientId');
 
@@ -144,7 +209,7 @@ class MCPLlmManager {
   Future<void> addMcpServerToLlmServer(
       String llmServerId,
       String mcpServerId,
-      Server mcpServer
+      server.Server mcpServer
       ) async {
     _logger.debug('Adding MCP server $mcpServerId to LLM server $llmServerId');
 
@@ -197,7 +262,7 @@ class MCPLlmManager {
   }
 
   /// Add MCP client to default LLM client for an LLM
-  Future<void> addMcpClientToDefaultLlmClient(String llmId, Client mcpClient) async {
+  Future<void> addMcpClientToDefaultLlmClient(String llmId, client.Client mcpClient) async {
     final defaultLlmClientId = await getDefaultLlmClientId(llmId);
     await addMcpClientToLlmClient(
         defaultLlmClientId,
@@ -364,19 +429,49 @@ class MCPLlmManager {
     }
   }
 
+  /// Set the default LLM client for an LLM
+  void setDefaultLlmClient(String llmId, String llmClientId) {
+    final llmInfo = _llms[llmId];
+    if (llmInfo == null) {
+      throw Exception('LLM not found: $llmId');
+    }
+
+    if (!llmInfo.llmClients.containsKey(llmClientId)) {
+      throw Exception('LLM client not found in LLM $llmId');
+    }
+
+    llmInfo.setDefaultLlmClient(llmClientId);
+    _logger.info('Set default LLM client $llmClientId for LLM $llmId');
+  }
+
+  /// Set the default LLM server for an LLM
+  void setDefaultLlmServer(String llmId, String llmServerId) {
+    final llmInfo = _llms[llmId];
+    if (llmInfo == null) {
+      throw Exception('LLM not found: $llmId');
+    }
+
+    if (!llmInfo.llmServers.containsKey(llmServerId)) {
+      throw Exception('LLM server not found in LLM $llmId');
+    }
+
+    llmInfo.setDefaultLlmServer(llmServerId);
+    _logger.info('Set default LLM server $llmServerId for LLM $llmId');
+  }
+
   /// Get LLM info
   LlmInfo? getLlmInfo(String id) {
     return _llms[id];
   }
 
   /// Get LLM client by ID directly
-  LlmClient? getLlmClientById(String llmClientId) {
+  llm.LlmClient? getLlmClientById(String llmClientId) {
     final (llmInfo, _) = _findLlmInfoByClientId(llmClientId);
     return llmInfo?.llmClients[llmClientId];
   }
 
   /// Get LLM server by ID directly
-  LlmServer? getLlmServerById(String llmServerId) {
+  llm.LlmServer? getLlmServerById(String llmServerId) {
     final (llmInfo, _) = _findLlmInfoByServerId(llmServerId);
     return llmInfo?.llmServers[llmServerId];
   }
@@ -464,6 +559,16 @@ class MCPLlmManager {
     return _mcpServerToLlmMap[mcpServerId]?.toList() ?? [];
   }
 
+  /// Get the LLM ID for a client
+  String? getLlmIdForClient(String llmClientId) {
+    return _llmClientIdToLlmId[llmClientId];
+  }
+
+  /// Get the LLM ID for a server
+  String? getLlmIdForServer(String llmServerId) {
+    return _llmServerIdToLlmId[llmServerId];
+  }
+
   /// Close all resources and connections for an LLM
   Future<void> closeLlm(String id) async {
     _logger.debug('Closing LLM: $id');
@@ -473,13 +578,13 @@ class MCPLlmManager {
     }
 
     // Close all LLM clients
-    for (final client in llmInfo.llmClients.values) {
-      await client.close();
+    for (final clientId in llmInfo.llmClients.keys.toList()) {
+      await closeLlmClient(clientId);
     }
 
     // Close all LLM servers
-    for (final server in llmInfo.llmServers.values) {
-      await server.close();
+    for (final serverId in llmInfo.llmServers.keys.toList()) {
+      await closeLlmServer(serverId);
     }
 
     // Remove from tracking maps
@@ -529,6 +634,9 @@ class MCPLlmManager {
       llmInfo.disassociateMcpClient(mcpClientId, llmClientId);
     }
 
+    // Remove from ID mapping
+    _llmClientIdToLlmId.remove(llmClientId);
+
     // Remove the client from LLM info
     llmInfo.removeLlmClient(llmClientId);
   }
@@ -555,6 +663,9 @@ class MCPLlmManager {
       llmInfo.disassociateMcpServer(mcpServerId, llmServerId);
     }
 
+    // Remove from ID mapping
+    _llmServerIdToLlmId.remove(llmServerId);
+
     // Remove the server from LLM info
     llmInfo.removeLlmServer(llmServerId);
   }
@@ -562,8 +673,29 @@ class MCPLlmManager {
   /// Close all LLMs
   Future<void> closeAll() async {
     _logger.debug('Closing all LLMs');
+    final errors = <String, dynamic>{};
+
+    // Close all LLM instances
     for (final id in _llms.keys.toList()) {
-      await closeLlm(id);
+      try {
+        await closeLlm(id);
+      } catch (e) {
+        errors[id] = e;
+        _logger.error('Error closing LLM $id: $e');
+      }
+    }
+
+    // Shutdown plugin integrator
+    await _pluginIntegrator.shutdown();
+
+    // Clear all registries
+    _llmClientIdToLlmId.clear();
+    _llmServerIdToLlmId.clear();
+
+    _logger.info('All LLM instances and resources closed');
+
+    if (errors.isNotEmpty) {
+      throw Exception('Errors occurred while closing LLMs: $errors');
     }
   }
 
@@ -579,483 +711,64 @@ class MCPLlmManager {
         'defaultLlmClientId': value.defaultLlmClientId,
         'defaultLlmServerId': value.defaultLlmServerId,
       })),
+      'registeredPlugins': _pluginIntegrator.getRegisteredLlmPluginNames(),
     };
+  }
+
+  /// Register core LLM plugins with improved registration process
+  Future<Map<String, bool>> registerCoreLlmPlugins(
+      String llmId,
+      {
+        String? llmClientId,
+        String? llmServerId,
+        bool includeCompletionPlugin = true,
+        bool includeStreamingPlugin = true,
+        bool includeEmbeddingPlugin = true,
+        bool includeRetrievalPlugins = false,
+      }
+      ) async {
+    final llmInfo = _llms[llmId];
+    if (llmInfo == null) {
+      throw Exception('LLM not found: $llmId');
+    }
+
+    llm.LlmInterface? llmProvider;
+    llm.RetrievalManager? retrievalManager;
+
+    if (llmClientId != null) {
+      final llmClient = llmInfo.llmClients[llmClientId];
+      if (llmClient == null) {
+        throw Exception('LLM client not found in LLM $llmId: $llmClientId');
+      }
+
+      llmProvider = llmClient.llmProvider;
+      retrievalManager = llmClient.retrievalManager;
+    } else if (llmServerId != null) {
+      final llmServer = llmInfo.llmServers[llmServerId];
+      if (llmServer == null) {
+        throw Exception('LLM server not found in LLM $llmId: $llmServerId');
+      }
+
+      llmProvider = llmServer.llmProvider;
+      retrievalManager = llmServer.retrievalManager;
+    } else {
+      throw Exception('Either llmClientId or llmServerId must be provided');
+    }
+
+    // Register core plugins
+    return await _pluginIntegrator.registerCoreLlmPlugins(
+      llmProvider,
+      retrievalManager,
+      includeCompletionPlugin: includeCompletionPlugin,
+      includeStreamingPlugin: includeStreamingPlugin,
+      includeEmbeddingPlugin: includeEmbeddingPlugin,
+      includeRetrievalPlugins: includeRetrievalPlugins,
+    );
+  }
+
+  /// Get the plugin integrator for LLM plugins
+  LlmPluginIntegrator getPluginIntegrator() {
+    return _pluginIntegrator;
   }
 }
 
-/*import 'package:mcp_client/mcp_client.dart';
-import 'package:mcp_llm/mcp_llm.dart';
-import 'package:mcp_server/mcp_server.dart';
-import '../managers/llm_info.dart';
-import '../utils/logger.dart';
-
-/// MCP LLM Manager with improved multi-client and multi-server support
-class MCPLlmManager {
-  /// Registered LLMs (llmId -> LlmInfo)
-  final Map<String, LlmInfo> _llms = {};
-
-  /// Map of MCP client IDs to LLM IDs
-  final Map<String, Set<String>> _mcpClientToLlmMap = {};
-
-  /// Map of MCP server IDs to LLM IDs
-  final Map<String, Set<String>> _mcpServerToLlmMap = {};
-
-  /// LLM counter (for ID generation)
-  int _counter = 0;
-
-  /// Logger
-  final MCPLogger _logger = MCPLogger('mcp.llm_manager');
-
-  /// Initialize
-  Future<void> initialize() async {
-    _logger.debug('LLM manager initialization');
-  }
-
-  /// Generate new LLM ID
-  String generateId() {
-    _counter++;
-    return 'llm_${DateTime.now().millisecondsSinceEpoch}_$_counter';
-  }
-
-  /// Generate new LLM client ID
-  String generateLlmClientId(String llmId) {
-    return 'llm_client_${llmId}_${DateTime.now().millisecondsSinceEpoch}';
-  }
-
-  /// Generate new LLM server ID
-  String generateLlmServerId(String llmId) {
-    return 'llm_server_${llmId}_${DateTime.now().millisecondsSinceEpoch}';
-  }
-
-  /// Register LLM with flexible initialization
-  /// Allows creation with client, server, both, or neither
-  void registerLlm(String id, MCPLlm mcpLlm, {LlmClient? initialClient, LlmServer? initialServer}) {
-    _logger.debug('Registering LLM: $id${initialClient != null ? " with initial client" : ""}${initialServer != null ? " with initial server" : ""}');
-
-    _llms[id] = LlmInfo(
-      id: id,
-      mcpLlm: mcpLlm,
-      initialClient: initialClient,
-      initialServer: initialServer,
-    );
-  }
-
-  /// Add a new LLM client to an existing LLM
-  Future<String> addLlmClient(String llmId, String llmClientId, LlmClient client) async {
-    _logger.debug('Adding LLM client to LLM: $llmId');
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    llmInfo.addLlmClient(llmClientId, client);
-
-    _logger.info('Added LLM client $llmClientId to LLM $llmId');
-    return llmClientId;
-  }
-
-  /// Add a new LLM server to an existing LLM
-  Future<String> addLlmServer(String llmId, String llmServerId, LlmServer server) async {
-    _logger.debug('Adding LLM server to LLM: $llmId');
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    llmInfo.addLlmServer(llmServerId, server);
-
-    _logger.info('Added LLM server $llmServerId to LLM $llmId');
-    return llmServerId;
-  }
-
-  /// Associate an MCP client with a specific LLM and LLM client
-  Future<void> associateMcpClientWithLlmClient(
-      String llmId,
-      String llmClientId,
-      String mcpClientId,
-      Client mcpClient
-      ) async {
-    _logger.debug('Associating MCP client $mcpClientId with LLM client $llmClientId in LLM $llmId');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    if (!llmInfo.llmClients.containsKey(llmClientId)) {
-      throw Exception('LLM client not found: $llmClientId in LLM $llmId');
-    }
-
-    // Use MCPLlm to add the MCP client to the LLM client
-    await llmInfo.mcpLlm.addMcpClientToLlmClient(
-        llmClientId,
-        mcpClientId,
-        mcpClient
-    );
-
-    // Track associations
-    llmInfo.associateMcpClient(mcpClientId, llmClientId);
-    _mcpClientToLlmMap.putIfAbsent(mcpClientId, () => {}).add(llmId);
-
-    _logger.info('Associated MCP client $mcpClientId with LLM client $llmClientId in LLM $llmId');
-  }
-
-  /// Associate an MCP server with a specific LLM and LLM server
-  Future<void> associateMcpServerWithLlmServer(
-      String llmId,
-      String llmServerId,
-      String mcpServerId,
-      Server mcpServer
-      ) async {
-    _logger.debug('Associating MCP server $mcpServerId with LLM server $llmServerId in LLM $llmId');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    if (!llmInfo.llmServers.containsKey(llmServerId)) {
-      throw Exception('LLM server not found: $llmServerId in LLM $llmId');
-    }
-
-    // Use MCPLlm to add the MCP server to the LLM server
-    await llmInfo.mcpLlm.addMcpServerToLlmServer(
-        llmServerId,
-        mcpServerId,
-        mcpServer
-    );
-
-    // Track associations
-    llmInfo.associateMcpServer(mcpServerId, llmServerId);
-    _mcpServerToLlmMap.putIfAbsent(mcpServerId, () => {}).add(llmId);
-
-    _logger.info('Associated MCP server $mcpServerId with LLM server $llmServerId in LLM $llmId');
-  }
-
-  /// Add MCP client to an LLM (using the default LLM client)
-  Future<void> addClientToLlm(String llmId, Client mcpClient) async {
-    _logger.debug('Adding client to LLM: $llmId, ${mcpClient.name}');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    // If no LLM clients exist, throw error - we need to create one first
-    if (!llmInfo.hasClients()) {
-      throw Exception('LLM has no clients available. Create a client for $llmId first.');
-    }
-
-    final defaultLlmClientId = llmInfo.defaultLlmClientId;
-    if (defaultLlmClientId == null) {
-      throw Exception('No default LLM client available for LLM: $llmId');
-    }
-
-    await associateMcpClientWithLlmClient(
-        llmId,
-        defaultLlmClientId,
-        mcpClient.name,
-        mcpClient
-    );
-  }
-
-  /// Remove client from LLM
-  Future<void> removeClientFromLlm(String llmId, String mcpClientId) async {
-    _logger.debug('Removing client from LLM: $llmId, $mcpClientId');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      _logger.warning('LLM not found when removing client: $llmId');
-      return;
-    }
-
-    // Get all LLM client IDs associated with this MCP client
-    final llmClientIds = llmInfo.getLlmClientIdsForMcpClient(mcpClientId);
-
-    for (final llmClientId in llmClientIds) {
-      // Remove the association from MCPLlm
-      await llmInfo.mcpLlm.removeMcpClientFromLlmClient(
-          llmClientId,
-          mcpClientId
-      );
-
-      // Update our tracking
-      llmInfo.disassociateMcpClient(mcpClientId, llmClientId);
-    }
-
-    // Remove from global tracking
-    final llmIds = _mcpClientToLlmMap[mcpClientId];
-    if (llmIds != null) {
-      llmIds.remove(llmId);
-      if (llmIds.isEmpty) {
-        _mcpClientToLlmMap.remove(mcpClientId);
-      }
-    }
-
-    _logger.info('Client $mcpClientId removed from LLM $llmId');
-  }
-
-  /// Add server to an LLM (using the default LLM server or creating one if none exists)
-  Future<void> addServerToLlm(String llmId, Server mcpServer) async {
-    _logger.debug('Adding server to LLM: $llmId, ${mcpServer.name}');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    if (!llmInfo.hasServers()) {
-      // No LLM server exists yet - create one
-      Exception('LLM has no clients available. Create a client for $llmId first.');
-    }
-
-    // Associate with the existing default LLM server
-    final defaultLlmServerId = llmInfo.defaultLlmServerId;
-    if (defaultLlmServerId == null) {
-      throw Exception('No default LLM server available for LLM: $llmId');
-    }
-
-    await associateMcpServerWithLlmServer(
-        llmId,
-        defaultLlmServerId,
-        mcpServer.name,
-        mcpServer
-    );
-  }
-
-  /// Remove server from LLM
-  Future<void> removeServerFromLlm(String llmId, String mcpServerId) async {
-    _logger.debug('Removing server from LLM: $llmId, $mcpServerId');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      _logger.warning('LLM not found when removing server: $llmId');
-      return;
-    }
-
-    // Get all LLM server IDs associated with this MCP server
-    final llmServerIds = llmInfo.getLlmServerIdsForMcpServer(mcpServerId);
-
-    for (final llmServerId in llmServerIds) {
-      // Remove the association from MCPLlm
-      await llmInfo.mcpLlm.removeMcpServerFromLlmServer(
-          llmServerId,
-          mcpServerId
-      );
-
-      // Update our tracking
-      llmInfo.disassociateMcpServer(mcpServerId, llmServerId);
-    }
-
-    // Remove from global tracking
-    final llmIds = _mcpServerToLlmMap[mcpServerId];
-    if (llmIds != null) {
-      llmIds.remove(llmId);
-      if (llmIds.isEmpty) {
-        _mcpServerToLlmMap.remove(mcpServerId);
-      }
-    }
-
-    _logger.info('Server $mcpServerId removed from LLM $llmId');
-  }
-
-  /// Set default client for LLM
-  Future<void> setDefaultClientForLlm(String llmId, String mcpClientId) async {
-    _logger.debug('Setting default client for LLM: $llmId, $mcpClientId');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    // Find an LLM client associated with this MCP client
-    final llmClientIds = llmInfo.getLlmClientIdsForMcpClient(mcpClientId);
-    if (llmClientIds.isEmpty) {
-      throw Exception('No LLM client associated with MCP client $mcpClientId in LLM $llmId');
-    }
-
-    // Use the first associated LLM client
-    final llmClientId = llmClientIds.first;
-
-    // Set as default in MCPLlm
-    await llmInfo.mcpLlm.setDefaultMcpClient(
-        llmClientId,
-        mcpClientId
-    );
-
-    _logger.info('Default client for LLM $llmId set to MCP client $mcpClientId via LLM client $llmClientId');
-  }
-
-  /// Set default server for LLM
-  Future<void> setDefaultServerForLlm(String llmId, String mcpServerId) async {
-    _logger.debug('Setting default server for LLM: $llmId, $mcpServerId');
-
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      throw Exception('LLM not found: $llmId');
-    }
-
-    // Find an LLM server associated with this MCP server
-    final llmServerIds = llmInfo.getLlmServerIdsForMcpServer(mcpServerId);
-    if (llmServerIds.isEmpty) {
-      throw Exception('No LLM server associated with MCP server $mcpServerId in LLM $llmId');
-    }
-
-    // Use the first associated LLM server
-    final llmServerId = llmServerIds.first;
-
-    // Set as default in MCPLlm
-    await llmInfo.mcpLlm.setDefaultMcpServer(
-        llmServerId,
-        mcpServerId
-    );
-
-    _logger.info('Default server for LLM $llmId set to MCP server $mcpServerId via LLM server $llmServerId');
-  }
-
-  /// Get LLM info
-  LlmInfo? getLlmInfo(String id) {
-    return _llms[id];
-  }
-
-  /// Get LLM client (default client for the LLM)
-  LlmClient? getLlmClient(String id) {
-    final llmInfo = _llms[id];
-    return llmInfo?.defaultLlmClient;
-  }
-
-  /// Get LLM server (default server for the LLM)
-  LlmServer? getLlmServer(String id) {
-    final llmInfo = _llms[id];
-    return llmInfo?.defaultLlmServer;
-  }
-
-  /// Get LLM client by ID
-  LlmClient? getLlmClientById(String llmId, String llmClientId) {
-    final llmInfo = _llms[llmId];
-    return llmInfo?.llmClients[llmClientId];
-  }
-
-  /// Get LLM server by ID
-  LlmServer? getLlmServerById(String llmId, String llmServerId) {
-    final llmInfo = _llms[llmId];
-    return llmInfo?.llmServers[llmServerId];
-  }
-
-  /// Get all LLM IDs
-  List<String> getAllLlmIds() {
-    return _llms.keys.toList();
-  }
-
-  /// Get all MCP client IDs associated with an LLM
-  Set<String> getMcpClientIds(String llmId) {
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      return {};
-    }
-    return llmInfo.getAllMcpClientIds();
-  }
-
-  /// Get all MCP server IDs associated with an LLM
-  Set<String> getMcpServerIds(String llmId) {
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      return {};
-    }
-    return llmInfo.getAllMcpServerIds();
-  }
-
-  /// Get all LLM client IDs for an LLM
-  Set<String> getLlmClientIds(String llmId) {
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      return {};
-    }
-    return llmInfo.getAllLlmClientIds();
-  }
-
-  /// Get all LLM server IDs for an LLM
-  Set<String> getLlmServerIds(String llmId) {
-    final llmInfo = _llms[llmId];
-    if (llmInfo == null) {
-      return {};
-    }
-    return llmInfo.getAllLlmServerIds();
-  }
-
-  /// Find LLMs associated with an MCP client
-  List<String> findLlmsForMcpClient(String mcpClientId) {
-    return _mcpClientToLlmMap[mcpClientId]?.toList() ?? [];
-  }
-
-  /// Find LLMs associated with an MCP server
-  List<String> findLlmsForMcpServer(String mcpServerId) {
-    return _mcpServerToLlmMap[mcpServerId]?.toList() ?? [];
-  }
-
-  /// Close LLM
-  Future<void> closeLlm(String id) async {
-    _logger.debug('Closing LLM: $id');
-    final llmInfo = _llms[id];
-    if (llmInfo == null) {
-      return;
-    }
-
-    // Close all LLM clients
-    for (final client in llmInfo.llmClients.values) {
-      await client.close();
-    }
-
-    // Close all LLM servers
-    for (final server in llmInfo.llmServers.values) {
-      await server.close();
-    }
-
-    // Remove from tracking maps
-    for (final mcpClientId in llmInfo.getAllMcpClientIds()) {
-      final llmIds = _mcpClientToLlmMap[mcpClientId];
-      if (llmIds != null) {
-        llmIds.remove(id);
-        if (llmIds.isEmpty) {
-          _mcpClientToLlmMap.remove(mcpClientId);
-        }
-      }
-    }
-
-    for (final mcpServerId in llmInfo.getAllMcpServerIds()) {
-      final llmIds = _mcpServerToLlmMap[mcpServerId];
-      if (llmIds != null) {
-        llmIds.remove(id);
-        if (llmIds.isEmpty) {
-          _mcpServerToLlmMap.remove(mcpServerId);
-        }
-      }
-    }
-
-    // Remove the LLM
-    _llms.remove(id);
-  }
-
-  /// Close all LLMs
-  Future<void> closeAll() async {
-    _logger.debug('Closing all LLMs');
-    for (final id in _llms.keys.toList()) {
-      await closeLlm(id);
-    }
-  }
-
-  /// Get status information
-  Map<String, dynamic> getStatus() {
-    return {
-      'total': _llms.length,
-      'llms': _llms.map((key, value) => MapEntry(key, {
-        'clientCount': value.llmClients.length,
-        'serverCount': value.llmServers.length,
-        'mcpClientCount': value.getAllMcpClientIds().length,
-        'mcpServerCount': value.getAllMcpServerIds().length,
-        'defaultLlmClientId': value.defaultLlmClientId,
-        'defaultLlmServerId': value.defaultLlmServerId,
-      })),
-    };
-  }
-}*/

@@ -202,8 +202,8 @@ class FlutterMCP {
           config.registerCoreLlmPlugins == true) {
         await _setupPluginIntegration(
             autoRegisterLlmPlugins: config.autoRegisterLlmPlugins ?? false,
-            registerMcpPluginsWithLlm: config.registerMcpPluginsWithLlm ?? false,
-            registerCoreLlmPlugins: config.registerCoreLlmPlugins ?? false,
+            enableRegisterMcpPluginsWithLlm: config.registerMcpPluginsWithLlm ?? false,
+            enableRegisterCoreLlmPlugins: config.registerCoreLlmPlugins ?? false,
             enableRetrieval: config.enableRetrieval ?? false
         );
       }
@@ -235,8 +235,8 @@ class FlutterMCP {
   /// Set up plugin integration according to configuration
   Future<void> _setupPluginIntegration({
     bool autoRegisterLlmPlugins = false,
-    bool registerMcpPluginsWithLlm = false,
-    bool registerCoreLlmPlugins = false,
+    bool enableRegisterMcpPluginsWithLlm = false,
+    bool enableRegisterCoreLlmPlugins = false,
     bool enableRetrieval = false,
   }) async {
     _logger.info('Setting up plugin integration');
@@ -271,7 +271,7 @@ class FlutterMCP {
       }
 
       // Convert MCP plugins to LLM plugins
-      if (registerMcpPluginsWithLlm) {
+      if (enableRegisterMcpPluginsWithLlm) {
         final mcpPlugins = _pluginRegistry.getAllPlugins();
         int convertedCount = 0;
 
@@ -290,7 +290,7 @@ class FlutterMCP {
       }
 
       // Register core LLM plugins
-      if (registerCoreLlmPlugins) {
+      if (enableRegisterCoreLlmPlugins) {
         for (final llmId in _llmManager.getAllLlmIds()) {
           final llmInfo = _llmManager.getLlmInfo(llmId);
           if (llmInfo != null) {
@@ -820,7 +820,7 @@ class FlutterMCP {
             config: llmConfig.config,
           );
 
-// Connect to MCP clients
+          // Connect to MCP clients
           for (final mcpClientRef in llmConfig.mcpClientIds) {
             if (mcpClientMap.containsKey(mcpClientRef)) {
               final mcpClientId = mcpClientMap[mcpClientRef]!;
@@ -962,9 +962,6 @@ class FlutterMCP {
       // Register client
       _clientManager.registerClient(clientId, mcpClient, transport);
 
-      // Update plugin registry
-      _pluginRegistry.registerClient(clientId, mcpClient);
-
       // Register for resource cleanup
       _resourceManager.register<client.Client>(
           'client_$clientId',
@@ -1035,9 +1032,6 @@ class FlutterMCP {
 
       // Register server
       _serverManager.registerServer(serverId, mcpServer, transport);
-
-      // Update plugin registry
-      _pluginRegistry.registerServer(serverId, mcpServer);
 
       // Register for resource cleanup
       _resourceManager.register<server.Server>(
@@ -3823,9 +3817,6 @@ class FlutterMCP {
     stopwatch.start();
 
     try {
-      // Get the LLM plugin integrator
-      final integrator = _llmManager.getPluginIntegrator();
-
       // Create appropriate adapter
       llm.LlmPlugin? adapter;
 

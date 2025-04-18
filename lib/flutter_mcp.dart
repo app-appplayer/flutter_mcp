@@ -962,6 +962,9 @@ class FlutterMCP {
       // Register client
       _clientManager.registerClient(clientId, mcpClient, transport);
 
+      // Update plugin registry
+      _pluginRegistry.registerClient(clientId, mcpClient);
+
       // Register for resource cleanup
       _resourceManager.register<client.Client>(
           'client_$clientId',
@@ -1032,6 +1035,9 @@ class FlutterMCP {
 
       // Register server
       _serverManager.registerServer(serverId, mcpServer, transport);
+
+      // Update plugin registry
+      _pluginRegistry.registerServer(serverId, mcpServer);
 
       // Register for resource cleanup
       _resourceManager.register<server.Server>(

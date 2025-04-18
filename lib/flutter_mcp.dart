@@ -24,7 +24,7 @@ import 'src/utils/object_pool.dart';
 import 'src/utils/circuit_breaker.dart';
 import 'src/utils/semantic_cache.dart';
 
-// Re-exports remain the same
+// Re-exports
 export 'src/config/mcp_config.dart';
 export 'src/config/background_config.dart';
 export 'src/config/notification_config.dart';
@@ -33,7 +33,7 @@ export 'src/config/job.dart';
 export 'src/utils/exceptions.dart';
 export 'src/utils/logger.dart';
 export 'src/plugins/plugin_system.dart' show MCPPlugin, MCPToolPlugin, MCPResourcePlugin,
-MCPBackgroundPlugin, MCPNotificationPlugin, MCPClientPlugin, MCPServerPlugin;
+MCPBackgroundPlugin, MCPNotificationPlugin, MCPPromptPlugin;
 export 'src/platform/tray/tray_manager.dart' show TrayMenuItem;
 export 'package:mcp_client/mcp_client.dart'
     show ClientCapabilities, Client, ClientTransport;
@@ -130,7 +130,7 @@ class FlutterMCP {
   String? get defaultLlmClientId => _defaultLlmClientId;
   String? get defaultLlmServerId => _defaultLlmServerId;
 
-  /// Initialize the plugin with improved concurrency handling
+  /// Initialize the plugin with improved concurrency handling and plugin integration
   ///
   /// [config] specifies the configuration for necessary components.
   Future<void> init(MCPConfig config) async {
@@ -196,6 +196,18 @@ class FlutterMCP {
       // Initialize plugin registry
       await _initializePluginRegistry();
 
+      // Setup plugin integration system based on config
+      if (config.autoRegisterLlmPlugins == true ||
+          config.registerMcpPluginsWithLlm == true ||
+          config.registerCoreLlmPlugins == true) {
+        await _setupPluginIntegration(
+            autoRegisterLlmPlugins: config.autoRegisterLlmPlugins ?? false,
+            registerMcpPluginsWithLlm: config.registerMcpPluginsWithLlm ?? false,
+            registerCoreLlmPlugins: config.registerCoreLlmPlugins ?? false,
+            enableRetrieval: config.enableRetrieval ?? false
+        );
+      }
+
       // Auto-start configuration
       if (config.autoStart) {
         _logger.info('Starting services based on auto-start configuration');
@@ -217,6 +229,106 @@ class FlutterMCP {
       await _cleanup();
 
       throw MCPInitializationException('Flutter MCP initialization failed', e, stackTrace);
+    }
+  }
+
+  /// Set up plugin integration according to configuration
+  Future<void> _setupPluginIntegration({
+    bool autoRegisterLlmPlugins = false,
+    bool registerMcpPluginsWithLlm = false,
+    bool registerCoreLlmPlugins = false,
+    bool enableRetrieval = false,
+  }) async {
+    _logger.info('Setting up plugin integration');
+
+    try {
+      // Auto-register LLM plugins
+      if (autoRegisterLlmPlugins) {
+        for (final llmId in _llmManager.getAllLlmIds()) {
+          final llmInfo = _llmManager.getLlmInfo(llmId);
+          if (llmInfo != null) {
+            // Register client plugins
+            for (final clientId in llmInfo.getAllLlmClientIds()) {
+              try {
+                await registerPluginsFromLlmClient(llmId, clientId);
+                _logger.debug('Auto-registered plugins from LLM client $clientId');
+              } catch (e) {
+                _logger.warning('Failed to register plugins from LLM client $clientId: $e');
+              }
+            }
+
+            // Register server plugins
+            for (final serverId in llmInfo.getAllLlmServerIds()) {
+              try {
+                await registerPluginsFromLlmServer(llmId, serverId);
+                _logger.debug('Auto-registered plugins from LLM server $serverId');
+              } catch (e) {
+                _logger.warning('Failed to register plugins from LLM server $serverId: $e');
+              }
+            }
+          }
+        }
+      }
+
+      // Convert MCP plugins to LLM plugins
+      if (registerMcpPluginsWithLlm) {
+        final mcpPlugins = _pluginRegistry.getAllPlugins();
+        int convertedCount = 0;
+
+        for (final plugin in mcpPlugins) {
+          if (plugin is MCPToolPlugin || plugin is MCPResourcePlugin || plugin is MCPPromptPlugin) {
+            try {
+              final success = await convertMcpPluginToLlm(plugin);
+              if (success) convertedCount++;
+            } catch (e) {
+              _logger.warning('Failed to convert MCP plugin ${plugin.name} to LLM plugin: $e');
+            }
+          }
+        }
+
+        _logger.info('Converted $convertedCount/${mcpPlugins.length} MCP plugins to LLM plugins');
+      }
+
+      // Register core LLM plugins
+      if (registerCoreLlmPlugins) {
+        for (final llmId in _llmManager.getAllLlmIds()) {
+          final llmInfo = _llmManager.getLlmInfo(llmId);
+          if (llmInfo != null) {
+            // Register core plugins for default client
+            if (llmInfo.defaultLlmClientId != null) {
+              try {
+                await registerCoreLlmPlugins(
+                    llmId,
+                    llmInfo.defaultLlmClientId!,
+                    isServer: false,
+                    includeRetrievalPlugins: enableRetrieval
+                );
+              } catch (e) {
+                _logger.warning('Failed to register core plugins for client: $e');
+              }
+            }
+
+            // Register core plugins for default server
+            if (llmInfo.defaultLlmServerId != null) {
+              try {
+                await registerCoreLlmPlugins(
+                    llmId,
+                    llmInfo.defaultLlmServerId!,
+                    isServer: true,
+                    includeRetrievalPlugins: enableRetrieval
+                );
+              } catch (e) {
+                _logger.warning('Failed to register core plugins for server: $e');
+              }
+            }
+          }
+        }
+      }
+
+      _logger.info('Plugin integration setup completed');
+    } catch (e, stackTrace) {
+      _logger.error('Error setting up plugin integration', e, stackTrace);
+      // Continue - integration failure shouldn't stop entire initialization
     }
   }
 
@@ -528,8 +640,6 @@ class FlutterMCP {
     _registerProviderSafely(mcpLlm, 'openai', llm.OpenAiProviderFactory());
     _registerProviderSafely(mcpLlm, 'claude', llm.ClaudeProviderFactory());
     _registerProviderSafely(mcpLlm, 'together', llm.TogetherProviderFactory());
-
-    // Register other providers as needed
   }
 
   /// Start services with better error aggregation
@@ -573,10 +683,8 @@ class FlutterMCP {
     _logger.info('Default LLM server ID set to: $llmServerId');
   }
 
-
   /// Start a client from configuration with improved error handling
   Future<String> _startClient(MCPClientConfig clientConfig) async {
-    // 클라이언트와 Transport 생성
     final clientId = await createClient(
       name: clientConfig.name,
       version: clientConfig.version,
@@ -587,14 +695,12 @@ class FlutterMCP {
       authToken: clientConfig.authToken,
     );
 
-    // ID만 반환하고 연결은 하지 않음
     _logger.debug('Created MCP client: ${clientConfig.name} with ID $clientId');
     return clientId;
   }
 
   /// Start a server from configuration with improved error handling
   Future<String> _startServer(MCPServerConfig serverConfig) async {
-    // 서버와 Transport 생성
     final serverId = await createServer(
       name: serverConfig.name,
       version: serverConfig.version,
@@ -605,7 +711,6 @@ class FlutterMCP {
       authToken: serverConfig.authToken,
     );
 
-    // ID만 반환하고 연결은 하지 않음
     _logger.debug('Created MCP server: ${serverConfig.name} with ID $serverId');
     return serverId;
   }
@@ -615,16 +720,16 @@ class FlutterMCP {
     final config = _config!;
     final startErrors = <String, dynamic>{};
 
-    // 1. MCP 서버 생성 (연결 없이)
-    final mcpServerMap = <String, String>{};  // 인덱스/이름 -> 실제 서버 ID 매핑
+    // 1. Create MCP servers (without connection)
+    final mcpServerMap = <String, String>{};  // index/name -> actual server ID mapping
 
     if (config.autoStartServer != null && config.autoStartServer!.isNotEmpty) {
       for (int i = 0; i < config.autoStartServer!.length; i++) {
         final serverConfig = config.autoStartServer![i];
         try {
           final serverId = await _startServer(serverConfig);
-          mcpServerMap['server_$i'] = serverId;  // 인덱스로 참조
-          mcpServerMap[serverConfig.name] = serverId;  // 이름으로 참조
+          mcpServerMap['server_$i'] = serverId;  // Reference by index
+          mcpServerMap[serverConfig.name] = serverId;  // Reference by name
         } catch (e, stackTrace) {
           _logger.error('Failed to create server: ${serverConfig.name}', e, stackTrace);
           startErrors['server.${serverConfig.name}'] = e;
@@ -632,16 +737,16 @@ class FlutterMCP {
       }
     }
 
-    // 2. MCP 클라이언트 생성 (연결 없이)
-    final mcpClientMap = <String, String>{};  // 인덱스/이름 -> 실제 클라이언트 ID 매핑
+    // 2. Create MCP clients (without connection)
+    final mcpClientMap = <String, String>{};  // index/name -> actual client ID mapping
 
     if (config.autoStartClient != null && config.autoStartClient!.isNotEmpty) {
       for (int i = 0; i < config.autoStartClient!.length; i++) {
         final clientConfig = config.autoStartClient![i];
         try {
           final clientId = await _startClient(clientConfig);
-          mcpClientMap['client_$i'] = clientId;  // 인덱스로 참조
-          mcpClientMap[clientConfig.name] = clientId;  // 이름으로 참조
+          mcpClientMap['client_$i'] = clientId;  // Reference by index
+          mcpClientMap[clientConfig.name] = clientId;  // Reference by name
         } catch (e, stackTrace) {
           _logger.error('Failed to create client: ${clientConfig.name}', e, stackTrace);
           startErrors['client.${clientConfig.name}'] = e;
@@ -649,23 +754,23 @@ class FlutterMCP {
       }
     }
 
-    // 3. LLM 서버 생성 및 MCP 서버 연결
+    // 3. Create LLM servers and connect to MCP servers
     if (config.autoStartLlmServer != null && config.autoStartLlmServer!.isNotEmpty) {
       for (int i = 0; i < config.autoStartLlmServer!.length; i++) {
         final llmConfig = config.autoStartLlmServer![i];
         try {
-          // LLM 서버 생성
+          // Create LLM server
           final (llmId, llmServerId) = await createLlmServer(
             providerName: llmConfig.providerName,
             config: llmConfig.config,
           );
 
-          // MCP 서버 연결
+          // Connect to MCP servers
           for (final mcpServerRef in llmConfig.mcpServerIds) {
             if (mcpServerMap.containsKey(mcpServerRef)) {
               final mcpServerId = mcpServerMap[mcpServerRef]!;
 
-              // 연결 관계 추가
+              // Add association
               await addMcpServerToLlmServer(
                 mcpServerId: mcpServerId,
                 llmServerId: llmServerId,
@@ -677,10 +782,25 @@ class FlutterMCP {
             }
           }
 
-          // 기본값으로 설정 (필요한 경우)
+          // Set as default if needed
           if (llmConfig.isDefault) {
             _defaultLlmServerId = llmServerId;
             _logger.debug('Set default LLM server: $llmServerId');
+          }
+
+          // Register core plugins if configured
+          if (config.registerCoreLlmPlugins == true) {
+            try {
+              await registerCoreLlmPlugins(
+                  llmId,
+                  llmServerId,
+                  isServer: true,
+                  includeRetrievalPlugins: config.enableRetrieval ?? false
+              );
+            } catch (e) {
+              _logger.warning('Failed to register core plugins for LLM server $llmServerId: $e');
+              startErrors['llm.server.plugins.$i'] = e;
+            }
           }
         } catch (e, stackTrace) {
           _logger.error('Failed to create LLM server at index $i', e, stackTrace);
@@ -689,23 +809,23 @@ class FlutterMCP {
       }
     }
 
-    // 4. LLM 클라이언트 생성 및 MCP 클라이언트 연결
+    // 4. Create LLM clients and connect to MCP clients
     if (config.autoStartLlmClient != null && config.autoStartLlmClient!.isNotEmpty) {
       for (int i = 0; i < config.autoStartLlmClient!.length; i++) {
         final llmConfig = config.autoStartLlmClient![i];
         try {
-          // LLM 클라이언트 생성
+          // Create LLM client
           final (llmId, llmClientId) = await createLlmClient(
             providerName: llmConfig.providerName,
             config: llmConfig.config,
           );
 
-          // MCP 클라이언트 연결
+// Connect to MCP clients
           for (final mcpClientRef in llmConfig.mcpClientIds) {
             if (mcpClientMap.containsKey(mcpClientRef)) {
               final mcpClientId = mcpClientMap[mcpClientRef]!;
 
-              // 연결 관계 추가
+              // Add association
               await addMcpClientToLlmClient(
                 mcpClientId: mcpClientId,
                 llmClientId: llmClientId,
@@ -717,10 +837,25 @@ class FlutterMCP {
             }
           }
 
-          // 기본값으로 설정 (필요한 경우)
+          // Set as default if needed
           if (llmConfig.isDefault) {
             _defaultLlmClientId = llmClientId;
             _logger.debug('Set default LLM client: $llmClientId');
+          }
+
+          // Register core plugins if configured
+          if (config.registerCoreLlmPlugins == true) {
+            try {
+              await registerCoreLlmPlugins(
+                  llmId,
+                  llmClientId,
+                  isServer: false,
+                  includeRetrievalPlugins: config.enableRetrieval ?? false
+              );
+            } catch (e) {
+              _logger.warning('Failed to register core plugins for LLM client $llmClientId: $e');
+              startErrors['llm.client.plugins.$i'] = e;
+            }
           }
         } catch (e, stackTrace) {
           _logger.error('Failed to create LLM client at index $i', e, stackTrace);
@@ -729,7 +864,7 @@ class FlutterMCP {
       }
     }
 
-    // 5. 모든 MCP 서버 연결
+    // 5. Connect all MCP servers
     for (final serverId in mcpServerMap.values.toSet()) {
       try {
         connectServer(serverId);
@@ -740,7 +875,7 @@ class FlutterMCP {
       }
     }
 
-    // 6. 모든 MCP 클라이언트 연결
+    // 6. Connect all MCP clients
     for (final clientId in mcpClientMap.values.toSet()) {
       try {
         await connectClient(clientId);
@@ -751,7 +886,21 @@ class FlutterMCP {
       }
     }
 
-    // 오류 보고
+    // 7. Handle MCP plugin integration
+    if (config.registerMcpPluginsWithLlm == true) {
+      final mcpPlugins = _pluginRegistry.getAllPlugins();
+      for (final plugin in mcpPlugins) {
+        if (plugin is MCPToolPlugin || plugin is MCPResourcePlugin || plugin is MCPPromptPlugin) {
+          try {
+            await convertMcpPluginToLlm(plugin);
+          } catch (e) {
+            _logger.warning('Failed to convert MCP plugin ${plugin.name} to LLM plugin: $e');
+            startErrors['plugin.convert.${plugin.name}'] = e;
+          }
+        }
+      }
+    }
+
     if (startErrors.isNotEmpty) {
       _logger.warning(
           'Some components failed to start (${startErrors.length} errors). ' +
@@ -812,9 +961,6 @@ class FlutterMCP {
 
       // Register client
       _clientManager.registerClient(clientId, mcpClient, transport);
-
-      // Update plugin registry
-      _pluginRegistry.registerClient(clientId, mcpClient);
 
       // Register for resource cleanup
       _resourceManager.register<client.Client>(
@@ -887,9 +1033,6 @@ class FlutterMCP {
       // Register server
       _serverManager.registerServer(serverId, mcpServer, transport);
 
-      // Update plugin registry
-      _pluginRegistry.registerServer(serverId, mcpServer);
-
       // Register for resource cleanup
       _resourceManager.register<server.Server>(
           'server_$serverId',
@@ -918,7 +1061,7 @@ class FlutterMCP {
   /// [retrievalManager]: Optional retrieval manager for RAG capabilities
   /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
   ///
-  /// Returns a Map with llmId and llmClientId
+  /// Returns a tuple with llmId and llmClientId
   Future<(String llmId, String llmClientId)> createLlmClient({
     required String providerName,
     required llm.LlmConfiguration config,
@@ -994,6 +1137,30 @@ class FlutterMCP {
         similarityThreshold: 0.85,
       );
 
+      // Auto-register plugins if configured
+      if (_config?.autoRegisterLlmPlugins == true) {
+        try {
+          await registerPluginsFromLlmClient(llmId, llmClientId);
+          _logger.debug('Auto-registered plugins from new LLM client $llmClientId');
+        } catch (e) {
+          _logger.warning('Failed to auto-register plugins from new LLM client $llmClientId: $e');
+        }
+      }
+
+      // Register core plugins if configured
+      if (_config?.registerCoreLlmPlugins == true) {
+        try {
+          await registerCoreLlmPlugins(
+              llmId,
+              llmClientId,
+              isServer: false,
+              includeRetrievalPlugins: _config?.enableRetrieval ?? false
+          );
+        } catch (e) {
+          _logger.warning('Failed to register core plugins for LLM client $llmClientId: $e');
+        }
+      }
+
       PerformanceMonitor.instance.recordMetric(
           operationId,
           stopwatch.elapsedMilliseconds,
@@ -1045,7 +1212,7 @@ class FlutterMCP {
   /// [retrievalManager]: Optional retrieval manager for RAG capabilities
   /// [mcpLlmInstanceId]: ID of the MCPLlm instance to use (defaults to 'default')
   ///
-  /// Returns a Map with llmId and llmServerId
+  /// Returns a tuple with llmId and llmServerId
   Future<(String llmId, String llmServerId)> createLlmServer({
     required String providerName,
     required llm.LlmConfiguration config,
@@ -1111,6 +1278,30 @@ class FlutterMCP {
 
       // Add to LLM manager
       await _llmManager.addLlmServer(llmId, llmServerId, llmServer);
+
+      // Auto-register plugins if configured
+      if (_config?.autoRegisterLlmPlugins == true) {
+        try {
+          await registerPluginsFromLlmServer(llmId, llmServerId);
+          _logger.debug('Auto-registered plugins from new LLM server $llmServerId');
+        } catch (e) {
+          _logger.warning('Failed to auto-register plugins from new LLM server $llmServerId: $e');
+        }
+      }
+
+      // Register core plugins if configured
+      if (_config?.registerCoreLlmPlugins == true) {
+        try {
+          await registerCoreLlmPlugins(
+              llmId,
+              llmServerId,
+              isServer: true,
+              includeRetrievalPlugins: _config?.enableRetrieval ?? false
+          );
+        } catch (e) {
+          _logger.warning('Failed to register core plugins for LLM server $llmServerId: $e');
+        }
+      }
 
       PerformanceMonitor.instance.recordMetric(
           operationId,
@@ -2231,7 +2422,7 @@ class FlutterMCP {
     // Add 1 second for every 500 characters (roughly 100 tokens)
     int additionalSeconds = (messageLength / 500).ceil();
 
-    // Cap at 120 seconds to avoid excessive timeouts
+// Cap at 120 seconds to avoid excessive timeouts
     return Duration(seconds: min(baseTimeoutSeconds + additionalSeconds, 120));
   }
 
@@ -2306,45 +2497,7 @@ class FlutterMCP {
         message.contains('429') ||
         message.contains('too many requests');
   }
-/*
-  /// Check if an error is a rate limit error
-  bool _isRateLimitError(dynamic e) {
-    final message = e.toString().toLowerCase();
-    return message.contains('rate limit') ||
-        message.contains('too many requests') ||
-        message.contains('429') ||
-        message.contains('quota') ||
-        message.contains('exceed') && (
-            message.contains('limit') ||
-                message.contains('request') ||
-                message.contains('rate')
-        );
-  }
 
-  /// Check if an error is an authentication error
-  bool _isAuthError(dynamic e) {
-    final message = e.toString().toLowerCase();
-    return message.contains('auth') ||
-        message.contains('api key') ||
-        message.contains('unauthorized') ||
-        message.contains('401') ||
-        message.contains('403') ||
-        message.contains('permission') ||
-        message.contains('invalid key');
-  }
-
-  /// Check if an error is a network error
-  bool _isNetworkError(dynamic e) {
-    final message = e.toString().toLowerCase();
-    return message.contains('network') ||
-        message.contains('connection') ||
-        message.contains('timeout') ||
-        message.contains('socket') ||
-        message.contains('unreachable') ||
-        message.contains('dns') ||
-        message.contains('refused');
-  }
-*/
   /// Adds a document to the LLM's document store for retrieval
   ///
   /// Parameters:
@@ -2842,6 +2995,7 @@ class FlutterMCP {
       );
     }
   }
+
   /// Create a conversation with multiple sessions and enhanced persistence
   ///
   /// Parameters:
@@ -3835,8 +3989,7 @@ class FlutterMCP {
       }
     }
 
-    // Add LLM plugins info - this is simplified and would need more detail
-    // in a real implementation to get full information about each LLM plugin
+    // Add LLM plugins info
     for (final pluginName in llmPlugins) {
       final plugin = _llmManager.getPluginIntegrator().getLlmPlugin(pluginName);
       if (plugin != null) {

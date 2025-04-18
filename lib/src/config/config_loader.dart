@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_mcp/src/config/plugin_config.dart';
 import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
 import 'package:mcp_server/mcp_server.dart';
 import 'package:mcp_llm/mcp_llm.dart';
@@ -12,6 +13,7 @@ import 'background_config.dart';
 import 'notification_config.dart';
 import 'tray_config.dart';
 import 'job.dart';
+import '../plugins/plugin_system.dart';
 import '../platform/tray/tray_manager.dart';
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
@@ -149,7 +151,8 @@ class ConfigLoader {
 
     // Parse plugin settings
     final bool? autoLoadPlugins = json['autoLoadPlugins'] as bool?;
-    final Map<String, Map<String, dynamic>>? pluginConfigurations =
+
+    final List<PluginConfig>? pluginConfigurations =
     json.containsKey('pluginConfigurations')
         ? _parsePluginConfigurations(json['pluginConfigurations'])
         : null;
@@ -245,15 +248,30 @@ class ConfigLoader {
   }
 
   /// Parse plugin configurations
-  static Map<String, Map<String, dynamic>> _parsePluginConfigurations(dynamic json) {
-    final Map<String, Map<String, dynamic>> result = {};
+  static List<PluginConfig> _parsePluginConfigurations(
+      Map<String, dynamic> json,
+      ) {
+    final List<PluginConfig> result = [];
 
-    if (json is Map) {
-      json.forEach((key, value) {
-        if (value is Map) {
-          result[key.toString()] = Map<String, dynamic>.from(value);
-        }
-      });
+    for (final entry in json.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value is Map<String, dynamic> && value['plugin'] is MCPPlugin) {
+        final plugin = value['plugin'] as MCPPlugin;
+        final config = (value['config'] as Map?)?.cast<String, dynamic>() ?? {};
+        final targets = value.containsKey('targets') && value['targets'] is List
+            ? (value['targets'] as List).cast<String>()
+            : null;
+
+        result.add(PluginConfig(
+          plugin: plugin,
+          config: config,
+          targets: targets,
+        ));
+      } else {
+        throw Exception('Invalid plugin configuration for "$key". Must contain a plugin instance.');
+      }
     }
 
     return result;

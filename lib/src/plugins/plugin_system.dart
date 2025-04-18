@@ -1,6 +1,7 @@
 import '../utils/error_recovery.dart';
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
+import '../platform/tray/tray_manager.dart';
 import 'package:mcp_llm/mcp_llm.dart' as mcp_llm;
 import 'dart:async';
 import 'dart:convert';
@@ -102,28 +103,6 @@ abstract class MCPTrayPlugin extends MCPPlugin {
 
   /// Check if tray is supported on current platform
   bool get isSupported;
-}
-
-/// Tray menu item for MCP Tray plugins
-class TrayMenuItem {
-  final String? label;
-  final bool disabled;
-  final bool isSeparator;
-  final Function()? onTap;
-
-  /// Create a normal menu item
-  TrayMenuItem({
-    this.label,
-    this.disabled = false,
-    this.onTap,
-  }) : isSeparator = false;
-
-  /// Create a separator
-  TrayMenuItem.separator()
-      : label = null,
-        disabled = true,
-        isSeparator = true,
-        onTap = null;
 }
 
 /// MCP Plugin registry

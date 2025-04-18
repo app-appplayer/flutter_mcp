@@ -6,7 +6,7 @@ import 'package:flutter_mcp/src/utils/logger.dart';
 void main() {
   // Set up logging for tests
   setUp(() {
-    MCPLogger.setDefaultLevel(LogLevel.debug);
+    MCPLogger.setDefaultLevel(MCPLogLevel.debug);
     // Initialize fresh performance monitor for each test
     PerformanceMonitor.instance.reset();
   });

@@ -14,7 +14,7 @@ void main() {
 
   // Set up logging for tests
   setUp(() {
-    MCPLogger.setDefaultLevel(LogLevel.debug);
+    MCPLogger.setDefaultLevel(MCPLogLevel.debug);
     mockPlatformServices = MockPlatformServices();
 
     // Mock platform services behavior

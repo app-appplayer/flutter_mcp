@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_mcp/src/utils/circuit_breaker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/utils/exceptions.dart';
 import 'package:flutter_mcp/src/utils/error_recovery.dart';
@@ -192,36 +193,86 @@ void main() {
         throwsA(isA<MCPOperationFailedException>()),
       );
     });
+  });
 
-    test('Circuit breaker state transitions', () {
+  group('CircuitBreaker Tests', () {
+    test('Initially closed and allows request', () {
       final breaker = CircuitBreaker(
-        name: 'test',
-        failureThreshold: 2,
-        resetTimeout: Duration(milliseconds: 50),
-        successThreshold: 1,
+        name: 'testBreaker',
+        failureThreshold: 3,
+        resetTimeout: Duration(seconds: 1),
       );
 
-      // Initially closed
       expect(breaker.state, CircuitBreakerState.closed);
-      expect(breaker.allowRequest, true);
+    });
 
-      // Record failures to trigger open state
-      breaker.recordFailure();
+    test('Transitions to open after reaching failure threshold', () {
+      final breaker = CircuitBreaker(
+        name: 'testBreaker',
+        failureThreshold: 2,
+        resetTimeout: Duration(seconds: 1),
+      );
+
+      breaker.recordFailure('error');
       expect(breaker.state, CircuitBreakerState.closed);
 
-      breaker.recordFailure();
+      breaker.recordFailure('error');
       expect(breaker.state, CircuitBreakerState.open);
-      expect(breaker.allowRequest, false);
+    });
 
-      // After timeout, should transition to half-open
-      Future.delayed(Duration(milliseconds: 100), () {
-        expect(breaker.allowRequest, true);
-        expect(breaker.state, CircuitBreakerState.halfOpen);
+    test('Rejects operation when open and before timeout', () async {
+      final breaker = CircuitBreaker(
+        name: 'testBreaker',
+        failureThreshold: 1,
+        resetTimeout: Duration(seconds: 1),
+      );
 
-        // Record success to close the circuit
-        breaker.recordSuccess();
-        expect(breaker.state, CircuitBreakerState.closed);
-      });
+      breaker.recordFailure('error');
+      expect(breaker.state, CircuitBreakerState.open);
+
+      expect(
+            () async => await breaker.execute(() async => 'Should fail'),
+        throwsA(isA<CircuitBreakerOpenException>()),
+      );
+    });
+
+    test('Transitions to half-open after timeout, then closed on success', () async {
+      final breaker = CircuitBreaker(
+        name: 'testBreaker',
+        failureThreshold: 1,
+        resetTimeout: Duration(milliseconds: 100),
+        halfOpenSuccessThreshold: 1,
+      );
+
+      breaker.recordFailure('error');
+      expect(breaker.state, CircuitBreakerState.open);
+
+      await Future.delayed(Duration(milliseconds: 150));
+
+      final result = await breaker.execute(() async => 'Recovered');
+      expect(result, 'Recovered');
+      expect(breaker.state, CircuitBreakerState.closed);
+    });
+
+    test('Failure during half-open goes back to open', () async {
+      final breaker = CircuitBreaker(
+        name: 'testBreaker',
+        failureThreshold: 1,
+        resetTimeout: Duration(milliseconds: 100),
+        halfOpenSuccessThreshold: 1,
+      );
+
+      breaker.recordFailure('error');
+      expect(breaker.state, CircuitBreakerState.open);
+
+      await Future.delayed(Duration(milliseconds: 150));
+
+      expect(
+            () async => await breaker.execute(() async => throw Exception('fail')),
+        throwsException,
+      );
+
+      expect(breaker.state, CircuitBreakerState.open);
     });
   });
 }

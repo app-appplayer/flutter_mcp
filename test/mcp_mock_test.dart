@@ -27,7 +27,7 @@ void main() {
 
   setUp(() {
     // Set up logging for tests
-    MCPLogger.setDefaultLevel(LogLevel.debug);
+    MCPLogger.setDefaultLevel(MCPLogLevel.debug);
 
     // Initialize mocks
     mockBackgroundService = MockBackgroundService();

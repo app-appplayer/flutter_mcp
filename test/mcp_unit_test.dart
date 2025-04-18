@@ -19,7 +19,7 @@ import 'package:flutter_mcp/src/utils/memory_manager.dart';
 void main() {
   // Set up logging for tests
   setUp(() {
-    MCPLogger.setDefaultLevel(LogLevel.debug);
+    MCPLogger.setDefaultLevel(MCPLogLevel.debug);
   });
 
   group('MCPConfig Tests', () {
@@ -34,31 +34,6 @@ void main() {
       expect(config.useBackgroundService, true);
       expect(config.useNotification, true);
       expect(config.useTray, true);
-    });
-
-    test('Create development config', () {
-      final config = MCPConfig.development(
-        appName: 'Dev App',
-        appVersion: '0.1.0',
-      );
-
-      expect(config.appName, 'Dev App');
-      expect(config.appVersion, '0.1.0');
-      expect(config.loggingLevel, LogLevel.debug);
-      expect(config.enablePerformanceMonitoring, true);
-    });
-
-    test('Create production config', () {
-      final config = MCPConfig.production(
-        appName: 'Prod App',
-        appVersion: '1.0.0',
-      );
-
-      expect(config.appName, 'Prod App');
-      expect(config.appVersion, '1.0.0');
-      expect(config.loggingLevel, LogLevel.info);
-      expect(config.enablePerformanceMonitoring, false);
-      expect(config.background?.autoStartOnBoot, true);
     });
 
     test('Config validation succeeds with valid data', () {

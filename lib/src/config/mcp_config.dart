@@ -1,3 +1,4 @@
+import 'package:flutter_mcp/src/config/plugin_config.dart';
 import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
 import 'package:mcp_server/mcp_server.dart';
 import 'package:mcp_llm/mcp_llm.dart';
@@ -239,7 +240,7 @@ class MCPConfig {
   final bool? autoLoadPlugins;
 
   /// Plugin configurations
-  final Map<String, Map<String, dynamic>>? pluginConfigurations;
+  final List<PluginConfig>? pluginConfigurations;
 
   /// High memory usage threshold (MB)
   final int? highMemoryThresholdMB;
@@ -496,7 +497,7 @@ class MCPConfig {
     bool? enableMetricsExport,
     String? metricsExportPath,
     bool? autoLoadPlugins,
-    Map<String, Map<String, dynamic>>? pluginConfigurations,
+    List<PluginConfig>? pluginConfigurations,
     int? highMemoryThresholdMB,
     int? lowBatteryWarningThreshold,
     int? maxConnectionRetries,

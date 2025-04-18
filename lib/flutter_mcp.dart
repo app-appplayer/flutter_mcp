@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter_mcp/src/config/plugin_config.dart';
 import 'package:flutter_mcp/src/plugins/llm_plugin_integration.dart';
 import 'package:flutter_mcp/src/utils/error_recovery.dart';
 import 'package:mcp_client/mcp_client.dart' as client;
@@ -194,18 +195,8 @@ class FlutterMCP {
       }
 
       // Initialize plugin registry
-      await _initializePluginRegistry();
-
-      // Setup plugin integration system based on config
-      if (config.autoRegisterLlmPlugins == true ||
-          config.registerMcpPluginsWithLlm == true ||
-          config.registerCoreLlmPlugins == true) {
-        await _setupPluginIntegration(
-            autoRegisterLlmPlugins: config.autoRegisterLlmPlugins ?? false,
-            enableRegisterMcpPluginsWithLlm: config.registerMcpPluginsWithLlm ?? false,
-            enableRegisterCoreLlmPlugins: config.registerCoreLlmPlugins ?? false,
-            enableRetrieval: config.enableRetrieval ?? false
-        );
+      if (config.pluginConfigurations != null) {
+        await _initializePluginRegistry(config.pluginConfigurations!);
       }
 
       // Auto-start configuration
@@ -229,106 +220,6 @@ class FlutterMCP {
       await _cleanup();
 
       throw MCPInitializationException('Flutter MCP initialization failed', e, stackTrace);
-    }
-  }
-
-  /// Set up plugin integration according to configuration
-  Future<void> _setupPluginIntegration({
-    bool autoRegisterLlmPlugins = false,
-    bool enableRegisterMcpPluginsWithLlm = false,
-    bool enableRegisterCoreLlmPlugins = false,
-    bool enableRetrieval = false,
-  }) async {
-    _logger.info('Setting up plugin integration');
-
-    try {
-      // Auto-register LLM plugins
-      if (autoRegisterLlmPlugins) {
-        for (final llmId in _llmManager.getAllLlmIds()) {
-          final llmInfo = _llmManager.getLlmInfo(llmId);
-          if (llmInfo != null) {
-            // Register client plugins
-            for (final clientId in llmInfo.getAllLlmClientIds()) {
-              try {
-                await registerPluginsFromLlmClient(llmId, clientId);
-                _logger.debug('Auto-registered plugins from LLM client $clientId');
-              } catch (e) {
-                _logger.warning('Failed to register plugins from LLM client $clientId: $e');
-              }
-            }
-
-            // Register server plugins
-            for (final serverId in llmInfo.getAllLlmServerIds()) {
-              try {
-                await registerPluginsFromLlmServer(llmId, serverId);
-                _logger.debug('Auto-registered plugins from LLM server $serverId');
-              } catch (e) {
-                _logger.warning('Failed to register plugins from LLM server $serverId: $e');
-              }
-            }
-          }
-        }
-      }
-
-      // Convert MCP plugins to LLM plugins
-      if (enableRegisterMcpPluginsWithLlm) {
-        final mcpPlugins = _pluginRegistry.getAllPlugins();
-        int convertedCount = 0;
-
-        for (final plugin in mcpPlugins) {
-          if (plugin is MCPToolPlugin || plugin is MCPResourcePlugin || plugin is MCPPromptPlugin) {
-            try {
-              final success = await convertMcpPluginToLlm(plugin);
-              if (success) convertedCount++;
-            } catch (e) {
-              _logger.warning('Failed to convert MCP plugin ${plugin.name} to LLM plugin: $e');
-            }
-          }
-        }
-
-        _logger.info('Converted $convertedCount/${mcpPlugins.length} MCP plugins to LLM plugins');
-      }
-
-      // Register core LLM plugins
-      if (enableRegisterCoreLlmPlugins) {
-        for (final llmId in _llmManager.getAllLlmIds()) {
-          final llmInfo = _llmManager.getLlmInfo(llmId);
-          if (llmInfo != null) {
-            // Register core plugins for default client
-            if (llmInfo.defaultLlmClientId != null) {
-              try {
-                await registerCoreLlmPlugins(
-                    llmId,
-                    llmInfo.defaultLlmClientId!,
-                    isServer: false,
-                    includeRetrievalPlugins: enableRetrieval
-                );
-              } catch (e) {
-                _logger.warning('Failed to register core plugins for client: $e');
-              }
-            }
-
-            // Register core plugins for default server
-            if (llmInfo.defaultLlmServerId != null) {
-              try {
-                await registerCoreLlmPlugins(
-                    llmId,
-                    llmInfo.defaultLlmServerId!,
-                    isServer: true,
-                    includeRetrievalPlugins: enableRetrieval
-                );
-              } catch (e) {
-                _logger.warning('Failed to register core plugins for server: $e');
-              }
-            }
-          }
-        }
-      }
-
-      _logger.info('Plugin integration setup completed');
-    } catch (e, stackTrace) {
-      _logger.error('Error setting up plugin integration', e, stackTrace);
-      // Continue - integration failure shouldn't stop entire initialization
     }
   }
 
@@ -537,30 +428,14 @@ class FlutterMCP {
   }
 
   /// Initialize plugin registry with improved dependency tracking
-  Future<void> _initializePluginRegistry() async {
-    // Connect the plugin registry with core managers
-    final List<Future<void>> registrationTasks = [];
+  Future<void> _initializePluginRegistry(List<PluginConfig> config) async {
+    // Setup plugin integration system based on config
+    for (final entry in config) {
+      final plugin = entry.plugin;
+      final config = entry.config;
 
-    for (final serverId in _serverManager.getAllServerIds()) {
-      final server = _serverManager.getServer(serverId);
-      if (server != null) {
-        registrationTasks.add(
-            Future(() => _pluginRegistry.registerServer(serverId, server))
-        );
-      }
+      await registerPlugin(plugin, config);
     }
-
-    for (final clientId in _clientManager.getAllClientIds()) {
-      final client = _clientManager.getClient(clientId);
-      if (client != null) {
-        registrationTasks.add(
-            Future(() => _pluginRegistry.registerClient(clientId, client))
-        );
-      }
-    }
-
-    // Register in parallel
-    await Future.wait(registrationTasks);
 
     // Register for cleanup
     _resourceManager.registerCallback(
@@ -1137,6 +1012,22 @@ class FlutterMCP {
         similarityThreshold: 0.85,
       );
 
+      if(_config?.pluginConfigurations != null) {
+        // Register plugins for this client
+        for (final entry in _config!.pluginConfigurations!) {
+          final plugin = entry.plugin;
+          final targets = entry.targets;
+
+          if (targets != null && targets.contains(mcpLlmInstanceId)) {
+            await convertMcpPluginToLlm(
+              plugin,
+              targetLlmIds: [llmId],
+              targetLlmClientIds: [llmClientId],
+            );
+          }
+        }
+      }
+
       // Auto-register plugins if configured
       if (_config?.autoRegisterLlmPlugins == true) {
         try {
@@ -1286,6 +1177,22 @@ class FlutterMCP {
           _logger.debug('Auto-registered plugins from new LLM server $llmServerId');
         } catch (e) {
           _logger.warning('Failed to auto-register plugins from new LLM server $llmServerId: $e');
+        }
+      }
+
+      if(_config?.pluginConfigurations != null) {
+        // Register plugins for this client
+        for (final entry in _config!.pluginConfigurations!) {
+          final plugin = entry.plugin;
+          final targets = entry.targets;
+
+          if (targets != null && targets.contains(mcpLlmInstanceId)) {
+            await convertMcpPluginToLlm(
+              plugin,
+              targetLlmIds: [llmId],
+              targetLlmServerIds: [llmServerId],
+            );
+          }
         }
       }
 

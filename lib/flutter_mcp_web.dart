@@ -22,7 +22,6 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
 
   // Plugin state
   bool _initialized = false;
-  MCPConfig? _config;
 
   /// Constructs a FlutterMcpWeb
   FlutterMcpWeb();
@@ -74,7 +73,9 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
   /// Check if local storage is supported
   bool _supportsLocalStorage() {
     try {
-      return web.window.localStorage != null;
+      // Just try to access localStorage property to see if it's available
+      web.window.localStorage;
+      return true;
     } catch (e) {
       return false;
     }
@@ -84,11 +85,10 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
   @override
   Future<void> initialize(MCPConfig config) async {
     if (_initialized) {
-      _logger.warning('Web platform is already initialized');
+      _logger.info('Web platform is already initialized');
       return;
     }
 
-    _config = config;
     _logger.debug('Initializing FlutterMCP for web platform');
 
     try {
@@ -127,7 +127,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_backgroundService == null) {
-      _logger.warning('Background service is not available');
+      _logger.debug('Background service is not available');
       return false;
     }
 
@@ -142,7 +142,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_backgroundService == null) {
-      _logger.warning('Background service is not available');
+      _logger.debug('Background service is not available');
       return false;
     }
 
@@ -162,7 +162,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_notificationManager == null) {
-      _logger.warning('Notification manager is not available');
+      _logger.debug('Notification manager is not available');
       return;
     }
 
@@ -182,7 +182,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_storageManager == null) {
-      _logger.warning('Storage manager is not available');
+      _logger.debug('Storage manager is not available');
       return;
     }
 
@@ -197,7 +197,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_storageManager == null) {
-      _logger.warning('Storage manager is not available');
+      _logger.debug('Storage manager is not available');
       return null;
     }
 
@@ -239,22 +239,20 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
   }
   
   /// [UNSUPPORTED ON WEB] Create an MCP server
-  @override
   Future<String> createServer({
     required String name,
     required String version,
     dynamic capabilities,
     Map<String, dynamic>? options,
   }) async {
-    _logger.warning('Server creation not fully supported on web platform');
+    _logger.debug('Server creation not supported on web platform');
     throw MCPPlatformNotSupportedException(
-      'MCP Server creation is not fully supported on web platform',
+      'MCP Server creation is not supported on web platform',
       errorCode: 'WEB_SERVER_NOT_SUPPORTED',
     );
   }
   
   /// [UNSUPPORTED ON WEB] Create an MCP client
-  @override
   Future<String> createClient({
     required String name,
     required String version,
@@ -263,63 +261,58 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     List<String>? transportArgs,
     Map<String, dynamic>? options,
   }) async {
-    _logger.warning('Client creation not fully supported on web platform');
+    _logger.debug('Client creation not supported on web platform');
     throw MCPPlatformNotSupportedException(
-      'MCP Client creation is not fully supported on web platform',
+      'MCP Client creation is not supported on web platform',
       errorCode: 'WEB_CLIENT_NOT_SUPPORTED',
     );
   }
   
   /// [UNSUPPORTED ON WEB] Connect an MCP server
-  @override
   Future<bool> connectServer(String serverId) async {
-    _logger.warning('Server connection not fully supported on web platform');
+    _logger.debug('Server connection not supported on web platform');
     throw MCPPlatformNotSupportedException(
-      'MCP Server connection is not fully supported on web platform',
+      'MCP Server connection is not supported on web platform',
       errorCode: 'WEB_SERVER_NOT_SUPPORTED',
     );
   }
   
   /// [UNSUPPORTED ON WEB] Connect an MCP client
-  @override
   Future<bool> connectClient(String clientId) async {
-    _logger.warning('Client connection not fully supported on web platform');
+    _logger.debug('Client connection not supported on web platform');
     throw MCPPlatformNotSupportedException(
-      'MCP Client connection is not fully supported on web platform',
+      'MCP Client connection is not supported on web platform',
       errorCode: 'WEB_CLIENT_NOT_SUPPORTED',
     );
   }
   
   /// [UNSUPPORTED ON WEB] Create and configure an LLM
-  @override
   Future<String> createLlm({
     required String providerName,
     required dynamic config,
     Map<String, dynamic>? options,
   }) async {
-    _logger.warning('LLM creation not fully supported on web platform');
+    _logger.debug('LLM creation not supported on web platform');
     throw MCPPlatformNotSupportedException(
-      'LLM creation is not fully supported on web platform',
+      'LLM creation is not supported on web platform',
       errorCode: 'WEB_LLM_NOT_SUPPORTED',
     );
   }
   
   /// [UNSUPPORTED ON WEB] Send a chat message to LLM
-  @override
   Future<dynamic> chat(
     String llmId,
     String userInput, {
     Map<String, dynamic>? options,
   }) async {
-    _logger.warning('LLM chat not fully supported on web platform');
+    _logger.debug('LLM chat not supported on web platform');
     throw MCPPlatformNotSupportedException(
-      'LLM chat is not fully supported on web platform',
+      'LLM chat is not supported on web platform',
       errorCode: 'WEB_LLM_NOT_SUPPORTED',
     );
   }
   
   /// Get web platform status information
-  @override
   Map<String, dynamic> getSystemStatus() {
     return {
       'initialized': _initialized,

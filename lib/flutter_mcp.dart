@@ -24,12 +24,15 @@ import 'src/utils/memory_manager.dart';
 import 'src/utils/object_pool.dart';
 import 'src/utils/circuit_breaker.dart';
 import 'src/utils/semantic_cache.dart';
+import 'src/utils/diagnostic_utils.dart';
+import 'src/utils/platform_utils.dart';
 
 // Re-exports
 export 'src/config/mcp_config.dart';
 export 'src/config/background_config.dart';
 export 'src/config/notification_config.dart';
 export 'src/config/tray_config.dart';
+export 'src/config/plugin_config.dart';
 export 'src/config/job.dart';
 export 'src/utils/exceptions.dart';
 export 'src/utils/logger.dart';
@@ -3350,13 +3353,21 @@ class FlutterMCP {
     try {
       return await operation().timeout(
           timeout,
-          onTimeout: () => throw TimeoutException(
-              'Operation timed out after ${timeout.inSeconds} seconds: $operationName'
+          onTimeout: () => throw MCPTimeoutException(
+              'Operation timed out after ${timeout.inSeconds} seconds: $operationName',
+              timeout
           )
       );
-    } on TimeoutException catch (e) {
+    } on MCPTimeoutException catch (e) {
       _logger.error('Timeout in operation: $operationName', e);
       rethrow;
+    } on TimeoutException catch (e) {
+      _logger.error('Timeout in operation: $operationName', e);
+      throw MCPTimeoutException(
+        'Operation timed out: $operationName', 
+        timeout,
+        e
+      );
     }
   }
 
@@ -4259,24 +4270,37 @@ class FlutterMCP {
   llm.LlmClient? getLlmClient(String llmId) => _llmManager.getLlmClientById(llmId);
   llm.LlmServer? getLlmServer(String llmId) => _llmManager.getLlmServerById(llmId);
 
-  /// Get system status with enhanced information and health metrics
+  /// Get system status with enhanced diagnostics and health metrics
+  /// 
+  /// Returns a detailed status report of the current MCP system state
   Map<String, dynamic> getSystemStatus() {
-    // Basic stats
-    final status = {
-      'initialized': _initialized,
-      'clients': _clientManager.getAllClientIds().length,
-      'servers': _serverManager.getAllServerIds().length,
-      'llms': _llmManager.getAllLlmIds().length,
-      'backgroundServiceRunning': _platformServices.isBackgroundServiceRunning,
-      'schedulerRunning': _scheduler.isRunning,
-      'clientsStatus': _clientManager.getStatus(),
-      'serversStatus': _serverManager.getStatus(),
-      'llmsStatus': _llmManager.getStatus(),
-      'pluginsCount': _pluginRegistry.getAllPluginNames().length,
-      'registeredResourcesCount': _resourceManager.count,
-      'platformName': _platformServices.platformName,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
+    if (!_initialized) {
+      return {
+        'initialized': false,
+        'timestamp': DateTime.now().toIso8601String(),
+        'platformName': PlatformUtils.platformName,
+        'platformFeatures': PlatformUtils.getFeatureSupport(),
+      };
+    }
+    
+    try {
+      // Basic stats
+      final status = {
+        'initialized': _initialized,
+        'clients': _clientManager.getAllClientIds().length,
+        'servers': _serverManager.getAllServerIds().length,
+        'llms': _llmManager.getAllLlmIds().length,
+        'backgroundServiceRunning': _platformServices.isBackgroundServiceRunning,
+        'schedulerRunning': _scheduler.isRunning,
+        'clientsStatus': _clientManager.getStatus(),
+        'serversStatus': _serverManager.getStatus(),
+        'llmsStatus': _llmManager.getStatus(),
+        'pluginsCount': _pluginRegistry.getAllPluginNames().length,
+        'registeredResourcesCount': _resourceManager.count,
+        'platformName': PlatformUtils.platformName,
+        'platformFeatures': PlatformUtils.getFeatureSupport(),
+        'timestamp': DateTime.now().toIso8601String(),
+      };
 
     // Add memory stats
     if (_config?.highMemoryThresholdMB != null) {
@@ -4311,8 +4335,65 @@ class FlutterMCP {
           MapEntry(id, {'size': cache.size, 'hitRate': cache.hitRate})
       ),
     };
-
+    
+    // Add comprehensive diagnostics
+    status['diagnostics'] = DiagnosticUtils.collectSystemDiagnostics(this);
+    
     return status;
+  } catch (e, stackTrace) {
+    _logger.error('Error getting system status', e, stackTrace);
+    return {
+      'initialized': _initialized,
+      'error': {
+        'message': e.toString(),
+        'stackTrace': stackTrace.toString(),
+      },
+      'timestamp': DateTime.now().toIso8601String(),
+      'platformName': PlatformUtils.platformName,
+    };
+  }
+  }
+  
+  /// Check system health
+  /// 
+  /// Performs a series of checks to determine the overall health of the MCP system.
+  /// Returns a health report with status ('healthy', 'degraded', or 'unhealthy')
+  /// and detailed check results.
+  Future<Map<String, dynamic>> checkHealth() async {
+    try {
+      if (!_initialized) {
+        return {
+          'status': 'unhealthy',
+          'checks': {
+            'initialization': {
+              'status': 'fail',
+              'details': {'initialized': false},
+            }
+          },
+          'timestamp': DateTime.now().toIso8601String(),
+        };
+      }
+      
+      return DiagnosticUtils.checkHealth(this);
+    } catch (e, stackTrace) {
+      _logger.error('Error checking system health', e, stackTrace);
+      return {
+        'status': 'unhealthy',
+        'error': {
+          'message': e.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+    }
+  }
+  
+  /// Check if a specific platform feature is supported
+  /// 
+  /// [feature]: The feature to check ('notifications', 'tray', 'background', etc.)
+  /// Returns true if the feature is supported on the current platform
+  bool isFeatureSupported(String feature) {
+    return PlatformUtils.isFeatureSupported(feature);
   }
 }
 

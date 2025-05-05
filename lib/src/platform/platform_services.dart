@@ -2,7 +2,7 @@ import 'dart:async';
 
 import '../config/mcp_config.dart';
 import '../utils/logger.dart';
-import '../utils/platform_utils.dart';
+import '../utils/platform_utils.dart' show PlatformUtils;
 import '../utils/error_recovery.dart';
 import '../utils/exceptions.dart';
 
@@ -53,17 +53,47 @@ class PlatformServices {
         await _initializeSecureStorage(config);
       }
 
-      // Initialize platform-specific services
-      if (config.useBackgroundService && PlatformUtils.supportsBackgroundService) {
-        await _initializeBackgroundService(config);
+      // Initialize platform-specific services with improved error handling
+      if (config.useBackgroundService) {
+        if (PlatformUtils.supportsBackgroundService) {
+          await _initializeBackgroundService(config);
+        } else {
+          _logger.warning('Background service requested but not supported on this platform: ${PlatformUtils.platformName}');
+          throw MCPPlatformNotSupportedException(
+            'background',
+            errorCode: 'BACKGROUND_SERVICE_UNSUPPORTED',
+            context: {'platform': PlatformUtils.platformName},
+            resolution: 'Disable background service in config for this platform or use a supported platform'
+          );
+        }
       }
 
-      if (config.useNotification && PlatformUtils.supportsNotifications) {
-        await _initializeNotificationManager(config);
+      if (config.useNotification) {
+        if (PlatformUtils.supportsNotifications) {
+          await _initializeNotificationManager(config);
+        } else {
+          _logger.warning('Notifications requested but not supported on this platform: ${PlatformUtils.platformName}');
+          throw MCPPlatformNotSupportedException(
+            'notifications',
+            errorCode: 'NOTIFICATIONS_UNSUPPORTED',
+            context: {'platform': PlatformUtils.platformName},
+            resolution: 'Disable notifications in config for this platform or use a supported platform'
+          );
+        }
       }
 
-      if (config.useTray && PlatformUtils.supportsTray) {
-        await _initializeTrayManager(config);
+      if (config.useTray) {
+        if (PlatformUtils.supportsTray) {
+          await _initializeTrayManager(config);
+        } else {
+          _logger.warning('System tray requested but not supported on this platform: ${PlatformUtils.platformName}');
+          throw MCPPlatformNotSupportedException(
+            'tray',
+            errorCode: 'TRAY_UNSUPPORTED',
+            context: {'platform': PlatformUtils.platformName},
+            resolution: 'Disable system tray in config for this platform or use a supported platform'
+          );
+        }
       }
 
       if (config.lifecycleManaged) {

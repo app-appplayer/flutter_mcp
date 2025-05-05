@@ -31,7 +31,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_mcp: ^0.0.2
+  flutter_mcp: ^0.1.0
 ```
 
 Or install via command line:
@@ -388,6 +388,16 @@ Check out the [example](https://github.com/app-appplayer/flutter_mcp/tree/main/e
 ## Issues and Feedback
 
 Please file any issues, bugs, or feature requests in our [issue tracker](https://github.com/app-appplayer/flutter_mcp/issues).
+
+## Platform Service Libraries
+
+This package uses the following external packages:
+
+- `flutter_foreground_task`: ^8.17.0 - For Android background services
+- `flutter_local_notifications`: ^19.0.0 - For notifications
+- `tray_manager`: ^0.4.0 - For system tray on desktop
+- `flutter_secure_storage`: ^9.2.4 - For secure storage
+- `path_provider`: ^2.1.5 - For file system access
 
 ## License
 

@@ -191,7 +191,13 @@ class MCPScheduler {
   Map<String, dynamic> getJobStatus(String jobId) {
     final job = _jobs[jobId];
     if (job == null) {
-      throw MCPResourceNotFoundException(jobId, 'Job not found');
+      throw MCPResourceNotFoundException.withContext(
+        jobId,
+        additionalInfo: 'Job not found',
+        resourceType: 'Job',
+        errorCode: 'JOB_NOT_FOUND',
+        resolution: 'Verify the job ID and ensure the job has been added to the scheduler'
+      );
     }
 
     return {

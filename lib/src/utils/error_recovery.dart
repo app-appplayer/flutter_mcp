@@ -97,7 +97,7 @@ class ErrorRecovery {
 
     try {
       return await primaryOperation();
-    } catch (e, stackTrace) {
+    } catch (e, _) {
       _logger.warning(
         '$name failed, falling back to alternative implementation',
         e,
@@ -112,12 +112,12 @@ class ErrorRecovery {
           fallbackStackTrace,
         );
 
-        throw MCPOperationFailedException(
+        throw MCPOperationFailedException.withContext(
           'Both primary and fallback $name failed',
           fallbackError,
           fallbackStackTrace,
-          originalError: e,
-          originalStackTrace: stackTrace,
+          errorCode: 'FALLBACK_FAILED',
+          resolution: 'Check both primary and fallback implementations'
         );
       }
     }

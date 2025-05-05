@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
-import 'package:web/web.dart' as web;
+import 'package:universal_html/html.dart' as web;
 
 import 'flutter_mcp_platform_interface.dart';
 import 'src/config/mcp_config.dart';
@@ -22,7 +22,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
 
   // Plugin state
   bool _initialized = false;
-  //MCPConfig? _config;
+  MCPConfig? _config;
 
   /// Constructs a FlutterMcpWeb
   FlutterMcpWeb();
@@ -42,6 +42,43 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
       return 'Unknown';
     }
   }
+  
+  /// Returns status of web platform capabilities
+  Map<String, dynamic> getWebCapabilities() {
+    return {
+      'supportsBackgroundService': _supportsBackgroundService(),
+      'supportsNotifications': _supportsNotifications(),
+      'supportsLocalStorage': _supportsLocalStorage(),
+      'supportsMCP': false, // Web platform has limited MCP capabilities
+    };
+  }
+  
+  /// Check if background service is supported
+  bool _supportsBackgroundService() {
+    try {
+      return web.window.navigator.serviceWorker != null;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Check if notifications are supported
+  bool _supportsNotifications() {
+    try {
+      return web.Notification.permission != null;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Check if local storage is supported
+  bool _supportsLocalStorage() {
+    try {
+      return web.window.localStorage != null;
+    } catch (e) {
+      return false;
+    }
+  }
 
   /// Initialize the plugin on web platform
   @override
@@ -51,7 +88,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
       return;
     }
 
-    //_config = config;
+    _config = config;
     _logger.debug('Initializing FlutterMCP for web platform');
 
     try {
@@ -180,10 +217,122 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
 
     _logger.debug('Shutting down web platform');
 
-    if (_backgroundService != null) {
-      await _backgroundService!.stop();
+    try {
+      // Stop background service if running
+      if (_backgroundService != null) {
+        await _backgroundService!.stop();
+        _backgroundService = null;
+      }
+      
+      // Clean up notification handlers if any
+      if (_notificationManager != null) {
+        _notificationManager = null;
+      }
+      
+      _initialized = false;
+      _logger.info('Web platform shutdown complete');
+    } catch (e, stackTrace) {
+      _logger.error('Error during web platform shutdown', e, stackTrace);
+      // Still mark as not initialized
+      _initialized = false;
     }
-
-    _initialized = false;
+  }
+  
+  /// [UNSUPPORTED ON WEB] Create an MCP server
+  @override
+  Future<String> createServer({
+    required String name,
+    required String version,
+    dynamic capabilities,
+    Map<String, dynamic>? options,
+  }) async {
+    _logger.warning('Server creation not fully supported on web platform');
+    throw MCPPlatformNotSupportedException(
+      'MCP Server creation is not fully supported on web platform',
+      errorCode: 'WEB_SERVER_NOT_SUPPORTED',
+    );
+  }
+  
+  /// [UNSUPPORTED ON WEB] Create an MCP client
+  @override
+  Future<String> createClient({
+    required String name,
+    required String version,
+    dynamic capabilities,
+    String? transportCommand,
+    List<String>? transportArgs,
+    Map<String, dynamic>? options,
+  }) async {
+    _logger.warning('Client creation not fully supported on web platform');
+    throw MCPPlatformNotSupportedException(
+      'MCP Client creation is not fully supported on web platform',
+      errorCode: 'WEB_CLIENT_NOT_SUPPORTED',
+    );
+  }
+  
+  /// [UNSUPPORTED ON WEB] Connect an MCP server
+  @override
+  Future<bool> connectServer(String serverId) async {
+    _logger.warning('Server connection not fully supported on web platform');
+    throw MCPPlatformNotSupportedException(
+      'MCP Server connection is not fully supported on web platform',
+      errorCode: 'WEB_SERVER_NOT_SUPPORTED',
+    );
+  }
+  
+  /// [UNSUPPORTED ON WEB] Connect an MCP client
+  @override
+  Future<bool> connectClient(String clientId) async {
+    _logger.warning('Client connection not fully supported on web platform');
+    throw MCPPlatformNotSupportedException(
+      'MCP Client connection is not fully supported on web platform',
+      errorCode: 'WEB_CLIENT_NOT_SUPPORTED',
+    );
+  }
+  
+  /// [UNSUPPORTED ON WEB] Create and configure an LLM
+  @override
+  Future<String> createLlm({
+    required String providerName,
+    required dynamic config,
+    Map<String, dynamic>? options,
+  }) async {
+    _logger.warning('LLM creation not fully supported on web platform');
+    throw MCPPlatformNotSupportedException(
+      'LLM creation is not fully supported on web platform',
+      errorCode: 'WEB_LLM_NOT_SUPPORTED',
+    );
+  }
+  
+  /// [UNSUPPORTED ON WEB] Send a chat message to LLM
+  @override
+  Future<dynamic> chat(
+    String llmId,
+    String userInput, {
+    Map<String, dynamic>? options,
+  }) async {
+    _logger.warning('LLM chat not fully supported on web platform');
+    throw MCPPlatformNotSupportedException(
+      'LLM chat is not fully supported on web platform',
+      errorCode: 'WEB_LLM_NOT_SUPPORTED',
+    );
+  }
+  
+  /// Get web platform status information
+  @override
+  Map<String, dynamic> getSystemStatus() {
+    return {
+      'initialized': _initialized,
+      'platform': 'web',
+      'backgroundServiceRunning': _backgroundService?.isRunning ?? false,
+      'notificationsSupported': _supportsNotifications(),
+      'storageSupported': _supportsLocalStorage(),
+      'backgroundServiceSupported': _supportsBackgroundService(),
+      'limitations': [
+        'MCP server and client support is limited on web',
+        'LLM integration is limited on web',
+        'Background processing is limited to browser restrictions',
+      ]
+    };
   }
 }

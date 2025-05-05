@@ -538,6 +538,18 @@ class TestFlutterMCP {
     _clients.clear();
     _llmClients.clear();
   }
+  
+  /// Execute a tiered memory cleanup for testing
+  Future<void> performTieredMemoryCleanup(int severityLevel) async {
+    // This is a stub method for testing purposes
+    // In production, this would call the actual method in FlutterMCP
+  }
+
+  /// Register a test resource
+  Future<void> registerTestResource(String key, dynamic value, {int priority = 100}) async {
+    // This is a stub method for testing purposes
+    // In production, this would register a resource with the ResourceManager
+  }
 
   TestFlutterMCP(this._platformServices);
 

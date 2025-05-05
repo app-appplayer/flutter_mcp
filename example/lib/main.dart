@@ -15,7 +15,7 @@ void main() async {
 /// Initialize MCP with configuration
 Future<void> initMCP() async {
   // Set up logging
-  MCPLogger.setDefaultLevel(LogLevel.debug);
+  MCPLogger.setDefaultLevel(MCPLogLevel.debug);
   final logger = MCPLogger('integration_app');
 
   logger.info('Initializing MCP...');
@@ -35,7 +35,7 @@ Future<void> initMCP() async {
         useNotification: true,
         useTray: true,
         autoStart: false, // We'll start services manually
-        loggingLevel: LogLevel.debug,
+        loggingLevel: MCPLogLevel.debug,
         enablePerformanceMonitoring: true, // Enable performance monitoring
         highMemoryThresholdMB: 512, // Set memory threshold for automatic cleanup
         background: BackgroundConfig(
@@ -210,14 +210,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       );
 
-      // Create LLM client
-      _llmId = await _createLlm();
+      // Create LLM with server configuration
+      _llmId = await _createLlmServer();
 
-      // Integrate server with LLM
+      // Add MCP server to LLM server
       if (_serverId != null && _llmId != null) {
-        await FlutterMCP.instance.integrateServerWithLlm(
-          serverId: _serverId!,
-          llmId: _llmId!,
+        await FlutterMCP.instance.addMcpServerToLlmServer(
+          llmServerId: _llmId!,
+          mcpServerId: _serverId!,
         );
       }
 
@@ -243,11 +243,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await FlutterMCP.instance.connectClient(_clientId!);
       }
 
-      // Integrate client with LLM
+      // Add MCP client to LLM client
       if (_clientId != null && _llmId != null) {
-        await FlutterMCP.instance.integrateClientWithLlm(
-          clientId: _clientId!,
-          llmId: _llmId!,
+        await FlutterMCP.instance.addMcpClientToLlmClient(
+          llmClientId: _llmId!,
+          mcpClientId: _clientId!,
         );
       }
 
@@ -287,25 +287,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  // Create LLM client
-  Future<String> _createLlm() async {
+  // Create LLM server
+  Future<String> _createLlmServer() async {
     // Determine which API key to use - prefer Claude if available
     if (_claudeKeyController.text.isNotEmpty) {
-      return await FlutterMCP.instance.createLlm(
+      var result = await FlutterMCP.instance.createLlmServer(
         providerName: 'claude',
         config: LlmConfiguration(
           apiKey: _claudeKeyController.text,
           model: 'claude-3-sonnet-20240229',
         ),
       );
+      // The createLlmServer method returns a (llmId, llmServerId) tuple,
+      // but we need to extract just the llmId
+      String llmId = result.$1; // Extract the first value from the tuple
+      return llmId;
     } else if (_openaiKeyController.text.isNotEmpty) {
-      return await FlutterMCP.instance.createLlm(
+      var result = await FlutterMCP.instance.createLlmServer(
         providerName: 'openai',
         config: LlmConfiguration(
           apiKey: _openaiKeyController.text,
           model: 'gpt-4o',
         ),
       );
+      String llmId = result.$1; // Extract the first value from the tuple
+      return llmId;
     } else {
       throw Exception('No API key provided for LLM');
     }
@@ -325,12 +331,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
 
     try {
-      // Use memory-efficient chat method with caching enabled
+      // Use memory-efficient chat method
       final response = await FlutterMCP.instance.chat(
         _llmId!,
         message,
         enableTools: true,
-        useCache: true, // Enable caching for faster subsequent responses
+        // Caching is managed internally by the LLM system
       );
 
       setState(() {

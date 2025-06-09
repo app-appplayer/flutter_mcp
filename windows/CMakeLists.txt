@@ -20,6 +20,14 @@ set(PLUGIN_NAME "flutter_mcp_plugin")
 list(APPEND PLUGIN_SOURCES
   "flutter_mcp_plugin.cpp"
   "flutter_mcp_plugin.h"
+  "tray/tray_icon_manager.cpp"
+  "tray/tray_icon_manager.h"
+  "notification/notification_manager.cpp"
+  "notification/notification_manager.h"
+  "storage/secure_storage_service.cpp"
+  "storage/secure_storage_service.h"
+  "background/background_service.cpp"
+  "background/background_service.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment

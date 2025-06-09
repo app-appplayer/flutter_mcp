@@ -15,7 +15,7 @@ class MCPScheduler {
   bool _isRunning = false;
 
   /// Logger
-  final MCPLogger _logger = MCPLogger('mcp.scheduler');
+  final Logger _logger = Logger('flutter_mcp.scheduler');
 
   /// Jobs in execution
   final Set<String> _runningJobs = {};
@@ -37,20 +37,20 @@ class MCPScheduler {
 
   /// Initialize the scheduler
   void initialize() {
-    _logger.debug('Scheduler initialization');
+    _logger.fine('Scheduler initialization');
   }
 
   /// Add a job
   String addJob(MCPJob job) {
     final jobId = job.id ?? 'job_${DateTime.now().millisecondsSinceEpoch}_${_jobs.length}';
     _jobs[jobId] = job.copyWith(id: jobId);
-    _logger.debug('Job added: $jobId, interval: ${job.interval}');
+    _logger.fine('Job added: $jobId, interval: ${job.interval}');
     return jobId;
   }
 
   /// Remove a job
   void removeJob(String jobId) {
-    _logger.debug('Removing job: $jobId');
+    _logger.fine('Removing job: $jobId');
     _jobs.remove(jobId);
   }
 
@@ -61,7 +61,7 @@ class MCPScheduler {
       return;
     }
 
-    _logger.debug('Starting scheduler');
+    _logger.fine('Starting scheduler');
 
     // Cancel any existing timer to avoid duplicates
     _timer?.cancel();
@@ -71,7 +71,7 @@ class MCPScheduler {
 
   /// Stop the scheduler
   void stop() {
-    _logger.debug('Stopping scheduler');
+    _logger.fine('Stopping scheduler');
 
     // Cancel the timer if it exists
     if (_timer != null) {
@@ -85,18 +85,32 @@ class MCPScheduler {
   /// Check jobs for execution
   void _checkJobs(Timer timer) {
     final now = DateTime.now();
+    _logger.fine('Checking jobs: ${_jobs.length} jobs registered');
 
     for (final entry in _jobs.entries.toList()) {
       final jobId = entry.key;
       final job = entry.value;
 
-      // Skip if job is already running (avoid concurrent execution)
-      if (_runningJobs.contains(jobId)) {
+      _logger.fine('Checking job $jobId: paused=${job.paused}, lastRun=${job.lastRun}, interval=${job.interval}');
+
+      // Skip if job is paused
+      if (job.paused) {
+        _logger.fine('Skipping paused job: $jobId');
         continue;
       }
 
-      if (job.lastRun == null ||
-          now.difference(job.lastRun!) >= job.interval) {
+      // Skip if job is already running (avoid concurrent execution)
+      if (_runningJobs.contains(jobId)) {
+        _logger.fine('Skipping running job: $jobId');
+        continue;
+      }
+
+      final shouldExecute = job.lastRun == null ||
+          now.difference(job.lastRun!) >= job.interval;
+      
+      _logger.fine('Job $jobId should execute: $shouldExecute');
+
+      if (shouldExecute) {
         // Execute job
         _executeJob(jobId, job, now);
       }
@@ -105,7 +119,12 @@ class MCPScheduler {
 
   /// Execute a job
   void _executeJob(String jobId, MCPJob job, DateTime now) {
-    _logger.debug('Executing job: $jobId');
+    _logger.fine('Executing job: $jobId');
+
+    // Skip if job is paused
+    if (job.paused) {
+      return;
+    }
 
     // Mark job as running
     _runningJobs.add(jobId);
@@ -120,25 +139,52 @@ class MCPScheduler {
 
     try {
       // Execute job task
-      job.task();
-
-      // Update execution record
-      execution.complete();
-
-      // Update last run time
-      _jobs[jobId] = job.copyWith(lastRun: now);
-
-      // Remove one-time job if needed
-      if (job.runOnce) {
-        _logger.debug('Removing one-time job: $jobId');
-        _jobs.remove(jobId);
+      final result = job.task();
+      
+      // If the result is a Future, handle it asynchronously
+      if (result is Future) {
+        result.then((_) {
+          // Update execution record
+          execution.complete();
+          
+          // Update last run time
+          _jobs[jobId] = job.copyWith(lastRun: now);
+          
+          // Remove one-time job if needed
+          if (job.runOnce) {
+            _logger.fine('Removing one-time job: $jobId');
+            _jobs.remove(jobId);
+          }
+          
+          // Mark job as not running anymore
+          _runningJobs.remove(jobId);
+        }).catchError((e, stackTrace) {
+          _logger.severe('Error executing async job: $jobId', e, stackTrace);
+          execution.fail(e.toString());
+          _runningJobs.remove(jobId);
+        });
+      } else {
+        // Synchronous task completed immediately
+        execution.complete();
+        
+        // Update last run time
+        _jobs[jobId] = job.copyWith(lastRun: now);
+        
+        // Remove one-time job if needed
+        if (job.runOnce) {
+          _logger.fine('Removing one-time job: $jobId');
+          _jobs.remove(jobId);
+        }
+        
+        // Mark job as not running anymore
+        _runningJobs.remove(jobId);
       }
     } catch (e, stackTrace) {
-      _logger.error('Error executing job: $jobId', e, stackTrace);
+      _logger.severe('Error executing job: $jobId', e, stackTrace);
 
       // Update execution record with error
       execution.fail(e.toString());
-    } finally {
+      
       // Mark job as not running anymore
       _runningJobs.remove(jobId);
     }
@@ -174,7 +220,7 @@ class MCPScheduler {
     final job = _jobs[jobId];
     if (job != null) {
       _jobs[jobId] = job.copyWith(paused: true);
-      _logger.debug('Job paused: $jobId');
+      _logger.fine('Job paused: $jobId');
     }
   }
 
@@ -183,7 +229,7 @@ class MCPScheduler {
     final job = _jobs[jobId];
     if (job != null) {
       _jobs[jobId] = job.copyWith(paused: false);
-      _logger.debug('Job resumed: $jobId');
+      _logger.fine('Job resumed: $jobId');
     }
   }
 
@@ -220,13 +266,21 @@ class MCPScheduler {
     }
   }
 
+  /// Manually trigger job checking (useful for testing)
+  void checkJobsNow() {
+    if (!_isRunning) {
+      throw StateError('Scheduler is not running');
+    }
+    _checkJobs(Timer(Duration.zero, () {})); // Dummy timer for the signature
+  }
+
   /// Clean up resources
   void dispose() {
     stop();
     _jobs.clear();
     _runningJobs.clear();
     _executionHistory.clear();
-    _logger.debug('Scheduler disposed');
+    _logger.fine('Scheduler disposed');
   }
 }
 

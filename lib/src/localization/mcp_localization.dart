@@ -6,7 +6,7 @@ import '../utils/exceptions.dart';
 
 /// MCP localization system for internationalization support
 class MCPLocalization {
-  final MCPLogger _logger = MCPLogger('mcp.localization');
+  final Logger _logger = Logger('flutter_mcp.localization');
 
   // Current locale
   Locale _currentLocale;
@@ -56,13 +56,13 @@ class MCPLocalization {
     Map<String, Map<String, String>>? translations,
   }) async {
     if (supportedLocales != null && supportedLocales.isNotEmpty) {
-      _logger.debug('Setting supported locales: ${supportedLocales.map((l) => l.toString()).join(', ')}');
+      _logger.fine('Setting supported locales: ${supportedLocales.map((l) => l.toString()).join(', ')}');
       _supportedLocales.clear();
       _supportedLocales.addAll(supportedLocales);
     }
 
     if (fallbackLocale != null) {
-      _logger.debug('Setting fallback locale: $fallbackLocale');
+      _logger.fine('Setting fallback locale: $fallbackLocale');
       _fallbackLocale = fallbackLocale;
 
       // Ensure fallback locale is in supported locales
@@ -74,7 +74,7 @@ class MCPLocalization {
     // Add translations directly if provided
     if (translations != null) {
       _translations.addAll(translations);
-      _logger.debug('Added ${translations.length} locale translations');
+      _logger.fine('Added ${translations.length} locale translations');
     }
 
     // Load translations from assets if path provided
@@ -89,12 +89,12 @@ class MCPLocalization {
       await setLocale(_currentLocale);
     }
 
-    _logger.debug('Localization initialized with ${_supportedLocales.length} locales');
+    _logger.fine('Localization initialized with ${_supportedLocales.length} locales');
   }
 
   /// Set the current locale
   Future<void> setLocale(Locale locale) async {
-    _logger.debug('Setting locale: $locale');
+    _logger.fine('Setting locale: $locale');
 
     // Find best matching locale
     final bestLocale = _findBestMatchingLocale(locale);
@@ -175,14 +175,14 @@ class MCPLocalization {
 
   /// Load translations from assets
   Future<void> loadTranslationsFromAssets(String path) async {
-    _logger.debug('Loading translations from assets: $path');
+    _logger.fine('Loading translations from assets: $path');
 
     try {
       for (final locale in _supportedLocales) {
         await _loadTranslationsForLocale(locale, path);
       }
     } catch (e, stackTrace) {
-      _logger.error('Failed to load translations from assets', e, stackTrace);
+      _logger.severe('Failed to load translations from assets', e, stackTrace);
       throw MCPConfigurationException('Failed to load translations: ${e.toString()}', e, stackTrace);
     }
   }
@@ -190,12 +190,12 @@ class MCPLocalization {
   /// Load translations for a specific locale
   Future<void> _loadTranslationsForLocale(Locale locale, [String? basePath]) async {
     final localeKey = _getLocaleKey(locale);
-    _logger.debug('Loading translations for locale: $localeKey');
+    _logger.fine('Loading translations for locale: $localeKey');
 
     try {
       // Skip if translations already loaded for this locale
       if (_translations.containsKey(localeKey)) {
-        _logger.debug('Translations already loaded for locale: $localeKey');
+        _logger.fine('Translations already loaded for locale: $localeKey');
         return;
       }
 
@@ -215,7 +215,7 @@ class MCPLocalization {
       // Store translations
       _translations[localeKey] = stringMap;
 
-      _logger.debug('Loaded ${stringMap.length} translations for $localeKey');
+      _logger.fine('Loaded ${stringMap.length} translations for $localeKey');
     } catch (e, stackTrace) {
       // Log but don't fail - just use fallback locale
       _logger.warning('Failed to load translations for locale: $localeKey', e, stackTrace);
@@ -271,7 +271,7 @@ class MCPLocalization {
     }
 
     _translations[localeKey]!.addAll(translations);
-    _logger.debug('Added ${translations.length} translations for $localeKey');
+    _logger.fine('Added ${translations.length} translations for $localeKey');
   }
 
   /// Get all available translation keys
@@ -289,7 +289,7 @@ class MCPLocalization {
   void addSupportedLocale(Locale locale) {
     if (!_supportedLocales.contains(locale)) {
       _supportedLocales.add(locale);
-      _logger.debug('Added supported locale: $locale');
+      _logger.fine('Added supported locale: $locale');
     }
   }
 

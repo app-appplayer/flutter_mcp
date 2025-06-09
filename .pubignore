@@ -1,0 +1,43 @@
+# Test output files
+test_output.txt
+test_results.txt
+
+# Coverage reports
+coverage/
+
+# Development/Internal documentation
+MCP_API_MIGRATION_REPORT.md
+NATIVE_IMPLEMENTATION_PLAN.md 
+PACKAGE_ANALYSIS_REPORT.md
+
+# Build outputs
+build/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Example app builds
+example/build/
+example/.dart_tool/
+example/.flutter-plugins
+example/.flutter-plugins-dependencies
+
+# Platform specific builds
+example/android/app/build/
+example/ios/build/
+example/macos/build/
+example/linux/build/
+example/windows/build/
+example/web/build/
+
+# Temporary files
+*.log
+*.tmp
+.DS_Store
+
+# Git-ignored mock files
+lib/plugin_mixin.dart
+test/mcp_plugin_test.mocks.dart
+test/mcp_secure_storage_test.mocks.dart

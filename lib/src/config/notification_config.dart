@@ -30,6 +30,17 @@ class NotificationConfig {
     this.enableVibration = true,
     this.priority = NotificationPriority.normal,
   });
+  
+  /// Convert to JSON
+  Map<String, dynamic> toJson() => {
+    'channelId': channelId,
+    'channelName': channelName,
+    'channelDescription': channelDescription,
+    'icon': icon,
+    'enableSound': enableSound,
+    'enableVibration': enableVibration,
+    'priority': priority.name,
+  };
 }
 
 /// Notification priority

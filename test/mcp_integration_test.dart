@@ -3,6 +3,7 @@ import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
 import 'package:flutter_mcp/src/platform/platform_services.dart';
+// Removed unused imports for batch_manager, health_monitor, and oauth_manager
 import 'package:mcp_llm/mcp_llm.dart' as llm;
 
 import 'mcp_integration_test.mocks.dart';
@@ -14,7 +15,7 @@ void main() {
 
   // Set up logging for tests
   setUp(() {
-    MCPLogger.setDefaultLevel(MCPLogLevel.debug);
+    FlutterMcpLogging.configure(level: Level.FINE, enableDebugLogging: true);
     mockPlatformServices = MockPlatformServices();
 
     // Mock platform services behavior
@@ -177,10 +178,7 @@ void main() {
       final serverId = await flutterMcp.createServer(
         name: 'Test Server',
         version: '1.0.0',
-        capabilities: ServerCapabilities(
-          tools: true,
-          resources: true,
-        ),
+        capabilities: ServerCapabilities(),
       );
 
       // Verify server was created

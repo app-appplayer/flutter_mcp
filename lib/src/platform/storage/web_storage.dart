@@ -11,7 +11,7 @@ import '../../utils/exceptions.dart';
 class WebStorageManager implements SecureStorageManager {
   final bool _useLocalStorage;
   final String _prefix;
-  final MCPLogger _logger = MCPLogger('mcp.web_storage');
+  final Logger _logger = Logger('flutter_mcp.web_storage');
 
   // Encryption key for storage security
   late String _encryptionKey;
@@ -40,7 +40,7 @@ class WebStorageManager implements SecureStorageManager {
 
   @override
   Future<void> initialize() async {
-    _logger.debug('Initializing web storage');
+    _logger.fine('Initializing web storage');
 
     // Check if we need to migrate from older storage format
     _needsMigration = _checkIfMigrationNeeded();
@@ -53,12 +53,12 @@ class WebStorageManager implements SecureStorageManager {
       await _migrateFromLegacyStorage();
     }
 
-    _logger.debug('Web storage initialized successfully');
+    _logger.fine('Web storage initialized successfully');
   }
 
   @override
   Future<void> saveString(String key, String value) async {
-    _logger.debug('Saving string to web storage: $key');
+    _logger.fine('Saving string to web storage: $key');
 
     try {
       // Encrypt value
@@ -81,7 +81,7 @@ class WebStorageManager implements SecureStorageManager {
       final storage = _getStorage();
       storage[_prefix + key] = jsonEncode(entry);
     } catch (e, stackTrace) {
-      _logger.error('Failed to save string to web storage', e, stackTrace);
+      _logger.severe('Failed to save string to web storage', e, stackTrace);
       throw MCPException(
           'Failed to save string to web storage: ${e.toString()}',
           e,
@@ -91,7 +91,7 @@ class WebStorageManager implements SecureStorageManager {
 
   @override
   Future<String?> readString(String key) async {
-    _logger.debug('Reading string from web storage: $key');
+    _logger.fine('Reading string from web storage: $key');
 
     try {
       final storage = _getStorage();
@@ -115,7 +115,7 @@ class WebStorageManager implements SecureStorageManager {
           // Decrypt value
           return _decrypt(entry['data'] as String);
         } catch (e) {
-          _logger.error('Failed to parse JSON value for key: $key', e);
+          _logger.severe('Failed to parse JSON value for key: $key', e);
           return null;
         }
       } else {
@@ -123,7 +123,7 @@ class WebStorageManager implements SecureStorageManager {
         return _decryptLegacy(value);
       }
     } catch (e, stackTrace) {
-      _logger.error('Failed to read string from web storage', e, stackTrace);
+      _logger.severe('Failed to read string from web storage', e, stackTrace);
       throw MCPException(
           'Failed to read string from web storage: ${e.toString()}',
           e,
@@ -133,14 +133,14 @@ class WebStorageManager implements SecureStorageManager {
 
   @override
   Future<bool> delete(String key) async {
-    _logger.debug('Deleting key from web storage: $key');
+    _logger.fine('Deleting key from web storage: $key');
 
     try {
       final storage = _getStorage();
       storage.remove(_prefix + key);
       return true;
     } catch (e, stackTrace) {
-      _logger.error('Failed to delete key from web storage', e, stackTrace);
+      _logger.severe('Failed to delete key from web storage', e, stackTrace);
       throw MCPException(
           'Failed to delete key from web storage: ${e.toString()}',
           e,
@@ -155,7 +155,7 @@ class WebStorageManager implements SecureStorageManager {
       return storage.containsKey(_prefix + key);
     } catch (e, stackTrace) {
       _logger.error(
-          'Failed to check if key exists in web storage', e, stackTrace);
+          'Failed to check if key exists in web storage: $e\nStack trace: $stackTrace');
       throw MCPException(
           'Failed to check if key exists in web storage: ${e.toString()}',
           e,
@@ -165,7 +165,7 @@ class WebStorageManager implements SecureStorageManager {
 
   @override
   Future<void> saveMap(String key, Map<String, dynamic> value) async {
-    _logger.debug('Saving map to web storage: $key');
+    _logger.fine('Saving map to web storage: $key');
 
     try {
       // Convert map to JSON string
@@ -191,7 +191,7 @@ class WebStorageManager implements SecureStorageManager {
       final storage = _getStorage();
       storage[_prefix + key] = jsonEncode(entry);
     } catch (e, stackTrace) {
-      _logger.error('Failed to save map to web storage', e, stackTrace);
+      _logger.severe('Failed to save map to web storage', e, stackTrace);
       throw MCPException(
           'Failed to save map to web storage: ${e.toString()}',
           e,
@@ -202,7 +202,7 @@ class WebStorageManager implements SecureStorageManager {
 
   @override
   Future<Map<String, dynamic>?> readMap(String key) async {
-    _logger.debug('Reading map from web storage: $key');
+    _logger.fine('Reading map from web storage: $key');
 
     try {
       final storage = _getStorage();
@@ -233,7 +233,7 @@ class WebStorageManager implements SecureStorageManager {
           // Parse the JSON map
           return jsonDecode(decrypted) as Map<String, dynamic>;
         } catch (e) {
-          _logger.error('Failed to parse map value for key: $key', e);
+          _logger.severe('Failed to parse map value for key: $key', e);
           return null;
         }
       } else {
@@ -245,12 +245,12 @@ class WebStorageManager implements SecureStorageManager {
           }
           return jsonDecode(legacy) as Map<String, dynamic>;
         } catch (e) {
-          _logger.error('Failed to parse legacy map for key: $key', e);
+          _logger.severe('Failed to parse legacy map for key: $key', e);
           return null;
         }
       }
     } catch (e, stackTrace) {
-      _logger.error('Failed to read map from web storage', e, stackTrace);
+      _logger.severe('Failed to read map from web storage', e, stackTrace);
       throw MCPException(
           'Failed to read map from web storage: ${e.toString()}',
           e,
@@ -261,7 +261,7 @@ class WebStorageManager implements SecureStorageManager {
 
   @override
   Future<void> clear() async {
-    _logger.debug('Clearing all web storage with prefix: $_prefix');
+    _logger.fine('Clearing all web storage with prefix: $_prefix');
 
     try {
       final storage = _getStorage();
@@ -280,7 +280,7 @@ class WebStorageManager implements SecureStorageManager {
         storage.remove(key);
       }
     } catch (e, stackTrace) {
-      _logger.error('Failed to clear web storage', e, stackTrace);
+      _logger.severe('Failed to clear web storage', e, stackTrace);
       throw MCPException(
           'Failed to clear web storage: ${e.toString()}', e, stackTrace);
     }
@@ -301,7 +301,7 @@ class WebStorageManager implements SecureStorageManager {
 
       return allKeys;
     } catch (e, stackTrace) {
-      _logger.error('Failed to get keys from web storage', e, stackTrace);
+      _logger.severe('Failed to get keys from web storage', e, stackTrace);
       throw MCPException('Failed to get keys from web storage: ${e.toString()}',
           e, stackTrace);
     }
@@ -364,7 +364,7 @@ class WebStorageManager implements SecureStorageManager {
 
   /// Migrate data from legacy storage format
   Future<void> _migrateFromLegacyStorage() async {
-    _logger.debug('Migrating from legacy storage format');
+    _logger.fine('Migrating from legacy storage format');
 
     final storage = _getStorage();
     final legacyKeys = <String>[];
@@ -395,7 +395,7 @@ class WebStorageManager implements SecureStorageManager {
           }
         }
       } catch (e) {
-        _logger.error('Failed to migrate legacy key: $key', e);
+        _logger.severe('Failed to migrate legacy key: $key', e);
       }
     }
 
@@ -474,7 +474,7 @@ class WebStorageManager implements SecureStorageManager {
       // Convert bytes back to string
       return utf8.decode(decrypted);
     } catch (e) {
-      _logger.error('Failed to decrypt value', e);
+      _logger.severe('Failed to decrypt value', e);
       return null;
     }
   }
@@ -486,8 +486,19 @@ class WebStorageManager implements SecureStorageManager {
       final decoded = base64Decode(encryptedValue);
       return utf8.decode(decoded);
     } catch (e) {
-      _logger.error('Failed to decrypt legacy value', e);
+      _logger.severe('Failed to decrypt legacy value', e);
       return null;
+    }
+  }
+
+  @override
+  Future<Set<String>> getAllKeys() async {
+    try {
+      final keys = await getKeys();
+      return keys.toSet();
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to get all keys from web storage', e, stackTrace);
+      throw MCPException('Failed to get all keys from web storage: ${e.toString()}', e, stackTrace);
     }
   }
 }

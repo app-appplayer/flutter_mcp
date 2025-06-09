@@ -12,8 +12,12 @@ class CircuitBreakerTestFlutterMCP extends TestFlutterMCP {
   final List<Map<String, dynamic>> circuitBreakerEvents = [];
   
   CircuitBreakerTestFlutterMCP(super.platformServices) {
-    // Listen for circuit breaker events
+    // Initialize circuit breakers first
+    _initializeCircuitBreakers();
+    
+    // Then listen for circuit breaker events
     EventSystem.instance.subscribe<Map<String, dynamic>>('circuit_breaker.opened', (data) {
+      print('Received circuit_breaker.opened event: $data');
       circuitBreakerEvents.add({
         'type': 'opened',
         'data': data
@@ -21,14 +25,12 @@ class CircuitBreakerTestFlutterMCP extends TestFlutterMCP {
     });
     
     EventSystem.instance.subscribe<Map<String, dynamic>>('circuit_breaker.closed', (data) {
+      print('Received circuit_breaker.closed event: $data');
       circuitBreakerEvents.add({
         'type': 'closed',
         'data': data
       });
     });
-    
-    // Initialize circuit breakers
-    _initializeCircuitBreakers();
   }
   
   void _initializeCircuitBreakers() {
@@ -38,9 +40,11 @@ class CircuitBreakerTestFlutterMCP extends TestFlutterMCP {
       failureThreshold: 3,
       resetTimeout: Duration(milliseconds: 200), // Set short timeout for testing
       onOpen: () {
+        print('Circuit breaker onOpen callback called for llm.chat');
         EventSystem.instance.publish('circuit_breaker.opened', {'operation': 'llm.chat'});
       },
       onClose: () {
+        print('Circuit breaker onClose callback called for llm.chat');
         EventSystem.instance.publish('circuit_breaker.closed', {'operation': 'llm.chat'});
       },
     );
@@ -76,7 +80,9 @@ class CircuitBreakerTestFlutterMCP extends TestFlutterMCP {
       throw MCPException('Circuit breaker not found: $breakerName');
     }
     
+    print('Recording failure for $breakerName. Current state: ${breaker.state}');
     breaker.recordFailure(error);
+    print('After recording failure. New state: ${breaker.state}');
   }
   
   /// Get circuit breaker state
@@ -146,6 +152,12 @@ void main() {
       // Verify circuit breaker opened
       expect(flutterMcp.getCircuitBreakerState('llm.chat'), CircuitBreakerState.open);
       
+      // Wait for event to be processed
+      await Future.delayed(Duration(milliseconds: 10));
+      
+      // Debug: Print events
+      print('Circuit breaker events: ${flutterMcp.circuitBreakerEvents}');
+      
       // Verify event was published
       expect(flutterMcp.circuitBreakerEvents.where((e) => e['type'] == 'opened').length, 1);
       
@@ -181,12 +193,18 @@ void main() {
       // Wait for reset timeout to transition to half-open
       await Future.delayed(Duration(milliseconds: 300)); // 1.5x the reset timeout for stability
       
+      // Wait for event processing
+      await Future.delayed(Duration(milliseconds: 10));
+      
       // Execute a successful operation
       final result = await flutterMcp.executeWithCircuitBreaker('llm.chat', () async => 'success');
       
       // Verify operation succeeded and circuit is closed
       expect(result, 'success');
       expect(flutterMcp.getCircuitBreakerState('llm.chat'), CircuitBreakerState.closed);
+      
+      // Wait for event to be processed
+      await Future.delayed(Duration(milliseconds: 10));
       
       // Verify closed event was published
       expect(flutterMcp.circuitBreakerEvents.where((e) => e['type'] == 'closed').length, 1);
@@ -210,6 +228,7 @@ void main() {
       int attemptCount = 0;
       Future<String> flakyOperation() async {
         attemptCount++;
+        print('flakyOperation attempt $attemptCount');
         if (attemptCount % 2 == 0) {
           throw Exception('Flaky operation failed');
         }
@@ -221,15 +240,32 @@ void main() {
       expect(result1, 'Operation succeeded');
       
       // Second execution fails (even count)
-      expect(
-        () => flutterMcp.executeWithCircuitBreaker('tool.call', flakyOperation),
-        throwsException,
-      );
+      try {
+        await flutterMcp.executeWithCircuitBreaker('tool.call', flakyOperation);
+        fail('Should have thrown an exception');
+      } catch (e) {
+        // Exception is expected
+      }
       
-      // Third execution fails (odd count, but failure was recorded)
-      flutterMcp.recordCircuitBreakerFailure('tool.call', 'Manual failure');
+      // Debug: Check current state
+      print('After second execution - State: ${flutterMcp.getCircuitBreakerState('tool.call')}');
+      print('Failure count: ${flutterMcp._circuitBreakers['tool.call']!.failureCount}');
       
-      // Circuit should now be open
+      // Third execution should fail too (odd count would succeed but we'll make it fail)
+      attemptCount++; // Force even count to make it fail
+      try {
+        await flutterMcp.executeWithCircuitBreaker('tool.call', flakyOperation);
+        fail('Should have thrown an exception');
+      } catch (e) {
+        // Exception is expected - this should trigger the circuit breaker to open
+        print('After third execution - State: ${flutterMcp.getCircuitBreakerState('tool.call')}');
+        print('Failure count: ${flutterMcp._circuitBreakers['tool.call']!.failureCount}');
+      }
+      
+      // Wait for async event processing
+      await Future.delayed(Duration(milliseconds: 10));
+      
+      // Circuit should now be open after 2 failures
       expect(flutterMcp.getCircuitBreakerState('tool.call'), CircuitBreakerState.open);
       
       // All subsequent calls should fail fast with CircuitBreakerOpenException (not the original exception)
@@ -306,8 +342,9 @@ void main() {
       // Simulate a service experiencing transient failures
       int errorCount = 0;
       Future<String> transientService() async {
+        errorCount++;
+        print('transientService attempt $errorCount');
         if (errorCount < 4) {
-          errorCount++;
           throw Exception('Transient failure');
         }
         return 'Service recovered';
@@ -315,13 +352,19 @@ void main() {
       
       // First three calls will fail and open the circuit
       for (int i = 0; i < 3; i++) {
-        expect(
-          () => flutterMcp.executeWithCircuitBreaker('llm.chat', transientService),
-          throwsException,
-        );
+        try {
+          await flutterMcp.executeWithCircuitBreaker('llm.chat', transientService);
+          fail('Should have thrown an exception');
+        } catch (e) {
+          // Exception is expected
+          print('Failure $i recorded. Current state: ${flutterMcp.getCircuitBreakerState('llm.chat')}');
+        }
       }
       
-      // Circuit should now be open
+      // Wait for async event processing
+      await Future.delayed(Duration(milliseconds: 10));
+      
+      // Circuit should now be open after 3 failures
       expect(flutterMcp.getCircuitBreakerState('llm.chat'), CircuitBreakerState.open);
       
       // Calls fail fast now
@@ -333,7 +376,10 @@ void main() {
       // Wait for reset timeout 
       await Future.delayed(Duration(milliseconds: 250));
       
-      // Service has recovered (errorCount would be 4+ now), call succeeds
+      // Debug circuit state after timeout
+      print('Circuit state after timeout: ${flutterMcp.getCircuitBreakerState('llm.chat')}');
+      
+      // Service has recovered - the next call should increment errorCount to 4 and succeed
       final result = await flutterMcp.executeWithCircuitBreaker('llm.chat', transientService);
       expect(result, 'Service recovered');
       

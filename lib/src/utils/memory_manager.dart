@@ -1,14 +1,18 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import '../utils/logger.dart';
 import '../utils/performance_monitor.dart';
 import '../utils/event_system.dart';
+import '../config/app_config.dart';
+import '../events/event_models.dart';
+import 'web_memory_monitor.dart';
 
 /// Memory management utility for optimizing memory usage in LLM applications
 class MemoryManager {
-  static final MCPLogger _logger = MCPLogger('mcp.memory_manager');
+  static final Logger _logger = Logger('flutter_mcp.memory_manager');
 
   // Singleton instance
   static final MemoryManager _instance = MemoryManager._internal();
@@ -17,22 +21,27 @@ class MemoryManager {
   static MemoryManager get instance => _instance;
 
   // Private constructor
-  MemoryManager._internal();
+  MemoryManager._internal() {
+    // Use new typed configuration
+    final memoryConfig = AppConfig.instance.getMemoryConfig();
+    _monitoringInterval = memoryConfig.monitoringInterval;
+    _maxReadings = memoryConfig.maxReadings;
+  }
 
   // Configuration
   bool _isMonitoring = false;
-  Duration _monitoringInterval = Duration(seconds: 30);
+  late Duration _monitoringInterval;
   int? _highMemoryThresholdMB;
   Timer? _monitoringTimer;
 
   // Memory stats
   int _peakMemoryUsageMB = 0;
   int _currentMemoryUsageMB = 0;
-  List<int> _recentMemoryReadings = [];
-  int _maxReadings = 10;
+  final List<int> _recentMemoryReadings = [];
+  late int _maxReadings;
 
   // Callback when memory threshold is exceeded
-  List<Future<void> Function()> _highMemoryCallbacks = [];
+  final List<Future<void> Function()> _highMemoryCallbacks = [];
 
   /// Initialize memory manager
   void initialize({
@@ -55,7 +64,7 @@ class MemoryManager {
   void startMemoryMonitoring() {
     if (_isMonitoring) return;
 
-    _logger.debug('Starting memory monitoring with interval: ${_monitoringInterval.inSeconds}s');
+    _logger.fine('Starting memory monitoring with interval: ${_monitoringInterval.inSeconds}s');
 
     _monitoringTimer = Timer.periodic(_monitoringInterval, (_) {
       _checkMemoryUsage();
@@ -71,7 +80,7 @@ class MemoryManager {
   void stopMemoryMonitoring() {
     if (!_isMonitoring) return;
 
-    _logger.debug('Stopping memory monitoring');
+    _logger.fine('Stopping memory monitoring');
 
     _monitoringTimer?.cancel();
     _monitoringTimer = null;
@@ -114,18 +123,29 @@ class MemoryManager {
       capacity: _highMemoryThresholdMB?.toDouble(),
     );
 
-    _logger.debug('Current memory usage: ${memoryUsageMB}MB (Peak: ${_peakMemoryUsageMB}MB)');
+    _logger.fine('Current memory usage: ${memoryUsageMB}MB (Peak: ${_peakMemoryUsageMB}MB)');
 
     // Check threshold
     if (_highMemoryThresholdMB != null &&
         memoryUsageMB > _highMemoryThresholdMB!) {
       _logger.warning('High memory usage detected: ${memoryUsageMB}MB exceeds threshold of ${_highMemoryThresholdMB}MB');
 
-      // Publish memory warning event
+      // Publish memory warning event (both typed and legacy)
+      final memoryEvent = MemoryEvent(
+        currentMB: memoryUsageMB,
+        thresholdMB: _highMemoryThresholdMB!,
+        peakMB: _peakMemoryUsageMB,
+      );
+      
+      // New type-safe event
+      EventSystem.instance.publishTyped<MemoryEvent>(memoryEvent);
+      
+      // Legacy event for backward compatibility
       EventSystem.instance.publish('memory.high', {
         'currentMB': memoryUsageMB,
         'thresholdMB': _highMemoryThresholdMB,
         'peakMB': _peakMemoryUsageMB,
+        'timestamp': DateTime.now().toIso8601String(),
       });
 
       // Execute callbacks
@@ -133,7 +153,7 @@ class MemoryManager {
         try {
           await callback();
         } catch (e) {
-          _logger.error('Error in high memory callback', e);
+          _logger.severe('Error in high memory callback', e);
         }
       }
 
@@ -144,28 +164,70 @@ class MemoryManager {
 
   /// Estimate memory usage (implementation depends on platform)
   Future<int> _estimateMemoryUsage() async {
-    // For a real implementation, this would use platform-specific
-    // methods to obtain memory information.
-    // This is a placeholder implementation.
-
-    // In a real app, you'd typically use:
-    // - For web: performance.memory API
-    // - For mobile: method channels to query native memory APIs
-    // - For desktop: platform-specific libraries via FFI
-
-    // For this example, we'll simulate memory growth over time
-    // with occasional "garbage collection" drops
-
+    try {
+      // Get actual memory usage for each platform
+      if (kIsWeb) {
+        return await _getWebMemoryUsage();
+      } else if (io.Platform.isAndroid || io.Platform.isIOS) {
+        return await _getMobileMemoryUsage();
+      } else if (io.Platform.isWindows || io.Platform.isMacOS || io.Platform.isLinux) {
+        return await _getDesktopMemoryUsage();
+      }
+      
+      // Fallback to simulation if platform-specific implementation fails
+      return _simulateMemoryUsage();
+    } catch (e) {
+      _logger.warning('Failed to get actual memory usage, using simulation: $e');
+      return _simulateMemoryUsage();
+    }
+  }
+  
+  /// Get memory usage on web platform
+  Future<int> _getWebMemoryUsage() async {
+    // Use the dedicated web memory monitor
+    try {
+      return await WebMemoryMonitor.instance.getCurrentMemoryUsage();
+    } catch (e) {
+      _logger.warning('Failed to get web memory usage, using simulation: $e');
+      return _simulateMemoryUsage();
+    }
+  }
+  
+  /// Get memory usage on mobile platforms
+  Future<int> _getMobileMemoryUsage() async {
+    // On mobile, we can use ProcessInfo to get RSS (Resident Set Size)
+    if (!kIsWeb) {
+      final processInfo = io.ProcessInfo.currentRss;
+      // Convert bytes to MB
+      return (processInfo / (1024 * 1024)).round();
+    }
+    return _simulateMemoryUsage();
+  }
+  
+  /// Get memory usage on desktop platforms
+  Future<int> _getDesktopMemoryUsage() async {
+    // On desktop, we can also use ProcessInfo
+    if (!kIsWeb) {
+      final processInfo = io.ProcessInfo.currentRss;
+      // Convert bytes to MB
+      return (processInfo / (1024 * 1024)).round();
+    }
+    return _simulateMemoryUsage();
+  }
+  
+  /// Simulate memory usage as fallback
+  int _simulateMemoryUsage() {
+    final memoryConfig = AppConfig.instance.getMemoryConfig();
     if (_recentMemoryReadings.isEmpty) {
-      return 100; // Start at 100MB
+      return memoryConfig.initialSimulationMB;
     }
 
     final lastReading = _recentMemoryReadings.last;
-    final shouldGC = math.Random().nextDouble() < 0.2; // 20% chance of GC
+    final shouldGC = math.Random().nextDouble() < memoryConfig.gcProbability;
 
     if (shouldGC) {
       // Simulate GC reducing memory
-      return math.max(100, lastReading - math.Random().nextInt(50));
+      return math.max(memoryConfig.initialSimulationMB, lastReading - math.Random().nextInt(50));
     } else {
       // Simulate memory growth
       return lastReading + math.Random().nextInt(20);
@@ -178,13 +240,14 @@ class MemoryManager {
 
     // This is a hint for the VM to collect garbage soon
     // Note: This is not guaranteed to run immediately and is just a hint
-    _logger.debug('Suggesting garbage collection');
+    _logger.fine('Suggesting garbage collection');
 
     if (kDebugMode) {
       // In debug mode, we can often trigger more aggressive GC
       // by running operations known to stress the memory system
 
-      final largeList = List<int>.filled(10000, 0); // Create some garbage
+      final memoryConfig = AppConfig.instance.getMemoryConfig();
+      final largeList = List<int>.filled(memoryConfig.gcHintArraySize, 0); // Create some garbage
       for (int i = 0; i < largeList.length; i++) {
         largeList[i] = i; // Touch all elements
       }
@@ -196,9 +259,10 @@ class MemoryManager {
   static Future<List<R>> processInChunks<T, R>({
     required List<T> items,
     required Future<R> Function(T item) processItem,
-    int chunkSize = 10,
+    int? chunkSize,
     Duration? pauseBetweenChunks,
   }) async {
+    chunkSize ??= 10; // Keep default for backward compatibility
     final results = <R>[];
 
     for (int i = 0; i < items.length; i += chunkSize) {
@@ -224,10 +288,12 @@ class MemoryManager {
   static Future<List<R>> processInParallelChunks<T, R>({
     required List<T> items,
     required Future<R> Function(T item) processItem,
-    int maxConcurrent = 3,
-    int chunkSize = 10,
+    int? maxConcurrent,
+    int? chunkSize,
     Duration? pauseBetweenChunks,
   }) async {
+    maxConcurrent ??= 3; // Keep default for backward compatibility
+    chunkSize ??= 10; // Keep default for backward compatibility
     final results = <R>[];
     final semaphore = Semaphore(maxConcurrent);
 
@@ -262,9 +328,10 @@ class MemoryManager {
   static Stream<R> streamInChunks<T, R>({
     required List<T> items,
     required Future<R> Function(T item) processItem,
-    int chunkSize = 10,
+    int? chunkSize,
     Duration? pauseBetweenChunks,
   }) async* {
+    chunkSize ??= 10; // Keep default for backward compatibility
     for (int i = 0; i < items.length; i += chunkSize) {
       final end = math.min(i + chunkSize, items.length);
       final chunk = items.sublist(i, end);
@@ -297,6 +364,12 @@ class MemoryManager {
       'isMonitoring': _isMonitoring,
       'monitoringIntervalSeconds': _monitoringInterval.inSeconds,
     };
+  }
+
+  /// Perform memory cleanup by suggesting garbage collection
+  void performMemoryCleanup() {
+    _logger.info('Performing memory cleanup');
+    _tryForcedGarbageCollection();
   }
 
   /// Dispose resources
@@ -370,7 +443,7 @@ class MemoryAwareCache<K, V> {
     if (_entryTTL == null) return false;
 
     final now = DateTime.now();
-    return now.difference(entry.insertedAt) > _entryTTL;
+    return now.difference(entry.insertedAt) > _entryTTL!;
   }
 
   /// Check if we need to evict entries
@@ -429,7 +502,7 @@ class MemoryAwareCache<K, V> {
       _cache.remove(key);
     }
 
-    MCPLogger('mcp.memory_cache').info('Cache reduced from $currentSize to ${_cache.length} items due to high memory');
+    Logger('flutter_mcp.memory_cache').info('Cache reduced from $currentSize to ${_cache.length} items due to high memory');
   }
 
   /// Current cache size

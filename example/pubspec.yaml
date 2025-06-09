@@ -3,6 +3,13 @@ description: A demo application for Flutter MCP integration.
 publish_to: 'none'
 version: 1.0.0+1
 
+# Example of custom foreground service types configuration
+flutter_mcp:
+  android:
+    foreground_service_types:
+      - dataSync
+      - location
+
 environment:
   sdk: ">=2.17.0 <3.0.0"
   flutter: ">=3.0.0"
@@ -19,13 +26,18 @@ dependencies:
   cupertino_icons: ^1.0.5
   shared_preferences: ^2.2.0
   path_provider: ^2.1.0
+  logging: ^1.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.2
 
+dependency_overrides:
+  mcp_server:
+    path: ../../mcp_server
+  mcp_client:
+    path: ../../mcp_client
+
 flutter:
   uses-material-design: true
-  assets:
-    - assets/images/

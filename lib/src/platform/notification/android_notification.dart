@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
 import '../../utils/exceptions.dart';
@@ -7,8 +7,11 @@ import 'notification_manager.dart';
 
 /// Android notification manager implementation
 class AndroidNotificationManager implements NotificationManager {
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
-  final MCPLogger _logger = MCPLogger('mcp.android_notification');
+  static const MethodChannel _channel = MethodChannel('flutter_mcp');
+  static const EventChannel _eventChannel = EventChannel('flutter_mcp/events');
+  
+  final Logger _logger = Logger('flutter_mcp.android_notification');
+  StreamSubscription? _eventSubscription;
 
   // Store notification data for later retrieval
   final Map<String, Map<String, dynamic>> _notificationData = {};
@@ -32,7 +35,7 @@ class AndroidNotificationManager implements NotificationManager {
 
   @override
   Future<void> initialize(NotificationConfig? config) async {
-    _logger.debug('Android notification manager initializing');
+    _logger.fine('Android notification manager initializing');
 
     // Apply configuration if provided
     if (config != null) {
@@ -45,33 +48,59 @@ class AndroidNotificationManager implements NotificationManager {
       _defaultIcon = config.icon;
     }
 
-    // Android notification settings
-    final AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings(_defaultIcon ?? 'app_icon');
-
-    final InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
+    // Initialize event listener for notification responses
+    _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
+      (dynamic event) {
+        if (event is Map) {
+          _handleEvent(Map<String, dynamic>.from(event));
+        }
+      },
+      onError: (error) {
+        _logger.severe('Event channel error', error);
+      },
     );
 
     try {
-      // Initialize the notifications plugin
-      final bool? initialized = await _notificationsPlugin.initialize(
-        initializationSettings,
-        onDidReceiveNotificationResponse: _onNotificationResponse,
-        onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationResponse,
-      );
+      // Initialize native notification system
+      await _channel.invokeMethod('configureNotifications', {
+        'channelId': _channelId,
+        'channelName': _channelName,
+        'channelDescription': _channelDescription,
+        'enableSound': _soundEnabled,
+        'enableVibration': _vibrationEnabled,
+        'priority': _defaultPriority.index,
+        'icon': _defaultIcon,
+      });
 
-      if (initialized == true) {
-        _logger.debug('Android notification manager initialized successfully');
-      } else {
-        _logger.warning('Android notification manager initialization returned: $initialized');
+      // Request notification permission
+      final hasPermission = await _channel.invokeMethod<bool>('requestNotificationPermission');
+      if (hasPermission != true) {
+        _logger.warning('Notification permission not granted');
       }
 
-      // Create notification channel
-      await _createNotificationChannel();
+      _logger.fine('Android notification manager initialized successfully');
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize Android notification manager', e, stackTrace);
+      _logger.severe('Failed to initialize Android notification manager', e, stackTrace);
       throw MCPException('Failed to initialize Android notification manager: ${e.toString()}', e, stackTrace);
+    }
+  }
+
+  void _handleEvent(Map<String, dynamic> event) {
+    final type = event['type'] as String?;
+    final data = event['data'] as Map<String, dynamic>? ?? {};
+    
+    _logger.fine('Received notification event: $type');
+    
+    if (type == 'notificationEvent') {
+      final action = data['action'] as String?;
+      final notificationId = data['notificationId'] as String?;
+      
+      if (action == 'click' && notificationId != null) {
+        _handleNotificationTap(notificationId);
+      } else if (action == 'dismiss' && notificationId != null) {
+        _activeNotifications.remove(notificationId);
+        _notificationData.remove(notificationId);
+      }
     }
   }
 
@@ -83,101 +112,71 @@ class AndroidNotificationManager implements NotificationManager {
     String id = 'mcp_notification',
     Map<String, dynamic>? additionalData,
   }) async {
-    _logger.debug('Showing Android notification: $title, ID: $id');
+    _logger.fine('Showing Android notification: $title, ID: $id');
 
     try {
       // Store additional data for later retrieval
       final notificationData = additionalData ?? {};
+      notificationData['title'] = title;
+      notificationData['body'] = body;
       _notificationData[id] = notificationData;
 
-      // Configure Android-specific details
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
-        importance: _getImportance(_defaultPriority),
-        priority: _getPriority(_defaultPriority),
-        icon: icon ?? _defaultIcon,
-        enableVibration: _vibrationEnabled,
-        enableLights: true,
-        playSound: _soundEnabled,
-        groupKey: 'mcp_notifications',
-        setAsGroupSummary: false,
-        channelShowBadge: true,
-        autoCancel: false,
-      );
-
-      // Platform-specific details
-      final NotificationDetails platformDetails = NotificationDetails(
-        android: androidDetails,
-      );
-
-      // Generate unique ID by hashing the ID string
-      final int notificationId = id.hashCode;
-
-      // Show the notification
-      await _notificationsPlugin.show(
-        notificationId,
-        title,
-        body,
-        platformDetails,
-        payload: id,
-      );
+      // Show notification using native implementation
+      await _channel.invokeMethod('showNotification', {
+        'id': id,
+        'title': title,
+        'body': body,
+        'icon': icon ?? _defaultIcon,
+        'priority': _defaultPriority.index,
+        'enableSound': _soundEnabled,
+        'enableVibration': _vibrationEnabled,
+        'channelId': _channelId,
+        'additionalData': additionalData,
+      });
 
       // Add to active notifications
       _activeNotifications.add(id);
 
-      // Update group summary if we have multiple notifications
-      if (_activeNotifications.length > 1) {
-        await _updateGroupSummary();
-      }
-
-      _logger.debug('Android notification shown successfully: $id');
+      _logger.fine('Android notification shown successfully: $id');
     } catch (e, stackTrace) {
-      _logger.error('Failed to show Android notification', e, stackTrace);
+      _logger.severe('Failed to show Android notification', e, stackTrace);
       throw MCPException('Failed to show Android notification: ${e.toString()}', e, stackTrace);
     }
   }
 
   @override
   Future<void> hideNotification(String id) async {
-    _logger.debug('Hiding Android notification: $id');
+    _logger.fine('Hiding Android notification: $id');
 
     try {
-      // Cancel the notification by its ID hash
-      await _notificationsPlugin.cancel(id.hashCode);
+      // Cancel the notification using native implementation
+      await _channel.invokeMethod('cancelNotification', {
+        'id': id,
+      });
 
       // Remove from active notifications and data store
       _activeNotifications.remove(id);
       _notificationData.remove(id);
 
-      // Update group summary if we still have notifications
-      if (_activeNotifications.length > 1) {
-        await _updateGroupSummary();
-      } else if (_activeNotifications.isEmpty) {
-        // Cancel the summary if no more notifications
-        await _notificationsPlugin.cancel(0);
-      }
-
-      _logger.debug('Android notification hidden successfully: $id');
+      _logger.fine('Android notification hidden successfully: $id');
     } catch (e, stackTrace) {
-      _logger.error('Failed to hide Android notification', e, stackTrace);
+      _logger.severe('Failed to hide Android notification', e, stackTrace);
       throw MCPException('Failed to hide Android notification: ${e.toString()}', e, stackTrace);
     }
   }
 
   /// Clear all active notifications
   Future<void> clearAllNotifications() async {
-    _logger.debug('Clearing all Android notifications');
+    _logger.fine('Clearing all Android notifications');
 
     try {
-      await _notificationsPlugin.cancelAll();
+      await _channel.invokeMethod('cancelAllNotifications');
       _activeNotifications.clear();
       _notificationData.clear();
 
-      _logger.debug('All Android notifications cleared successfully');
+      _logger.fine('All Android notifications cleared successfully');
     } catch (e, stackTrace) {
-      _logger.error('Failed to clear all Android notifications', e, stackTrace);
+      _logger.severe('Failed to clear all Android notifications', e, stackTrace);
       throw MCPException('Failed to clear all Android notifications: ${e.toString()}', e, stackTrace);
     }
   }
@@ -190,117 +189,6 @@ class AndroidNotificationManager implements NotificationManager {
   /// Unregister a notification click handler
   void unregisterClickHandler(String id) {
     _clickHandlers.remove(id);
-  }
-
-  /// Create notification channel for Android 8.0+
-  Future<void> _createNotificationChannel() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-    _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-
-    if (androidPlugin != null) {
-      // Create high importance channel for normal notifications
-      await androidPlugin.createNotificationChannel(
-        AndroidNotificationChannel(
-          _channelId,
-          _channelName,
-          description: _channelDescription,
-          importance: Importance.high,
-          enableVibration: _vibrationEnabled,
-          enableLights: true,
-          playSound: _soundEnabled,
-        ),
-      );
-
-      // Create a low importance channel for summary notifications
-      await androidPlugin.createNotificationChannel(
-        AndroidNotificationChannel(
-          '${_channelId}_summary',
-          '$_channelName Summary',
-          description: 'Summary notifications',
-          importance: Importance.low,
-        ),
-      );
-    }
-  }
-
-  /// Update the group summary notification
-  Future<void> _updateGroupSummary() async {
-    if (_activeNotifications.isEmpty) return;
-
-    try {
-      // Create summary details
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        '${_channelId}_summary',
-        '$_channelName Summary',
-        channelDescription: 'Summary notifications',
-        importance: Importance.low,
-        priority: Priority.low,
-        groupKey: 'mcp_notifications',
-        setAsGroupSummary: true,
-        styleInformation: InboxStyleInformation(
-          _activeNotifications.map((id) =>
-          _notificationData[id]?['title'] as String? ?? 'Notification').toList(),
-          contentTitle: '${_activeNotifications.length} notifications',
-          summaryText: '${_activeNotifications.length} new messages',
-        ),
-      );
-
-      final NotificationDetails platformDetails = NotificationDetails(
-        android: androidDetails,
-      );
-
-      // Show summary notification
-      await _notificationsPlugin.show(
-        0, // Use ID 0 for summary
-        '${_activeNotifications.length} notifications',
-        'You have ${_activeNotifications.length} active notifications',
-        platformDetails,
-      );
-    } catch (e) {
-      _logger.error('Failed to update notification group summary', e);
-    }
-  }
-
-  /// Convert priority to Android importance
-  Importance _getImportance(NotificationPriority priority) {
-    switch (priority) {
-      case NotificationPriority.max:
-        return Importance.max;
-      case NotificationPriority.high:
-        return Importance.high;
-      case NotificationPriority.normal:
-        return Importance.defaultImportance;
-      case NotificationPriority.low:
-        return Importance.low;
-      case NotificationPriority.min:
-        return Importance.min;
-    }
-  }
-
-  /// Convert priority to Android priority
-  Priority _getPriority(NotificationPriority priority) {
-    switch (priority) {
-      case NotificationPriority.max:
-        return Priority.max;
-      case NotificationPriority.high:
-        return Priority.high;
-      case NotificationPriority.normal:
-        return Priority.defaultPriority;
-      case NotificationPriority.low:
-        return Priority.low;
-      case NotificationPriority.min:
-        return Priority.min;
-    }
-  }
-
-  /// Notification response callback
-  void _onNotificationResponse(NotificationResponse response) {
-    final String? payload = response.payload;
-    _logger.debug('Android notification tapped: $payload');
-
-    if (payload != null) {
-      _handleNotificationTap(payload);
-    }
   }
 
   /// Handle notification tap
@@ -319,11 +207,17 @@ class AndroidNotificationManager implements NotificationManager {
       _clickHandlers['default']!(id, data);
     }
   }
-}
 
-/// Background notification handler
-@pragma('vm:entry-point')
-void _onBackgroundNotificationResponse(NotificationResponse response) {
-  // Background processing can be added here if needed
-  // This function needs to be a top-level function
+  /// Get active notification count
+  int get activeNotificationCount => _activeNotifications.length;
+
+  /// Check if a notification is active
+  bool isNotificationActive(String id) => _activeNotifications.contains(id);
+
+  void dispose() {
+    _eventSubscription?.cancel();
+    _clickHandlers.clear();
+    _notificationData.clear();
+    _activeNotifications.clear();
+  }
 }

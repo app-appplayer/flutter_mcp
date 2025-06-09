@@ -13,7 +13,7 @@ import 'src/utils/exceptions.dart';
 /// A web implementation of the FlutterMcpPlatform of the FlutterMcp plugin.
 class FlutterMcpWeb extends FlutterMcpPlatform {
   // Logger
-  final MCPLogger _logger = MCPLogger('flutter_mcp_web');
+  final Logger _logger = Logger('flutter_mcp.flutter_mcp_web');
 
   // Web-specific services
   WebBackgroundService? _backgroundService;
@@ -37,7 +37,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
       final version = web.window.navigator.userAgent;
       return version;
     } catch (e, stackTrace) {
-      _logger.error('Failed to get platform version', e, stackTrace);
+      _logger.severe('Failed to get platform version', e, stackTrace);
       return 'Unknown';
     }
   }
@@ -89,24 +89,24 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
       return;
     }
 
-    _logger.debug('Initializing FlutterMCP for web platform');
+    _logger.fine('Initializing FlutterMCP for web platform');
 
     try {
       // Initialize platform services
       if (config.useBackgroundService) {
-        _logger.debug('Initializing web background service');
+        _logger.fine('Initializing web background service');
         _backgroundService = WebBackgroundService();
         await _backgroundService!.initialize(config.background);
       }
 
       if (config.useNotification) {
-        _logger.debug('Initializing web notification manager');
+        _logger.fine('Initializing web notification manager');
         _notificationManager = WebNotificationManager();
         await _notificationManager!.initialize(config.notification);
       }
 
       if (config.secure) {
-        _logger.debug('Initializing web storage manager');
+        _logger.fine('Initializing web storage manager');
         _storageManager = WebStorageManager(useLocalStorage: true);
         await _storageManager!.initialize();
       }
@@ -114,7 +114,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
       _initialized = true;
       _logger.info('Web platform initialization completed');
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize web platform', e, stackTrace);
+      _logger.severe('Failed to initialize web platform', e, stackTrace);
       throw MCPInitializationException('Failed to initialize web platform', e, stackTrace);
     }
   }
@@ -127,7 +127,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_backgroundService == null) {
-      _logger.debug('Background service is not available');
+      _logger.fine('Background service is not available');
       return false;
     }
 
@@ -142,7 +142,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_backgroundService == null) {
-      _logger.debug('Background service is not available');
+      _logger.fine('Background service is not available');
       return false;
     }
 
@@ -162,7 +162,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_notificationManager == null) {
-      _logger.debug('Notification manager is not available');
+      _logger.fine('Notification manager is not available');
       return;
     }
 
@@ -182,7 +182,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_storageManager == null) {
-      _logger.debug('Storage manager is not available');
+      _logger.fine('Storage manager is not available');
       return;
     }
 
@@ -197,7 +197,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     }
 
     if (_storageManager == null) {
-      _logger.debug('Storage manager is not available');
+      _logger.fine('Storage manager is not available');
       return null;
     }
 
@@ -215,7 +215,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
   Future<void> shutdown() async {
     if (!_initialized) return;
 
-    _logger.debug('Shutting down web platform');
+    _logger.fine('Shutting down web platform');
 
     try {
       // Stop background service if running
@@ -232,7 +232,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
       _initialized = false;
       _logger.info('Web platform shutdown complete');
     } catch (e, stackTrace) {
-      _logger.error('Error during web platform shutdown', e, stackTrace);
+      _logger.severe('Error during web platform shutdown', e, stackTrace);
       // Still mark as not initialized
       _initialized = false;
     }
@@ -245,7 +245,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     dynamic capabilities,
     Map<String, dynamic>? options,
   }) async {
-    _logger.debug('Server creation not supported on web platform');
+    _logger.fine('Server creation not supported on web platform');
     throw MCPPlatformNotSupportedException(
       'MCP Server creation is not supported on web platform',
       errorCode: 'WEB_SERVER_NOT_SUPPORTED',
@@ -261,7 +261,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     List<String>? transportArgs,
     Map<String, dynamic>? options,
   }) async {
-    _logger.debug('Client creation not supported on web platform');
+    _logger.fine('Client creation not supported on web platform');
     throw MCPPlatformNotSupportedException(
       'MCP Client creation is not supported on web platform',
       errorCode: 'WEB_CLIENT_NOT_SUPPORTED',
@@ -270,7 +270,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
   
   /// [UNSUPPORTED ON WEB] Connect an MCP server
   Future<bool> connectServer(String serverId) async {
-    _logger.debug('Server connection not supported on web platform');
+    _logger.fine('Server connection not supported on web platform');
     throw MCPPlatformNotSupportedException(
       'MCP Server connection is not supported on web platform',
       errorCode: 'WEB_SERVER_NOT_SUPPORTED',
@@ -279,7 +279,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
   
   /// [UNSUPPORTED ON WEB] Connect an MCP client
   Future<bool> connectClient(String clientId) async {
-    _logger.debug('Client connection not supported on web platform');
+    _logger.fine('Client connection not supported on web platform');
     throw MCPPlatformNotSupportedException(
       'MCP Client connection is not supported on web platform',
       errorCode: 'WEB_CLIENT_NOT_SUPPORTED',
@@ -292,7 +292,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     required dynamic config,
     Map<String, dynamic>? options,
   }) async {
-    _logger.debug('LLM creation not supported on web platform');
+    _logger.fine('LLM creation not supported on web platform');
     throw MCPPlatformNotSupportedException(
       'LLM creation is not supported on web platform',
       errorCode: 'WEB_LLM_NOT_SUPPORTED',
@@ -305,7 +305,7 @@ class FlutterMcpWeb extends FlutterMcpPlatform {
     String userInput, {
     Map<String, dynamic>? options,
   }) async {
-    _logger.debug('LLM chat not supported on web platform');
+    _logger.fine('LLM chat not supported on web platform');
     throw MCPPlatformNotSupportedException(
       'LLM chat is not supported on web platform',
       errorCode: 'WEB_LLM_NOT_SUPPORTED',

@@ -71,4 +71,24 @@ abstract class FlutterMcpPlatform extends PlatformInterface {
   Future<void> shutdown() {
     throw UnimplementedError('shutdown() has not been implemented.');
   }
+
+  /// Check if a permission is granted
+  Future<bool> checkPermission(String permission) {
+    throw UnimplementedError('checkPermission() has not been implemented.');
+  }
+
+  /// Request a permission
+  Future<bool> requestPermission(String permission) {
+    throw UnimplementedError('requestPermission() has not been implemented.');
+  }
+
+  /// Request multiple permissions
+  Future<Map<String, bool>> requestPermissions(List<String> permissions) {
+    throw UnimplementedError('requestPermissions() has not been implemented.');
+  }
+
+  /// Cancel all notifications
+  Future<void> cancelAllNotifications() {
+    throw UnimplementedError('cancelAllNotifications() has not been implemented.');
+  }
 }

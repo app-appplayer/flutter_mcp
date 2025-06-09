@@ -1,0 +1,89 @@
+{
+  "async": {
+    "defaultMaxRetries": 5,
+    "defaultInitialDelay": 1000,
+    "defaultJitterRange": 100,
+    "defaultBackoffFactor": 2.5
+  },
+  "memory": {
+    "monitoringInterval": 60000,
+    "maxReadings": 20,
+    "defaultThresholdMB": 512,
+    "initialSimulationMB": 150,
+    "gcProbability": 0.3,
+    "gcHintArraySize": 20000
+  },
+  "batch": {
+    "defaultMaxSize": 100,
+    "defaultMaxWaitTime": 200,
+    "defaultMaxConcurrent": 5,
+    "defaultRetryEnabled": true,
+    "defaultMaxRetries": 3,
+    "exponentialBackoffBase": 200
+  },
+  "background": {
+    "maxConsecutiveErrors": 10,
+    "defaultInterval": 120000,
+    "flushDelay": 50
+  },
+  "health": {
+    "defaultCheckInterval": 60000,
+    "criticalCheckInterval": 15000
+  },
+  "scheduler": {
+    "timerInterval": 5000,
+    "maxHistorySize": 200
+  },
+  "pool": {
+    "defaultMaxSize": 200,
+    "trimThreshold": 20
+  },
+  "cache": {
+    "defaultMaxSize": 500,
+    "defaultTTL": 7200000,
+    "defaultSimilarityThreshold": 0.9
+  },
+  "ios": {
+    "maxConcurrentNotifications": 128
+  },
+  "resource": {
+    "priorityHigh": 400,
+    "priorityMedium": 250,
+    "priorityDefault": 150,
+    "priorityLow": 75
+  },
+  "circuitBreaker": {
+    "halfOpenSuccessThreshold": 2
+  },
+  "performance": {
+    "updateInterval": 2000,
+    "maxHistorySize": 600,
+    "thresholds": {
+      "cpu.usage": 90.0,
+      "memory.usage": 85.0,
+      "error.rate": 10.0,
+      "response.time": 2000.0
+    }
+  },
+  "oauth": {
+    "authorizationTimeout": 600000,
+    "flowExpiryTime": 900000,
+    "defaultRedirectUri": "myapp://oauth/callback",
+    "pkceEnabled": true
+  },
+  "webStorage": {
+    "useLocalStorage": true,
+    "prefix": "myapp_",
+    "storageVersion": 2
+  },
+  "logging": {
+    "defaultLevel": "debug",
+    "enableFileLogging": true,
+    "maxLogFileSize": 20971520
+  },
+  "network": {
+    "defaultTimeout": 60000,
+    "maxRedirects": 10,
+    "enableProxy": false
+  }
+}

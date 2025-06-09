@@ -1,12 +1,12 @@
 name: flutter_mcp
 description: Flutter plugin that integrates MCP server, client, and LLM into a unified agent system. Provides background execution, notification, system tray, lifecycle management, secure data storage, and scheduling for cross-platform agent apps.
-version: 0.1.0
+version: 1.0.0
 homepage: https://github.com/app-appplayer/flutter_mcp
 repository: https://github.com/app-appplayer/flutter_mcp
 issue_tracker: https://github.com/app-appplayer/flutter_mcp/issues
 
 environment:
-  sdk: ^3.7.2
+  sdk: '>=3.0.0 <4.0.0'
   flutter: '>=3.3.0'
 
 dependencies:
@@ -18,16 +18,9 @@ dependencies:
   plugin_platform_interface: ^2.0.2
 
   # MCP Core libraries
-  mcp_client: ^0.1.8
-  mcp_server: ^0.2.0
-  mcp_llm: ^0.2.3
-
-  # Platform service libraries
-  flutter_foreground_task: ^8.17.0  # For Android background services
-  flutter_local_notifications: ^19.0.0  # For notifications
-  tray_manager: ^0.4.0  # For system tray on desktop
-  flutter_secure_storage: ^9.2.4  # For secure storage
-  path_provider: ^2.1.5  # For file system access
+  mcp_client: ^1.0.0
+  mcp_server: ^1.0.0
+  mcp_llm: ^1.0.0
 
   # Utility libraries
   path: ^1.9.1
@@ -37,14 +30,17 @@ dependencies:
   yaml: ^3.1.3
   synchronized: ^3.3.1
   crypto: ^3.0.6
+  path_provider: ^2.1.5
+  logging: ^1.2.0
+  pub_semver: ^2.1.4 
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  mockito: ^5.4.2
+  mockito: ^5.4.6
   build_runner: ^2.4.6
-  analyzer: ^6.2.0
+  analyzer: ^7.4.1
 
 flutter:
 

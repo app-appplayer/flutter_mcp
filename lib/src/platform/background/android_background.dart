@@ -1,143 +1,162 @@
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'dart:async';
+import 'package:flutter/services.dart';
 import '../../config/background_config.dart';
 import '../../utils/logger.dart';
 import 'background_service.dart';
 
 class AndroidBackgroundService implements BackgroundService {
+  static const MethodChannel _channel = MethodChannel('flutter_mcp');
+  static const EventChannel _eventChannel = EventChannel('flutter_mcp/events');
+  
   bool _isRunning = false;
-  final MCPLogger _logger = MCPLogger('mcp.android_background');
+  final Logger _logger = Logger('flutter_mcp.android_background');
   late BackgroundConfig _config;
+  StreamSubscription? _eventSubscription;
+  
+  // Callback functions
+  Function()? _onStart;
+  Function(DateTime)? _onRepeat;
+  Function()? _onDestroy;
+  Function(Map<String, dynamic>)? _onEvent;
 
   @override
   bool get isRunning => _isRunning;
 
   @override
   Future<void> initialize(BackgroundConfig? config) async {
-    _logger.debug('Android background service initializing');
+    _logger.fine('Android background service initializing');
     _config = config ?? BackgroundConfig.defaultConfig();
-    await _initializeForegroundTask();
+    
+    // Initialize event listener
+    _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
+      (dynamic event) {
+        if (event is Map) {
+          _handleEvent(Map<String, dynamic>.from(event));
+        }
+      },
+      onError: (error) {
+        _logger.severe('Event channel error', error);
+      },
+    );
+    
+    // Initialize native service
+    await _channel.invokeMethod('initialize', {
+      'config': _config.toMap(),
+    });
   }
 
-  Future<void> _initializeForegroundTask() async {
-    final androidOptions = AndroidNotificationOptions(
-      channelId: _config.notificationChannelId ?? 'flutter_mcp_channel',
-      channelName: _config.notificationChannelName ?? 'MCP Service',
-      channelDescription: _config.notificationDescription ?? 'MCP Background Service',
-    );
+  Future<void> configure({
+    Function()? onStart,
+    Function(DateTime)? onRepeat,
+    Function()? onDestroy,
+    Function(Map<String, dynamic>)? onEvent,
+  }) async {
+    _onStart = onStart;
+    _onRepeat = onRepeat;
+    _onDestroy = onDestroy;
+    _onEvent = onEvent;
+    
+    await _channel.invokeMethod('configureBackgroundService', {
+      'intervalMs': _config.intervalMs,
+      'channelId': _config.notificationChannelId,
+      'channelName': _config.notificationChannelName,
+      'notificationDescription': _config.notificationDescription,
+      'notificationIcon': _config.notificationIcon,
+      'autoStartOnBoot': _config.autoStartOnBoot,
+      'keepAlive': _config.keepAlive,
+    });
+  }
 
-    final iosOptions = IOSNotificationOptions(
-      showNotification: true,
-      playSound: false,
-    );
-
-    final taskOptions = ForegroundTaskOptions(
-      autoRunOnBoot: _config.autoStartOnBoot,
-      allowWifiLock: true,
-      allowWakeLock: true,
-      eventAction: ForegroundTaskEventAction.repeat(_config.intervalMs),
-    );
-
-    FlutterForegroundTask.init(
-      androidNotificationOptions: androidOptions,
-      iosNotificationOptions: iosOptions,
-      foregroundTaskOptions: taskOptions,
-    );
-
-    FlutterForegroundTask.setTaskHandler(MCPTaskHandler());
+  void _handleEvent(Map<String, dynamic> event) {
+    final type = event['type'] as String?;
+    final data = event['data'] as Map<String, dynamic>? ?? {};
+    
+    _logger.fine('Received event: $type');
+    
+    switch (type) {
+      case 'backgroundEvent':
+        final eventType = data['type'] as String?;
+        if (eventType == 'start') {
+          _onStart?.call();
+        } else if (eventType == 'periodic') {
+          final timestamp = data['timestamp'] as int?;
+          if (timestamp != null) {
+            _onRepeat?.call(DateTime.fromMillisecondsSinceEpoch(timestamp ~/ 1000));
+          }
+        } else if (eventType == 'destroy') {
+          _onDestroy?.call();
+        }
+        break;
+      
+      case 'backgroundTaskResult':
+        _onEvent?.call(data);
+        break;
+      
+      default:
+        _logger.fine('Unknown event type: $type');
+    }
   }
 
   @override
   Future<bool> start() async {
-    _logger.debug('Android background service starting');
-
-    if (await FlutterForegroundTask.isRunningService) {
-      _logger.debug('Service is already running');
-      _isRunning = true;
-      return true;
-    }
+    _logger.fine('Android background service starting');
 
     try {
-      final result = await FlutterForegroundTask.startService(
-        notificationTitle: _config.notificationChannelName ?? 'MCP Service',
-        notificationText: 'Running in background',
-        callback: _startCallback,
-      );
-
-      _isRunning = result == ServiceRequestSuccess();
-      _logger.debug('Service started: $_isRunning');
+      final result = await _channel.invokeMethod<bool>('startBackgroundService');
+      _isRunning = result ?? false;
+      _logger.fine('Service started: $_isRunning');
       return _isRunning;
     } catch (e, stackTrace) {
-      _logger.error('Failed to start service', e, stackTrace);
+      _logger.severe('Failed to start service', e, stackTrace);
       return false;
     }
   }
 
   @override
   Future<bool> stop() async {
-    _logger.debug('Android background service stopping');
-
-    if (!await FlutterForegroundTask.isRunningService) {
-      _logger.debug('Service is not running');
-      _isRunning = false;
-      return true;
-    }
+    _logger.fine('Android background service stopping');
 
     try {
-      final result = await FlutterForegroundTask.stopService();
-      final success = result == ServiceRequestSuccess();
+      final result = await _channel.invokeMethod<bool>('stopBackgroundService');
       _isRunning = false;
-      _logger.debug('Service stopped successfully: $success');
-      return success;
+      _logger.fine('Service stopped successfully');
+      return result ?? true;
     } catch (e, stackTrace) {
-      _logger.error('Failed to stop service', e, stackTrace);
+      _logger.severe('Failed to stop service', e, stackTrace);
       return false;
     }
   }
-}
 
-@pragma('vm:entry-point')
-void _startCallback() {
-  FlutterForegroundTask.setTaskHandler(MCPTaskHandler());
-}
-
-class MCPTaskHandler extends TaskHandler {
-  final MCPLogger _logger = MCPLogger('mcp.android_task_handler');
-
-  @override
-  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    _logger.debug('Background task started at $timestamp');
+  Future<void> scheduleTask(String taskId, Duration delay, Function() task) async {
+    try {
+      await _channel.invokeMethod('scheduleBackgroundTask', {
+        'taskId': taskId,
+        'delayMillis': delay.inMilliseconds,
+      });
+      
+      // Store task locally to execute when event is received
+      _scheduledTasks[taskId] = task;
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to schedule task', e, stackTrace);
+    }
   }
 
-  @override
-  Future<void> onRepeatEvent(DateTime timestamp) async {
-    _logger.debug('Background task executing at $timestamp');
+  Future<void> cancelTask(String taskId) async {
+    try {
+      await _channel.invokeMethod('cancelBackgroundTask', {
+        'taskId': taskId,
+      });
+      
+      _scheduledTasks.remove(taskId);
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to cancel task', e, stackTrace);
+    }
   }
 
-  @override
-  Future<void> onDestroy(DateTime timestamp) async {
-    _logger.debug('Background task stopping at $timestamp');
-  }
-  // Called when data is sent using `FlutterForegroundTask.sendDataToTask`.
-  @override
-  void onReceiveData(Object data) {
-    _logger.debug('onReceiveData: $data');
-  }
+  final Map<String, Function()> _scheduledTasks = {};
 
-  // Called when the notification button is pressed.
-  @override
-  void onNotificationButtonPressed(String id) {
-    _logger.debug('onNotificationButtonPressed: $id');
-  }
-
-  // Called when the notification itself is pressed.
-  @override
-  void onNotificationPressed() {
-    _logger.debug('onNotificationPressed');
-  }
-
-  // Called when the notification itself is dismissed.
-  @override
-  void onNotificationDismissed() {
-    _logger.debug('onNotificationDismissed');
+  void dispose() {
+    _eventSubscription?.cancel();
+    _scheduledTasks.clear();
   }
 }

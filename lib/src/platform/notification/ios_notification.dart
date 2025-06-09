@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import '../../config/notification_config.dart';
 import '../../utils/logger.dart';
 import '../../utils/exceptions.dart';
@@ -8,15 +8,17 @@ import 'notification_manager.dart';
 
 /// iOS notification manager implementation
 class IOSNotificationManager implements NotificationManager {
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
-  final MCPLogger _logger = MCPLogger('mcp.ios_notification');
+  static const MethodChannel _channel = MethodChannel('flutter_mcp');
+  static const EventChannel _eventChannel = EventChannel('flutter_mcp/events');
+  
+  final Logger _logger = Logger('flutter_mcp.ios_notification');
+  StreamSubscription? _eventSubscription;
 
   // Store notification data for later retrieval
   final Map<String, Map<String, dynamic>> _notificationData = {};
 
   // Notification click handlers
-  final Map<String, Function(String, Map<String, dynamic>?)> _clickHandlers = {
-  };
+  final Map<String, Function(String, Map<String, dynamic>?)> _clickHandlers = {};
 
   // Active notifications queue (since iOS doesn't have a notification center API)
   final Queue<String> _activeNotifications = Queue<String>();
@@ -31,7 +33,7 @@ class IOSNotificationManager implements NotificationManager {
 
   @override
   Future<void> initialize(NotificationConfig? config) async {
-    _logger.debug('iOS notification manager initializing');
+    _logger.fine('iOS notification manager initializing');
 
     // Apply configuration if provided
     if (config != null) {
@@ -39,41 +41,57 @@ class IOSNotificationManager implements NotificationManager {
       _defaultPriority = config.priority;
     }
 
-    // iOS notification settings
-    final DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(
-      requestSoundPermission: _soundEnabled,
-      requestBadgePermission: _badgesEnabled,
-      requestAlertPermission: true,
-      defaultPresentAlert: true,
-      defaultPresentBadge: true,
-      defaultPresentSound: _soundEnabled,
-    );
-
-    final InitializationSettings initializationSettings = InitializationSettings(
-      iOS: initializationSettingsIOS,
+    // Initialize event listener for notification responses
+    _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
+      (dynamic event) {
+        if (event is Map) {
+          _handleEvent(Map<String, dynamic>.from(event));
+        }
+      },
+      onError: (error) {
+        _logger.severe('Event channel error', error);
+      },
     );
 
     try {
-      final bool? initialized = await _notificationsPlugin.initialize(
-        initializationSettings,
-        onDidReceiveNotificationResponse: _onNotificationResponse,
-      );
+      // Initialize native notification system
+      await _channel.invokeMethod('configureNotifications', {
+        'enableSound': _soundEnabled,
+        'enableBadges': _badgesEnabled,
+        'priority': _defaultPriority.index,
+      });
 
-      if (initialized == true) {
-        _logger.debug('iOS notification manager initialized successfully');
+      // Request notification permission
+      final hasPermission = await _channel.invokeMethod<bool>('requestNotificationPermission');
+      if (hasPermission != true) {
+        _logger.warning('Notification permission not granted');
       } else {
-        _logger.warning(
-            'iOS notification manager initialization returned: $initialized');
+        _logger.fine('iOS notification permissions granted');
       }
 
-      // Request permissions
-      await _requestPermissions();
+      _logger.fine('iOS notification manager initialized successfully');
     } catch (e, stackTrace) {
-      _logger.error(
-          'Failed to initialize iOS notification manager', e, stackTrace);
-      throw MCPException(
-          'Failed to initialize iOS notification manager: ${e.toString()}', e,
-          stackTrace);
+      _logger.severe('Failed to initialize iOS notification manager', e, stackTrace);
+      throw MCPException('Failed to initialize iOS notification manager: ${e.toString()}', e, stackTrace);
+    }
+  }
+
+  void _handleEvent(Map<String, dynamic> event) {
+    final type = event['type'] as String?;
+    final data = event['data'] as Map<String, dynamic>? ?? {};
+    
+    _logger.fine('Received notification event: $type');
+    
+    if (type == 'notificationEvent') {
+      final action = data['action'] as String?;
+      final notificationId = data['notificationId'] as String?;
+      
+      if (action == 'click' && notificationId != null) {
+        _handleNotificationTap(notificationId);
+      } else if (action == 'dismiss' && notificationId != null) {
+        _activeNotifications.remove(notificationId);
+        _notificationData.remove(notificationId);
+      }
     }
   }
 
@@ -85,102 +103,85 @@ class IOSNotificationManager implements NotificationManager {
     String id = 'mcp_notification',
     Map<String, dynamic>? additionalData,
   }) async {
-    _logger.debug('Showing iOS notification: $title, ID: $id');
+    _logger.fine('Showing iOS notification: $title, ID: $id');
 
     try {
       // Store additional data for later retrieval
       final notificationData = additionalData ?? {};
+      notificationData['title'] = title;
+      notificationData['body'] = body;
       _notificationData[id] = notificationData;
-
-      // Configure iOS-specific details
-      final DarwinNotificationDetails iOSDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: _badgesEnabled,
-        presentSound: _soundEnabled,
-        sound: _soundEnabled ? 'default' : null,
-        badgeNumber: _getNextBadgeNumber(),
-        threadIdentifier: id,
-        // Group notifications with the same ID
-        categoryIdentifier: 'mcp_category',
-        subtitle: notificationData['subtitle'] as String?,
-        interruptionLevel: _getInterruptionLevel(_defaultPriority),
-      );
-
-      // Platform-specific details
-      final NotificationDetails platformDetails = NotificationDetails(
-        iOS: iOSDetails,
-      );
-
-      // Generate unique ID by hashing the ID string
-      final int notificationId = id.hashCode;
 
       // Check if we need to manage the queue
       _manageConcurrentNotifications(id);
 
-      // Show the notification
-      await _notificationsPlugin.show(
-        notificationId,
-        title,
-        body,
-        platformDetails,
-        payload: id,
-      );
+      // Show notification using native implementation
+      await _channel.invokeMethod('showNotification', {
+        'id': id,
+        'title': title,
+        'body': body,
+        'subtitle': notificationData['subtitle'] as String?,
+        'priority': _defaultPriority.index,
+        'enableSound': _soundEnabled,
+        'enableBadges': _badgesEnabled,
+        'badgeNumber': _getNextBadgeNumber(),
+        'threadIdentifier': id,
+        'categoryIdentifier': 'mcp_category',
+        'additionalData': additionalData,
+      });
 
       // Add to active notifications
       _activeNotifications.add(id);
 
-      _logger.debug('iOS notification shown successfully: $id');
+      _logger.fine('iOS notification shown successfully: $id');
     } catch (e, stackTrace) {
-      _logger.error('Failed to show iOS notification', e, stackTrace);
-      throw MCPException(
-          'Failed to show iOS notification: ${e.toString()}', e, stackTrace);
+      _logger.severe('Failed to show iOS notification', e, stackTrace);
+      throw MCPException('Failed to show iOS notification: ${e.toString()}', e, stackTrace);
     }
   }
 
   @override
   Future<void> hideNotification(String id) async {
-    _logger.debug('Hiding iOS notification: $id');
+    _logger.fine('Hiding iOS notification: $id');
 
     try {
-      // Cancel the notification by its ID hash
-      await _notificationsPlugin.cancel(id.hashCode);
+      // Cancel the notification using native implementation
+      await _channel.invokeMethod('cancelNotification', {
+        'id': id,
+      });
 
       // Remove from active notifications and data store
       _activeNotifications.remove(id);
       _notificationData.remove(id);
 
-      _logger.debug('iOS notification hidden successfully: $id');
+      _logger.fine('iOS notification hidden successfully: $id');
     } catch (e, stackTrace) {
-      _logger.error('Failed to hide iOS notification', e, stackTrace);
-      throw MCPException(
-          'Failed to hide iOS notification: ${e.toString()}', e, stackTrace);
+      _logger.severe('Failed to hide iOS notification', e, stackTrace);
+      throw MCPException('Failed to hide iOS notification: ${e.toString()}', e, stackTrace);
     }
   }
 
   /// Clear all active notifications
   Future<void> clearAllNotifications() async {
-    _logger.debug('Clearing all iOS notifications');
+    _logger.fine('Clearing all iOS notifications');
 
     try {
-      await _notificationsPlugin.cancelAll();
+      await _channel.invokeMethod('cancelAllNotifications');
       _activeNotifications.clear();
       _notificationData.clear();
 
       // Reset badge count
       await _resetBadgeCount();
 
-      _logger.debug('All iOS notifications cleared successfully');
+      _logger.fine('All iOS notifications cleared successfully');
     } catch (e, stackTrace) {
-      _logger.error('Failed to clear all iOS notifications', e, stackTrace);
-      throw MCPException(
-          'Failed to clear all iOS notifications: ${e.toString()}', e,
-          stackTrace);
+      _logger.severe('Failed to clear all iOS notifications', e, stackTrace);
+      throw MCPException('Failed to clear all iOS notifications: ${e.toString()}', e, stackTrace);
     }
   }
 
   /// Register a notification click handler
-  void registerClickHandler(String id,
-      Function(String, Map<String, dynamic>?) handler) {
+  void registerClickHandler(String id, Function(String, Map<String, dynamic>?) handler) {
     _clickHandlers[id] = handler;
   }
 
@@ -189,50 +190,13 @@ class IOSNotificationManager implements NotificationManager {
     _clickHandlers.remove(id);
   }
 
-  /// Request notification permissions from the user
-  Future<bool> _requestPermissions() async {
-    _logger.debug('Requesting iOS notification permissions');
-
-    try {
-      final IOSFlutterLocalNotificationsPlugin? iOSPlugin =
-      _notificationsPlugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
-
-      if (iOSPlugin != null) {
-        final bool? result = await iOSPlugin.requestPermissions(
-          alert: true,
-          badge: _badgesEnabled,
-          sound: _soundEnabled,
-          critical: _defaultPriority == NotificationPriority.high ||
-              _defaultPriority == NotificationPriority.max,
-        );
-
-        return result ?? false;
-      }
-
-      return false;
-    } catch (e) {
-      _logger.error('Failed to request iOS notification permissions', e);
-      return false;
-    }
-  }
-
   /// Reset badge count
   Future<void> _resetBadgeCount() async {
     try {
-      final IOSFlutterLocalNotificationsPlugin? iOSPlugin =
-      _notificationsPlugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
-
-      if (iOSPlugin != null) {
-        await iOSPlugin.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-      }
+      // Badge count is automatically reset when all notifications are cleared
+      _logger.fine('Badge count reset');
     } catch (e) {
-      _logger.error('Failed to reset badge count', e);
+      _logger.severe('Failed to reset badge count', e);
     }
   }
 
@@ -246,37 +210,15 @@ class IOSNotificationManager implements NotificationManager {
     // If we're at the limit, remove the oldest notification
     if (_activeNotifications.length >= _maxConcurrentNotifications) {
       final oldestId = _activeNotifications.removeFirst();
-      _notificationsPlugin.cancel(oldestId.hashCode);
+      
+      // Cancel the oldest notification
+      _channel.invokeMethod('cancelNotification', {
+        'id': oldestId,
+      });
+      
       _notificationData.remove(oldestId);
 
-      _logger.debug(
-          'Removed oldest notification to stay within limit: $oldestId');
-    }
-  }
-
-  /// Convert priority to iOS interruption level
-  InterruptionLevel _getInterruptionLevel(NotificationPriority priority) {
-    switch (priority) {
-      case NotificationPriority.max:
-        return InterruptionLevel.timeSensitive;
-      case NotificationPriority.high:
-        return InterruptionLevel.timeSensitive;
-      case NotificationPriority.normal:
-        return InterruptionLevel.active;
-      case NotificationPriority.low:
-        return InterruptionLevel.passive;
-      case NotificationPriority.min:
-        return InterruptionLevel.passive;
-    }
-  }
-
-  /// Legacy iOS notification callback (for iOS <10)
-  void _onNotificationResponse(NotificationResponse response) {
-    final String? payload = response.payload;
-    _logger.debug('iOS notification tapped: $payload');
-
-    if (payload != null) {
-      _handleNotificationTap(payload);
+      _logger.fine('Removed oldest notification to stay within limit: $oldestId');
     }
   }
 
@@ -295,5 +237,18 @@ class IOSNotificationManager implements NotificationManager {
     if (_clickHandlers.containsKey('default')) {
       _clickHandlers['default']!(id, data);
     }
+  }
+
+  /// Get active notification count
+  int get activeNotificationCount => _activeNotifications.length;
+
+  /// Check if a notification is active
+  bool isNotificationActive(String id) => _activeNotifications.contains(id);
+
+  void dispose() {
+    _eventSubscription?.cancel();
+    _clickHandlers.clear();
+    _notificationData.clear();
+    _activeNotifications.clear();
   }
 }

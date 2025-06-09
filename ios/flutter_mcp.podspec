@@ -4,18 +4,20 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_mcp'
-  s.version          = '0.0.1'
-  s.summary          = 'A new Flutter plugin project.'
+  s.version          = '1.0.0'
+  s.summary          = 'Flutter plugin that integrates MCP into a unified agent system.'
   s.description      = <<-DESC
-A new Flutter plugin project.
+Flutter plugin that integrates MCP server, client, and LLM into a unified agent system.
+Provides background execution, notification, system tray, lifecycle management,
+secure data storage, and scheduling for cross-platform agent apps.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/app-appplayer/flutter_mcp'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'app-appplayer' => 'author@example.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
-  s.platform = :ios, '12.0'
+  s.platform = :ios, '13.0'
 
   # Flutter.framework does not contain a i386 slice.
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }

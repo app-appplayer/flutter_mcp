@@ -6,6 +6,8 @@ import '../utils/platform_utils.dart' show PlatformUtils;
 import '../utils/error_recovery.dart';
 import '../utils/exceptions.dart';
 
+import '../../flutter_mcp_platform_interface.dart';
+import '../../flutter_mcp_method_channel.dart';
 import 'background/background_service.dart';
 import 'notification/notification_manager.dart';
 import 'tray/tray_manager.dart';
@@ -26,7 +28,7 @@ class PlatformServices {
   //MCPConfig? _config;
 
   /// Logger
-  final MCPLogger _logger = MCPLogger('mcp.platform_services');
+  final Logger _logger = Logger('flutter_mcp.platform_services');
 
   /// Platform factory
   final PlatformFactory _factory = PlatformFactory();
@@ -44,10 +46,13 @@ class PlatformServices {
       return;
     }
 
-    _logger.debug('Initializing platform services');
+    _logger.fine('Initializing platform services');
     //_config = config;
 
     try {
+      // Initialize method channel platform interface
+      await _initializePlatformInterface(config);
+      
       // Initialize secure storage
       if(config.secure) {
         await _initializeSecureStorage(config);
@@ -103,15 +108,39 @@ class PlatformServices {
       _initialized = true;
       _logger.info('Platform services initialization completed');
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize platform services', e, stackTrace);
+      _logger.severe('Failed to initialize platform services', e, stackTrace);
       await _cleanupOnError();
       throw MCPInitializationException('Failed to initialize platform services', e, stackTrace);
     }
   }
 
+  /// Initialize platform interface
+  Future<void> _initializePlatformInterface(MCPConfig config) async {
+    _logger.fine('Initializing platform interface');
+    
+    try {
+      // Set up platform interface if not already set
+      if (FlutterMcpPlatform.instance is! MethodChannelFlutterMcp) {
+        FlutterMcpPlatform.instance = MethodChannelFlutterMcp();
+      }
+      
+      // Initialize with config
+      await FlutterMcpPlatform.instance.initialize(config);
+      
+      // Add cleanup callback
+      _cleanupCallbacks.add(() async {
+        _logger.fine('Shutting down platform interface');
+        await FlutterMcpPlatform.instance.shutdown();
+      });
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to initialize platform interface', e, stackTrace);
+      throw MCPInitializationException('Failed to initialize platform interface', e, stackTrace);
+    }
+  }
+
   /// Initialize secure storage
   Future<void> _initializeSecureStorage(MCPConfig config) async {
-    _logger.debug('Initializing secure storage');
+    _logger.fine('Initializing secure storage');
 
     try {
       _secureStorage = _factory.createStorageManager();
@@ -119,18 +148,18 @@ class PlatformServices {
 
       // Add cleanup callback
       _cleanupCallbacks.add(() async {
-        _logger.debug('Cleaning up secure storage');
+        _logger.fine('Cleaning up secure storage');
         // No specific cleanup needed for storage
       });
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize secure storage', e, stackTrace);
+      _logger.severe('Failed to initialize secure storage', e, stackTrace);
       throw MCPInitializationException('Failed to initialize secure storage', e, stackTrace);
     }
   }
 
   /// Initialize background service
   Future<void> _initializeBackgroundService(MCPConfig config) async {
-    _logger.debug('Initializing background service');
+    _logger.fine('Initializing background service');
 
     try {
       _backgroundService = _factory.createBackgroundService();
@@ -142,20 +171,20 @@ class PlatformServices {
 
       // Add cleanup callback
       _cleanupCallbacks.add(() async {
-        _logger.debug('Stopping background service');
+        _logger.fine('Stopping background service');
         if (_backgroundService != null && _backgroundService!.isRunning) {
           await _backgroundService!.stop();
         }
       });
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize background service', e, stackTrace);
+      _logger.severe('Failed to initialize background service', e, stackTrace);
       throw MCPInitializationException('Failed to initialize background service', e, stackTrace);
     }
   }
 
   /// Initialize notification manager
   Future<void> _initializeNotificationManager(MCPConfig config) async {
-    _logger.debug('Initializing notification manager');
+    _logger.fine('Initializing notification manager');
 
     try {
       _notificationManager = _factory.createNotificationManager();
@@ -165,14 +194,14 @@ class PlatformServices {
         maxRetries: 2,
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize notification manager', e, stackTrace);
+      _logger.severe('Failed to initialize notification manager', e, stackTrace);
       throw MCPInitializationException('Failed to initialize notification manager', e, stackTrace);
     }
   }
 
   /// Initialize tray manager
   Future<void> _initializeTrayManager(MCPConfig config) async {
-    _logger.debug('Initializing tray manager');
+    _logger.fine('Initializing tray manager');
 
     try {
       _trayManager = _factory.createTrayManager();
@@ -184,20 +213,20 @@ class PlatformServices {
 
       // Add cleanup callback
       _cleanupCallbacks.add(() async {
-        _logger.debug('Disposing tray manager');
+        _logger.fine('Disposing tray manager');
         if (_trayManager != null) {
           await _trayManager!.dispose();
         }
       });
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize tray manager', e, stackTrace);
+      _logger.severe('Failed to initialize tray manager', e, stackTrace);
       throw MCPInitializationException('Failed to initialize tray manager', e, stackTrace);
     }
   }
 
   /// Initialize lifecycle manager
   void _initializeLifecycleManager() {
-    _logger.debug('Initializing lifecycle manager');
+    _logger.fine('Initializing lifecycle manager');
 
     try {
       _lifecycleManager = LifecycleManager();
@@ -205,13 +234,13 @@ class PlatformServices {
 
       // Add cleanup callback
       _cleanupCallbacks.add(() async {
-        _logger.debug('Disposing lifecycle manager');
+        _logger.fine('Disposing lifecycle manager');
         if (_lifecycleManager != null) {
           _lifecycleManager!.dispose();
         }
       });
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize lifecycle manager', e, stackTrace);
+      _logger.severe('Failed to initialize lifecycle manager', e, stackTrace);
       throw MCPInitializationException('Failed to initialize lifecycle manager', e, stackTrace);
     }
   }
@@ -222,12 +251,23 @@ class PlatformServices {
       throw MCPException('Platform services not initialized');
     }
 
+    _logger.fine('Starting background service');
+    
+    // Use method channel for native platforms
+    if (PlatformUtils.isNative) {
+      return await ErrorRecovery.tryWithRetry(
+        () => FlutterMcpPlatform.instance.startBackgroundService(),
+        operationName: 'start background service (native)',
+        maxRetries: 2,
+      );
+    }
+    
+    // Use Dart implementation for non-native platforms
     if (_backgroundService == null) {
       _logger.warning('Background service not initialized');
       return false;
     }
 
-    _logger.debug('Starting background service');
     return await ErrorRecovery.tryWithRetry(
           () => _backgroundService!.start(),
       operationName: 'start background service',
@@ -241,12 +281,23 @@ class PlatformServices {
       throw MCPException('Platform services not initialized');
     }
 
+    _logger.fine('Stopping background service');
+    
+    // Use method channel for native platforms
+    if (PlatformUtils.isNative) {
+      return await ErrorRecovery.tryWithRetry(
+        () => FlutterMcpPlatform.instance.stopBackgroundService(),
+        operationName: 'stop background service (native)',
+        maxRetries: 2,
+      );
+    }
+    
+    // Use Dart implementation for non-native platforms
     if (_backgroundService == null) {
       _logger.warning('Background service not initialized');
       return false;
     }
 
-    _logger.debug('Stopping background service');
     return await ErrorRecovery.tryWithRetry(
           () => _backgroundService!.stop(),
       operationName: 'stop background service',
@@ -265,12 +316,29 @@ class PlatformServices {
       throw MCPException('Platform services not initialized');
     }
 
+    _logger.fine('Showing notification: $title');
+    
+    // Use method channel for native platforms
+    if (PlatformUtils.isNative) {
+      await ErrorRecovery.tryWithRetry(
+        () => FlutterMcpPlatform.instance.showNotification(
+          title: title,
+          body: body,
+          icon: icon,
+          id: id,
+        ),
+        operationName: 'show notification (native)',
+        maxRetries: 2,
+      );
+      return;
+    }
+    
+    // Use Dart implementation for non-native platforms
     if (_notificationManager == null) {
       _logger.warning('Notification manager not initialized');
       return;
     }
 
-    _logger.debug('Showing notification: $title');
     await ErrorRecovery.tryWithRetry(
           () => _notificationManager!.showNotification(
         title: title,
@@ -294,7 +362,7 @@ class PlatformServices {
       return;
     }
 
-    _logger.debug('Hiding notification: $id');
+    _logger.fine('Hiding notification: $id');
     await ErrorRecovery.tryWithRetry(
           () => _notificationManager!.hideNotification(id),
       operationName: 'hide notification',
@@ -308,11 +376,23 @@ class PlatformServices {
       throw MCPException('Platform services not initialized');
     }
 
+    _logger.fine('Storing secure value: $key');
+    
+    // Use method channel for native platforms
+    if (PlatformUtils.isNative) {
+      await ErrorRecovery.tryWithRetry(
+        () => FlutterMcpPlatform.instance.secureStore(key, value),
+        operationName: 'store secure value (native)',
+        maxRetries: 2,
+      );
+      return;
+    }
+    
+    // Use Dart implementation for non-native platforms
     if (_secureStorage == null) {
       throw MCPException('Secure storage not initialized');
     }
 
-    _logger.debug('Storing secure value: $key');
     await ErrorRecovery.tryWithRetry(
           () => _secureStorage!.saveString(key, value),
       operationName: 'store secure value',
@@ -326,11 +406,22 @@ class PlatformServices {
       throw MCPException('Platform services not initialized');
     }
 
+    _logger.fine('Reading secure value: $key');
+    
+    // Use method channel for native platforms
+    if (PlatformUtils.isNative) {
+      return await ErrorRecovery.tryWithRetry(
+        () => FlutterMcpPlatform.instance.secureRead(key),
+        operationName: 'read secure value (native)',
+        maxRetries: 2,
+      );
+    }
+    
+    // Use Dart implementation for non-native platforms
     if (_secureStorage == null) {
       throw MCPException('Secure storage not initialized');
     }
 
-    _logger.debug('Reading secure value: $key');
     return await ErrorRecovery.tryWithRetry(
           () => _secureStorage!.readString(key),
       operationName: 'read secure value',
@@ -348,7 +439,7 @@ class PlatformServices {
       throw MCPException('Secure storage not initialized');
     }
 
-    _logger.debug('Deleting secure value: $key');
+    _logger.fine('Deleting secure value: $key');
     return await ErrorRecovery.tryWithRetry(
           () => _secureStorage!.delete(key),
       operationName: 'delete secure value',
@@ -384,7 +475,7 @@ class PlatformServices {
       return;
     }
 
-    _logger.debug('Setting tray menu items');
+    _logger.fine('Setting tray menu items');
     await ErrorRecovery.tryWithRetry(
           () => _trayManager!.setContextMenu(items),
       operationName: 'set tray menu',
@@ -403,7 +494,7 @@ class PlatformServices {
       return;
     }
 
-    _logger.debug('Setting tray icon: $path');
+    _logger.fine('Setting tray icon: $path');
     await ErrorRecovery.tryWithRetry(
           () => _trayManager!.setIcon(path),
       operationName: 'set tray icon',
@@ -422,7 +513,7 @@ class PlatformServices {
       return;
     }
 
-    _logger.debug('Setting tray tooltip: $tooltip');
+    _logger.fine('Setting tray tooltip: $tooltip');
     await ErrorRecovery.tryWithRetry(
           () => _trayManager!.setTooltip(tooltip),
       operationName: 'set tray tooltip',
@@ -441,20 +532,20 @@ class PlatformServices {
       return;
     }
 
-    _logger.debug('Setting lifecycle change listener');
+    _logger.fine('Setting lifecycle change listener');
     _lifecycleManager!.setLifecycleChangeListener(listener);
   }
 
   /// Shut down all services
   Future<void> shutdown() async {
-    _logger.debug('Shutting down platform services');
+    _logger.fine('Shutting down platform services');
 
     // Execute all cleanup callbacks in reverse order
     for (final callback in _cleanupCallbacks.reversed) {
       try {
         await callback();
       } catch (e, stackTrace) {
-        _logger.error('Error during cleanup', e, stackTrace);
+        _logger.severe('Error during cleanup', e, stackTrace);
       }
     }
 
@@ -465,14 +556,14 @@ class PlatformServices {
 
   /// Clean up resources on initialization error
   Future<void> _cleanupOnError() async {
-    _logger.debug('Cleaning up after initialization error');
+    _logger.fine('Cleaning up after initialization error');
 
     // Execute all cleanup callbacks added so far
     for (final callback in _cleanupCallbacks.reversed) {
       try {
         await callback();
       } catch (e) {
-        _logger.error('Error during error cleanup', e);
+        _logger.severe('Error during error cleanup', e);
       }
     }
 
@@ -481,4 +572,28 @@ class PlatformServices {
 
   /// Get current platform name
   String get platformName => PlatformUtils.platformName;
+
+  /// Check if a permission is granted
+  Future<bool> checkPermission(String permission) async {
+    if (!_initialized) {
+      throw MCPException('Platform services not initialized');
+    }
+    return await FlutterMcpPlatform.instance.checkPermission(permission);
+  }
+
+  /// Request a permission
+  Future<bool> requestPermission(String permission) async {
+    if (!_initialized) {
+      throw MCPException('Platform services not initialized');
+    }
+    return await FlutterMcpPlatform.instance.requestPermission(permission);
+  }
+
+  /// Request multiple permissions
+  Future<Map<String, bool>> requestPermissions(List<String> permissions) async {
+    if (!_initialized) {
+      throw MCPException('Platform services not initialized');
+    }
+    return await FlutterMcpPlatform.instance.requestPermissions(permissions);
+  }
 }

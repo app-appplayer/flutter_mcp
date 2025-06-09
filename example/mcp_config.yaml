@@ -1,0 +1,104 @@
+# Flutter MCP Configuration File
+# This file demonstrates how to configure various aspects of Flutter MCP
+
+# Async/Retry Configuration
+async:
+  defaultMaxRetries: 5  # Increase retries for unreliable networks
+  defaultInitialDelay: 1000  # Start with 1 second delay
+  defaultJitterRange: 100  # +/- 100ms jitter
+  defaultBackoffFactor: 2.5  # More aggressive backoff
+
+# Memory Management
+memory:
+  monitoringInterval: 60000  # Check memory every minute
+  maxReadings: 20  # Keep more history
+  defaultThresholdMB: 512  # Alert when memory exceeds 512MB
+  initialSimulationMB: 150
+  gcProbability: 0.3
+  gcHintArraySize: 20000
+
+# Batch Processing
+batch:
+  defaultMaxSize: 100  # Larger batches for better throughput
+  defaultMaxWaitTime: 200  # Wait longer to accumulate more requests
+  defaultMaxConcurrent: 5  # More concurrent batches
+  defaultRetryEnabled: true
+  defaultMaxRetries: 3
+  exponentialBackoffBase: 200
+
+# Background Processing
+background:
+  maxConsecutiveErrors: 10  # More tolerant of errors
+  defaultInterval: 120000  # 2 minutes
+  flushDelay: 50
+
+# Health Monitoring
+health:
+  defaultCheckInterval: 60000  # 1 minute
+  criticalCheckInterval: 15000  # 15 seconds
+
+# Scheduler
+scheduler:
+  timerInterval: 5000  # Check every 5 seconds
+  maxHistorySize: 200
+
+# Object Pool
+pool:
+  defaultMaxSize: 200
+  trimThreshold: 20
+
+# Semantic Cache
+cache:
+  defaultMaxSize: 500
+  defaultTTL: 7200000  # 2 hours
+  defaultSimilarityThreshold: 0.9  # Higher threshold for better matches
+
+# iOS Notifications
+ios:
+  maxConcurrentNotifications: 128
+
+# Resource Manager
+resource:
+  priorityHigh: 400
+  priorityMedium: 250
+  priorityDefault: 150
+  priorityLow: 75
+
+# Circuit Breaker
+circuitBreaker:
+  halfOpenSuccessThreshold: 2
+
+# Performance Monitoring
+performance:
+  updateInterval: 2000  # Update every 2 seconds
+  maxHistorySize: 600  # 20 minutes of history at 2s intervals
+  thresholds:
+    cpu.usage: 90.0
+    memory.usage: 85.0
+    error.rate: 10.0
+    response.time: 2000.0
+
+# OAuth
+oauth:
+  authorizationTimeout: 600000  # 10 minutes
+  flowExpiryTime: 900000  # 15 minutes
+  defaultRedirectUri: "myapp://oauth/callback"
+  pkceEnabled: true
+
+# Web Storage
+webStorage:
+  useLocalStorage: true
+  prefix: "myapp_"
+  storageVersion: 2
+
+# Logging
+logging:
+  defaultLevel: "debug"  # More verbose for development
+  enableFileLogging: true
+  maxLogFileSize: 20971520  # 20MB
+
+# Network
+network:
+  defaultTimeout: 60000  # 1 minute
+  maxRedirects: 10
+  enableProxy: false

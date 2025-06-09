@@ -2,9 +2,24 @@ import 'dart:async';
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
 
+/// Resource allocation information
+class ResourceAllocation {
+  final String id;
+  final int memorySizeMB;
+  final DateTime allocatedAt;
+  final String? description;
+  
+  ResourceAllocation({
+    required this.id,
+    required this.memorySizeMB,
+    required this.allocatedAt,
+    this.description,
+  });
+}
+
 /// Resource manager to track and properly dispose of resources
 class ResourceManager {
-  final MCPLogger _logger = MCPLogger('mcp.resource_manager');
+  final Logger _logger = Logger('flutter_mcp.resource_manager');
 
   /// Resources to dispose
   final Map<String, _DisposableResource> _resources = {};
@@ -15,17 +30,26 @@ class ResourceManager {
 
   /// Resource cleanup priority groups
   final Map<int, Set<String>> _priorityGroups = {};
+  
+  /// Memory allocations
+  final Map<String, ResourceAllocation> _memoryAllocations = {};
 
   /// Default cleanup priority
-  static const int HIGH_PRIORITY = 300;
-  static const int MEDIUM_PRIORITY = 200;
-  static const int DEFAULT_PRIORITY = 100;
-  static const int LOW_PRIORITY = 50;
+  static const int highPriority = 300;
+  static const int mediumPriority = 200;
+  static const int defaultPriority = 100;
+  static const int lowPriority = 50;
 
   /// Resource cleanup statistics
   int _totalResourcesRegistered = 0;
   int _totalResourcesDisposed = 0;
   int _failedDisposals = 0;
+  
+  // Singleton instance
+  static ResourceManager? _instance;
+  static ResourceManager get instance => _instance ??= ResourceManager._();
+  
+  ResourceManager._();
 
   /// Register a resource for cleanup
   ///
@@ -38,17 +62,17 @@ class ResourceManager {
       String key,
       T resource,
       Future<void> Function(T) disposeFunction, {
-        int priority = DEFAULT_PRIORITY,
+        int priority = defaultPriority,
         List<String>? dependencies,
         String? tag,
       }) {
-    _logger.debug('Registering resource: $key');
+    _logger.fine('Registering resource: $key');
 
     // Dispose any existing resource with the same key
     if (_resources.containsKey(key)) {
-      _logger.debug('Resource with key $key already exists, disposing previous resource');
+      _logger.fine('Resource with key $key already exists, disposing previous resource');
       _resources[key]!.dispose().catchError((error) {
-        _logger.error('Error disposing previous resource: $key', error);
+        _logger.severe('Error disposing previous resource: $key', error);
       });
 
       // Remove from dependency/dependent mappings
@@ -80,7 +104,7 @@ class ResourceManager {
   void registerSubscription(
       String key,
       StreamSubscription subscription, {
-        int priority = DEFAULT_PRIORITY,
+        int priority = defaultPriority,
         List<String>? dependencies,
         String? tag,
       }) {
@@ -98,7 +122,7 @@ class ResourceManager {
   void registerCallback(
       String key,
       Future<void> Function() callback, {
-        int priority = DEFAULT_PRIORITY,
+        int priority = defaultPriority,
         List<String>? dependencies,
         String? tag,
       }) {
@@ -145,7 +169,7 @@ class ResourceManager {
 
     // Check for circular dependencies
     if (_wouldCreateCircularDependency(resource, dependsOn)) {
-      _logger.error('Cannot add dependency: Would create circular dependency between $resource and $dependsOn');
+      _logger.severe('Cannot add dependency: Would create circular dependency between $resource and $dependsOn');
       return;
     }
 
@@ -155,7 +179,7 @@ class ResourceManager {
     // Add to dependents map
     _dependents.putIfAbsent(dependsOn, () => {}).add(resource);
 
-    _logger.debug('Added dependency: $resource depends on $dependsOn');
+    _logger.fine('Added dependency: $resource depends on $dependsOn');
   }
 
   /// Remove a dependency between resources
@@ -249,12 +273,12 @@ class ResourceManager {
       return;
     }
 
-    _logger.debug('Disposing resource: $key');
+    _logger.fine('Disposing resource: $key');
 
     try {
       // Check dependents first
       if (_dependents.containsKey(key) && _dependents[key]!.isNotEmpty) {
-        _logger.debug('Resource $key has dependents: ${_dependents[key]!.join(", ")}');
+        _logger.fine('Resource $key has dependents: ${_dependents[key]!.join(", ")}');
 
         // Dispose dependents first
         for (final dependent in List<String>.from(_dependents[key]!)) {
@@ -273,7 +297,7 @@ class ResourceManager {
 
       _totalResourcesDisposed++;
     } catch (e, stackTrace) {
-      _logger.error('Error disposing resource: $key', e, stackTrace);
+      _logger.severe('Error disposing resource: $key', e, stackTrace);
       _failedDisposals++;
       throw MCPOperationFailedException(
         'Failed to dispose resource: $key',
@@ -285,7 +309,7 @@ class ResourceManager {
 
   /// Dispose all resources in prioritized order
   Future<void> disposeAll() async {
-    _logger.debug('Disposing all resources');
+    _logger.fine('Disposing all resources');
 
     final errors = <String, dynamic>{};
 
@@ -318,7 +342,7 @@ class ResourceManager {
             await _resources[key]!.dispose();
             _totalResourcesDisposed++;
           } catch (e, stackTrace) {
-            _logger.error('Error disposing resource: $key', e, stackTrace);
+            _logger.severe('Error disposing resource: $key', e, stackTrace);
             errors[key] = e;
             _failedDisposals++;
           } finally {
@@ -336,7 +360,7 @@ class ResourceManager {
       _dependents.clear();
       _priorityGroups.clear();
     } catch (e, stackTrace) {
-      _logger.error('Unexpected error during resource cleanup', e, stackTrace);
+      _logger.severe('Unexpected error during resource cleanup', e, stackTrace);
       errors['_general'] = e;
     }
 
@@ -359,7 +383,7 @@ class ResourceManager {
       T resource,
       Future<void> Function(T) disposeFunction,
       String tag, {
-        int priority = DEFAULT_PRIORITY,
+        int priority = defaultPriority,
         List<String>? dependencies,
       }) {
     register(
@@ -374,7 +398,7 @@ class ResourceManager {
 
   /// Dispose all resources with a specific tag
   Future<void> disposeByTag(String tag) async {
-    _logger.debug('Disposing resources with tag: $tag');
+    _logger.fine('Disposing resources with tag: $tag');
 
     final keysToDispose = _resources.entries
         .where((entry) => entry.value.tag == tag)
@@ -387,7 +411,7 @@ class ResourceManager {
       try {
         await dispose(key);
       } catch (e, stackTrace) {
-        _logger.error('Error disposing resource: $key', e, stackTrace);
+        _logger.severe('Error disposing resource: $key', e, stackTrace);
         errors[key] = e;
         _failedDisposals++;
       }
@@ -406,6 +430,43 @@ class ResourceManager {
         .toList();
   }
 
+  /// Allocate memory for a component
+  Future<ResourceAllocation> allocateMemory(String id, int memorySizeMB) async {
+    if (_memoryAllocations.containsKey(id)) {
+      throw StateError('Memory allocation with id "$id" already exists');
+    }
+    
+    final allocation = ResourceAllocation(
+      id: id,
+      memorySizeMB: memorySizeMB,
+      allocatedAt: DateTime.now(),
+    );
+    
+    _memoryAllocations[id] = allocation;
+    _logger.info('Allocated ${memorySizeMB}MB memory for: $id');
+    
+    return allocation;
+  }
+  
+  /// Release allocated memory
+  Future<void> releaseMemory(String id) async {
+    if (_memoryAllocations.containsKey(id)) {
+      final allocation = _memoryAllocations.remove(id);
+      _logger.info('Released ${allocation?.memorySizeMB}MB memory for: $id');
+    }
+  }
+  
+  /// Get current memory allocation
+  ResourceAllocation? getMemoryAllocation(String id) {
+    return _memoryAllocations[id];
+  }
+  
+  /// Get total allocated memory
+  int getTotalAllocatedMemoryMB() {
+    return _memoryAllocations.values
+        .fold(0, (sum, allocation) => sum + allocation.memorySizeMB);
+  }
+  
   /// Get resource statistics
   Map<String, dynamic> getStatistics() {
     return {
@@ -415,6 +476,11 @@ class ResourceManager {
       'failedDisposals': _failedDisposals,
       'priorityGroups': _priorityGroups.map((k, v) => MapEntry(k.toString(), v.length)),
       'resourcesByType': _getResourceCountByType(),
+      'memoryAllocations': _memoryAllocations.map((k, v) => MapEntry(k, {
+        'sizeMB': v.memorySizeMB,
+        'allocatedAt': v.allocatedAt.toIso8601String(),
+      })),
+      'totalAllocatedMemoryMB': getTotalAllocatedMemoryMB(),
     };
   }
 
@@ -432,11 +498,12 @@ class ResourceManager {
 
   /// Clear all resources without disposing them
   void clear() {
-    _logger.debug('Clearing all resources without disposing');
+    _logger.fine('Clearing all resources without disposing');
     _resources.clear();
     _dependencies.clear();
     _dependents.clear();
     _priorityGroups.clear();
+    _memoryAllocations.clear();
   }
 }
 

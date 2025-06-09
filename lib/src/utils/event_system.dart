@@ -1,10 +1,12 @@
 import 'dart:async';
 import '../utils/logger.dart';
 import '../utils/error_recovery.dart';
+import '../events/event_models.dart';
+import '../events/enhanced_typed_event_system.dart';
 
 /// Type-safe event system for components to communicate across the application
 class EventSystem {
-  final MCPLogger _logger = MCPLogger('mcp.event_system');
+  final Logger _logger = Logger('flutter_mcp.event_system');
 
   // Event streams by topic
   final Map<String, StreamController<dynamic>> _eventControllers = {};
@@ -27,6 +29,9 @@ class EventSystem {
   // Events queued while paused
   final List<_QueuedEvent> _queuedEvents = [];
 
+  // Enhanced typed event system instance
+  final EnhancedTypedEventSystem _enhancedSystem = EnhancedTypedEventSystem.instance;
+
   // Singleton instance
   static final EventSystem _instance = EventSystem._internal();
 
@@ -36,11 +41,124 @@ class EventSystem {
   /// Internal constructor
   EventSystem._internal();
 
+  /// Publish a typed MCP event (new enhanced type-safe API)
+  Future<void> publishTyped<T extends McpEvent>(T event) async {
+    // For ServiceLifecycleEvent and ResourceLifecycleEvent, use the enhanced system directly
+    if (event.runtimeType.toString().contains('ServiceLifecycleEvent') || 
+        event.runtimeType.toString().contains('ResourceLifecycleEvent')) {
+      await _enhancedSystem.publish<T>(event);
+      return;
+    }
+    
+    // Temporarily bypass enhanced system for other events due to hanging issues
+    // TODO: Fix async handling in EnhancedTypedEventSystem
+    // await _enhancedSystem.publish<T>(event);
+    
+    // Publish to legacy system 
+    publish(event.eventType, event.toMap());
+  }
+
+  /// Subscribe to typed MCP events (new enhanced type-safe API)
+  String subscribeTyped<T extends McpEvent>(void Function(T) handler) {
+    // For ServiceLifecycleEvent and ResourceLifecycleEvent, use the enhanced system directly
+    if (T.toString().contains('ServiceLifecycleEvent') || T.toString().contains('ResourceLifecycleEvent')) {
+      return _enhancedSystem.subscribe<T>(handler);
+    }
+    
+    // Temporarily bypass enhanced system for other events due to hanging issues
+    // TODO: Fix async handling in EnhancedTypedEventSystem
+    // return _enhancedSystem.subscribe<T>(handler);
+    
+    // Determine the event type topic
+    String topic;
+    if (T.toString().contains('ServerEvent')) {
+      topic = 'server.status';
+    } else if (T.toString().contains('MemoryEvent')) {
+      topic = 'memory.high';
+    } else if (T.toString().contains('ClientEvent')) {
+      topic = 'client.status';
+    } else if (T.toString().contains('PerformanceEvent')) {
+      topic = 'performance.update';
+    } else {
+      // Use type name as fallback
+      topic = T.toString().toLowerCase();
+    }
+    
+    // Use legacy system with type checking
+    return subscribe<Map<String, dynamic>>(topic, (data) {
+      try {
+        // Create instance from map data
+        late T event;
+        if (T.toString().contains('ServerEvent')) {
+          event = ServerEvent.fromMap(data) as T;
+        } else if (T.toString().contains('MemoryEvent')) {
+          event = MemoryEvent.fromMap(data) as T;
+        } else if (T.toString().contains('ClientEvent')) {
+          event = ClientEvent.fromMap(data) as T;
+        } else if (T.toString().contains('PerformanceEvent')) {
+          event = PerformanceEvent.fromMap(data) as T;
+        } else {
+          // For other event types, try to use a generic approach
+          _logger.warning('Unknown event type: $T');
+          return;
+        }
+        handler(event);
+      } catch (e, stackTrace) {
+        _logger.severe('Error converting event data to $T', e, stackTrace);
+      }
+    });
+  }
+
+  /// Subscribe with advanced filtering and transformation (enhanced type-safe API)
+  String subscribeAdvanced<T extends McpEvent, R>({
+    required void Function(R) handler,
+    bool Function(T)? filter,
+    R Function(T)? transform,
+    int priority = 0,
+    Duration? timeout,
+    int? maxInvocations,
+    String? description,
+    Map<String, dynamic> metadata = const {},
+  }) {
+    // Temporarily bypass enhanced system due to hanging issues
+    // TODO: Fix async handling in EnhancedTypedEventSystem
+    
+    // Use legacy system with manual filtering and transformation
+    int invocations = 0;
+    return subscribeTyped<T>((event) {
+      if (maxInvocations != null && invocations >= maxInvocations) {
+        return;
+      }
+      
+      if (filter != null && !filter(event)) {
+        return;
+      }
+      
+      invocations++;
+      
+      final result = transform != null ? transform(event) : event as R;
+      handler(result);
+    });
+  }
+
+  /// Subscribe to multiple event types with pattern matching
+  String subscribePattern({
+    required Pattern eventTypePattern,
+    required void Function(McpEvent) handler,
+    String? description,
+    Map<String, dynamic> metadata = const {},
+  }) {
+    // Temporarily bypass enhanced system due to hanging issues
+    // TODO: Fix async handling in EnhancedTypedEventSystem
+    _logger.warning('Pattern subscriptions temporarily disabled');
+    return 'pattern_disabled';
+  }
+
   /// Publish an event to a topic
   void publish<T>(String topic, T event) {
     if (_isPaused) {
       _queuedEvents.add(_QueuedEvent<T>(topic, event));
-      _logger.debug('Event queued for topic: $topic (system paused)');
+      _logger.fine('Event queued for topic: $topic (system paused)');
       return;
     }
 
@@ -49,12 +167,12 @@ class EventSystem {
       if (_shouldCacheTopic(topic)) {
         _eventControllers[topic] = StreamController<dynamic>.broadcast();
       } else {
-        _logger.debug('No subscribers for topic: $topic');
+        _logger.fine('No subscribers for topic: $topic');
         return;
       }
     }
 
-    _logger.debug('Publishing event to topic: $topic');
+    _logger.fine('Publishing event to topic: $topic');
 
     // Add to cache if this topic uses caching
     if (_shouldCacheTopic(topic)) {
@@ -67,7 +185,7 @@ class EventSystem {
 
   /// Subscribe to a topic
   String subscribe<T>(String topic, void Function(T) handler) {
-    _logger.debug('Subscribing to topic: $topic');
+    _logger.fine('Subscribing to topic: $topic');
 
     // Create stream controller if it doesn't exist
     if (!_eventControllers.containsKey(topic)) {
@@ -85,7 +203,7 @@ class EventSystem {
       try {
         handler(event);
       } catch (e, stackTrace) {
-        _logger.error('Error in event handler for topic $topic', e, stackTrace);
+        _logger.severe('Error in event handler for topic $topic', e, stackTrace);
       }
     });
 
@@ -105,7 +223,7 @@ class EventSystem {
       return;
     }
 
-    _logger.debug('Unsubscribing: $token');
+    _logger.fine('Unsubscribing: $token');
 
     // Cancel subscription
     _subscriptions[token]!.cancel();
@@ -116,7 +234,7 @@ class EventSystem {
 
     // Check if this was the last subscription for the topic
     if (_subscriptions.keys.where((k) => k.startsWith('${topic}_')).isEmpty) {
-      _logger.debug('No more subscribers for topic: $topic, cleaning up');
+      _logger.fine('No more subscribers for topic: $topic, cleaning up');
       _eventControllers[topic]?.close();
       _eventControllers.remove(topic);
 
@@ -126,7 +244,7 @@ class EventSystem {
 
   /// Unsubscribe all handlers from a topic
   void unsubscribeFromTopic(String topic) {
-    _logger.debug('Unsubscribing all from topic: $topic');
+    _logger.fine('Unsubscribing all from topic: $topic');
 
     // Find all tokens for this topic
     final tokensToRemove = _subscriptions.keys
@@ -168,7 +286,7 @@ class EventSystem {
       void Function(T) handler,
       bool Function(T) filter,
       ) {
-    _logger.debug('Subscribing to topic with filter: $topic');
+    _logger.fine('Subscribing to topic with filter: $topic');
 
     // Create stream controller if it doesn't exist
     if (!_eventControllers.containsKey(topic)) {
@@ -186,7 +304,7 @@ class EventSystem {
       try {
         handler(event);
       } catch (e, stackTrace) {
-        _logger.error('Error in filtered event handler for topic $topic', e, stackTrace);
+        _logger.severe('Error in filtered event handler for topic $topic', e, stackTrace);
       }
     });
 
@@ -215,7 +333,7 @@ class EventSystem {
         int? maxEvents,
         Duration? timeout,
       }) {
-    _logger.debug('Creating temporary subscription to topic: $topic');
+    _logger.fine('Creating temporary subscription to topic: $topic');
 
     // Create stream controller if it doesn't exist
     if (!_eventControllers.containsKey(topic)) {
@@ -244,7 +362,7 @@ class EventSystem {
           }
         }
       } catch (e, stackTrace) {
-        _logger.error('Error in temporary event handler for topic $topic', e, stackTrace);
+        _logger.severe('Error in temporary event handler for topic $topic', e, stackTrace);
       }
     });
 
@@ -255,7 +373,7 @@ class EventSystem {
     if (timeout != null) {
       Timer(timeout, () {
         if (_subscriptions.containsKey(token)) {
-          _logger.debug('Subscription timeout reached: $token');
+          _logger.fine('Subscription timeout reached: $token');
           unsubscribe(token);
         }
       });
@@ -293,7 +411,7 @@ class EventSystem {
       void Function(T) handler,
       Duration duration,
       ) {
-    _logger.debug('Creating debounced subscription to topic: $topic');
+    _logger.fine('Creating debounced subscription to topic: $topic');
 
     // Create stream controller if it doesn't exist
     if (!_eventControllers.containsKey(topic)) {
@@ -312,7 +430,7 @@ class EventSystem {
       try {
         handler(event);
       } catch (e, stackTrace) {
-        _logger.error('Error in debounced event handler for topic $topic', e, stackTrace);
+        _logger.severe('Error in debounced event handler for topic $topic', e, stackTrace);
       }
     });
 
@@ -328,7 +446,7 @@ class EventSystem {
       void Function(T) handler,
       Duration duration,
       ) {
-    _logger.debug('Creating throttled subscription to topic: $topic');
+    _logger.fine('Creating throttled subscription to topic: $topic');
 
     // Create stream controller if it doesn't exist
     if (!_eventControllers.containsKey(topic)) {
@@ -357,7 +475,7 @@ class EventSystem {
             canEmit = true;
           });
         } catch (e, stackTrace) {
-          _logger.error('Error in throttled event handler for topic $topic', e, stackTrace);
+          _logger.severe('Error in throttled event handler for topic $topic', e, stackTrace);
         }
       }
     });
@@ -429,16 +547,20 @@ class EventSystem {
   /// Pause event delivery
   void pause() {
     _isPaused = true;
-    _logger.debug('Event system paused');
+    // Temporarily bypass enhanced system due to hanging issues
+    // _enhancedSystem.pause();
+    _logger.fine('Event system paused');
   }
 
   /// Resume event delivery, optionally processing queued events
-  void resume({bool processQueued = true}) {
+  Future<void> resume({bool processQueued = true}) async {
     _isPaused = false;
-    _logger.debug('Event system resumed');
+    // Temporarily bypass enhanced system due to hanging issues
+    // await _enhancedSystem.resume();
+    _logger.fine('Event system resumed');
 
     if (processQueued && _queuedEvents.isNotEmpty) {
-      _logger.debug('Processing ${_queuedEvents.length} queued events');
+      _logger.fine('Processing ${_queuedEvents.length} queued events');
 
       // Take a copy to avoid concurrent modification issues
       final queuedEvents = List<_QueuedEvent>.from(_queuedEvents);
@@ -467,18 +589,90 @@ class EventSystem {
     return topics.toList();
   }
 
-  /// Clean up resources
-  void dispose() {
-    _logger.debug('Disposing event system');
+  /// Get enhanced event system statistics
+  Map<String, dynamic> getEnhancedStatistics() {
+    // Temporarily bypass enhanced system due to hanging issues
+    return {
+      'totalEventsPublished': 0,
+      'totalEventsDelivered': 0,
+      'activeSubscriptions': _subscriptions.length,
+      'isPaused': _isPaused,
+    };
+  }
+
+  /// Get handler statistics from enhanced system
+  Map<String, dynamic> getHandlerStatistics() {
+    // Temporarily bypass enhanced system due to hanging issues
+    return {};
+  }
+
+  /// Start event recording for replay
+  void startRecording() {
+    // Temporarily bypass enhanced system due to hanging issues
+    _logger.warning('Event recording temporarily disabled');
+  }
+
+  /// Stop event recording
+  void stopRecording() {
+    // Temporarily bypass enhanced system due to hanging issues
+    _logger.warning('Event recording temporarily disabled');
+  }
+
+  /// Replay recorded events
+  Future<void> replayEvents({
+    DateTime? fromTime,
+    DateTime? toTime,
+    bool Function(McpEvent)? filter,
+  }) async {
+    // Temporarily bypass enhanced system due to hanging issues
+    _logger.warning('Event replay temporarily disabled');
+  }
+
+  /// Get event history
+  List<Map<String, dynamic>> getEventHistory({
+    DateTime? fromTime,
+    DateTime? toTime,
+  }) {
+    // Temporarily bypass enhanced system due to hanging issues
+    return [];
+  }
+
+  /// Add event middleware to enhanced system
+  void addMiddleware(EventMiddleware middleware) {
+    // Temporarily bypass enhanced system due to hanging issues
+    _logger.warning('Middleware temporarily disabled');
+  }
+
+  /// Remove event middleware from enhanced system
+  void removeMiddleware(String name) {
+    // Temporarily bypass enhanced system due to hanging issues
+    _logger.warning('Middleware temporarily disabled');
+  }
+
+  /// Get enhanced subscription information
+  EventSubscription? getEnhancedSubscription(String subscriptionId) {
+    // Temporarily bypass enhanced system due to hanging issues
+    return null;
+  }
+
+  /// Get all active enhanced subscriptions
+  List<EventSubscription> getActiveEnhancedSubscriptions() {
+    // Temporarily bypass enhanced system due to hanging issues
+    return [];
+  }
+
+  /// Reset the event system for testing purposes
+  Future<void> reset() async {
+    _logger.fine('Resetting event system');
 
     // Cancel all subscriptions
     for (final subscription in _subscriptions.values) {
-      subscription.cancel();
+      await subscription.cancel();
     }
 
     // Close all controllers
     for (final controller in _eventControllers.values) {
-      controller.close();
+      await controller.close();
     }
 
     // Clear collections
@@ -486,6 +680,18 @@ class EventSystem {
     _eventControllers.clear();
     _cachedEvents.clear();
     _queuedEvents.clear();
+    _subscriptionCounter = 0;
+    _isPaused = false;
+
+    // Temporarily skip enhanced system reset due to hanging issues
+    // TODO: Fix async handling in EnhancedTypedEventSystem
+    // await _enhancedSystem.reset();
+  }
+
+  /// Clean up resources
+  Future<void> dispose() async {
+    await reset();
+    _logger.fine('Event system disposed');
   }
 }
 

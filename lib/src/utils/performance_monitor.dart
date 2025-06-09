@@ -4,18 +4,25 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../utils/logger.dart';
+import '../metrics/typed_metrics.dart';
+import '../events/event_models.dart';
+import '../utils/event_system.dart';
 
 /// Performance monitoring utility for tracking operation metrics
 class PerformanceMonitor {
-  final MCPLogger _logger = MCPLogger('mcp.performance_monitor');
+  final Logger _logger = Logger('flutter_mcp.performance_monitor');
 
   // Active timers
   final Map<String, Stopwatch> _activeTimers = {};
 
-  // Performance metrics
+  // Performance metrics (legacy and typed)
   final Map<String, _MetricCounter> _counters = {};
   final Map<String, _MetricTimer> _timers = {};
   final Map<String, _ResourceUsage> _resources = {};
+  
+  // Typed metrics storage
+  final Map<String, PerformanceMetric> _typedMetrics = {};
+  final Map<String, MetricCollection> _metricCollections = {};
 
   // Recent operations queue (limited size)
   final Queue<_OperationRecord> _recentOperations = Queue();
@@ -66,7 +73,7 @@ class PerformanceMonitor {
 
     // Set configuration values
     if (enableLogging != null && enableLogging != _enableLogging) {
-      _logger.debug('Performance logging ${enableLogging ? 'enabled' : 'disabled'}');
+      _logger.fine('Performance logging ${enableLogging ? 'enabled' : 'disabled'}');
     }
 
     // Update export path
@@ -91,13 +98,13 @@ class PerformanceMonitor {
   /// Enable event caching for a topic
   void enableCaching(String topic) {
     _cachingTopics.add(topic);
-    _logger.debug('Enabled caching for topic: $topic');
+    _logger.fine('Enabled caching for topic: $topic');
   }
 
   /// Disable event caching for a topic
   void disableCaching(String topic) {
     _cachingTopics.remove(topic);
-    _logger.debug('Disabled caching for topic: $topic');
+    _logger.fine('Disabled caching for topic: $topic');
   }
 
   /// Start a timer for a specific operation
@@ -110,7 +117,7 @@ class PerformanceMonitor {
 
     // Log start if enabled
     if (_enableLogging) {
-      _logger.debug('Started operation: $operation (ID: $operationId)');
+      _logger.fine('Started operation: $operation (ID: $operationId)');
     }
 
     return operationId;
@@ -142,7 +149,7 @@ class PerformanceMonitor {
 
     // Log completion if enabled
     if (_enableLogging) {
-      _logger.debug(
+      _logger.fine(
           'Completed operation: $operationName in ${duration.inMilliseconds}ms '
               '(ID: $operationId, success: $success)'
       );
@@ -156,8 +163,21 @@ class PerformanceMonitor {
     _counters.putIfAbsent(name, () => _MetricCounter(name));
     _counters[name]!.increment(value);
 
+    // Create typed counter metric
+    final currentValue = _counters[name]!.value.toDouble();
+    final typedMetric = CounterMetric(
+      name: name,
+      value: currentValue,
+      increment: value.toDouble(),
+      unit: 'count',
+    );
+    _typedMetrics[name] = typedMetric;
+    
+    // Publish typed event
+    EventSystem.instance.publishTyped<PerformanceEvent>(typedMetric.toEvent());
+
     if (_enableLogging) {
-      _logger.debug('Counter $name incremented by $value');
+      _logger.fine('Counter $name incremented by $value');
     }
   }
 
@@ -167,7 +187,7 @@ class PerformanceMonitor {
     _counters[name]!.increment(-value);
 
     if (_enableLogging) {
-      _logger.debug('Counter $name decremented by $value');
+      _logger.fine('Counter $name decremented by $value');
     }
   }
 
@@ -176,9 +196,23 @@ class PerformanceMonitor {
     _resources.putIfAbsent(resource, () => _ResourceUsage(resource, capacity));
     _resources[resource]!.record(usage);
 
+    // Create typed resource usage metric
+    final resourceType = _getResourceType(resource);
+    final typedMetric = ResourceUsageMetric(
+      name: resource,
+      value: usage,
+      capacity: capacity,
+      resourceType: resourceType,
+      unit: _getResourceUnit(resource),
+    );
+    _typedMetrics[resource] = typedMetric;
+    
+    // Publish typed event
+    EventSystem.instance.publishTyped<PerformanceEvent>(typedMetric.toEvent());
+
     if (_enableLogging) {
       final capacityStr = capacity != null ? '/$capacity' : '';
-      _logger.debug('Resource $resource usage: $usage$capacityStr');
+      _logger.fine('Resource $resource usage: $usage$capacityStr');
     }
   }
 
@@ -211,7 +245,7 @@ class PerformanceMonitor {
 
     // Optional logging if enabled
     if (_enableLogging) {
-      _logger.debug(
+      _logger.fine(
           'Metric $name: ${duration}ms (success: $success, metadata: $metadata)'
       );
     }
@@ -226,6 +260,19 @@ class PerformanceMonitor {
     // Update timer metrics
     _timers.putIfAbsent(operation, () => _MetricTimer(operation));
     _timers[operation]!.record(duration, success);
+
+    // Create typed timer metric
+    final typedMetric = TimerMetric(
+      name: operation,
+      duration: duration,
+      operation: operation,
+      success: success,
+      errorMessage: success ? null : 'Operation failed',
+    );
+    _typedMetrics['timer.$operation'] = typedMetric;
+    
+    // Publish typed event
+    EventSystem.instance.publishTyped<PerformanceEvent>(typedMetric.toEvent());
 
     // Add to recent operations
     _recentOperations.add(_OperationRecord(
@@ -247,11 +294,191 @@ class PerformanceMonitor {
     return _cachingTopics.contains(topic);
   }
 
+  /// Helper method to determine resource type from resource name
+  ResourceType _getResourceType(String resourceName) {
+    final lowerName = resourceName.toLowerCase();
+    if (lowerName.contains('memory') || lowerName.contains('ram')) {
+      return ResourceType.memory;
+    } else if (lowerName.contains('cpu') || lowerName.contains('processor')) {
+      return ResourceType.cpu;
+    } else if (lowerName.contains('disk') || lowerName.contains('storage')) {
+      return ResourceType.disk;
+    } else if (lowerName.contains('network') || lowerName.contains('bandwidth')) {
+      return ResourceType.network;
+    } else if (lowerName.contains('battery') || lowerName.contains('power')) {
+      return ResourceType.battery;
+    }
+    return ResourceType.memory; // Default fallback
+  }
+
+  /// Helper method to determine unit from resource name
+  String? _getResourceUnit(String resourceName) {
+    final lowerName = resourceName.toLowerCase();
+    if (lowerName.contains('mb') || lowerName.contains('memory')) {
+      return 'MB';
+    } else if (lowerName.contains('percent') || lowerName.contains('%')) {
+      return '%';
+    } else if (lowerName.contains('bytes')) {
+      return 'bytes';
+    } else if (lowerName.contains('hz') || lowerName.contains('frequency')) {
+      return 'Hz';
+    }
+    return null; // No specific unit
+  }
+
   /// Get timer metrics for a specific operation
   Map<String, dynamic>? getTimerMetrics(String name) {
     final timer = _timers[name];
     if (timer == null) return null;
     return timer.toJson();
+  }
+
+  // ===== NEW TYPED METRICS API =====
+
+  /// Record a typed performance metric
+  void recordTypedMetric(PerformanceMetric metric) {
+    _typedMetrics[metric.name] = metric;
+    
+    // Publish typed event
+    EventSystem.instance.publishTyped<PerformanceEvent>(metric.toEvent());
+    
+    if (_enableLogging) {
+      _logger.fine('Recorded typed metric: ${metric.name} = ${metric.value} ${metric.unit ?? ''}');
+    }
+  }
+
+  /// Record a network operation metric
+  void recordNetworkMetric({
+    required String name,
+    required Duration latency,
+    required int bytes,
+    required NetworkOperation operation,
+    bool success = true,
+    int? statusCode,
+    String? endpoint,
+  }) {
+    final value = operation == NetworkOperation.throughput 
+        ? bytes / latency.inMilliseconds * 1000.0 // bytes per second
+        : latency.inMilliseconds.toDouble();
+        
+    final metric = NetworkMetric(
+      name: name,
+      value: value,
+      operation: operation,
+      latency: latency,
+      bytes: bytes,
+      success: success,
+      statusCode: statusCode,
+      endpoint: endpoint,
+    );
+    
+    recordTypedMetric(metric);
+  }
+
+  /// Record a histogram metric
+  void recordHistogramMetric({
+    required String name,
+    required List<double> samples,
+    required List<double> buckets,
+    String? unit,
+  }) {
+    final metric = HistogramMetric(
+      name: name,
+      samples: samples,
+      buckets: buckets,
+      unit: unit,
+    );
+    
+    recordTypedMetric(metric);
+  }
+
+  /// Record a custom metric
+  void recordCustomMetric({
+    required String name,
+    required double value,
+    required MetricType type,
+    required String category,
+    double? capacity,
+    String? unit,
+    Map<String, dynamic> metadata = const {},
+  }) {
+    final metric = CustomMetric(
+      name: name,
+      value: value,
+      type: type,
+      category: category,
+      capacity: capacity,
+      unit: unit,
+      metadata: metadata,
+    );
+    
+    recordTypedMetric(metric);
+  }
+
+  /// Get typed metric by name
+  PerformanceMetric? getTypedMetric(String name) {
+    return _typedMetrics[name];
+  }
+
+  /// Get all typed metrics of a specific type
+  List<T> getTypedMetricsByType<T extends PerformanceMetric>() {
+    return _typedMetrics.values.whereType<T>().toList();
+  }
+
+  /// Create a metric collection from current metrics
+  MetricCollection createMetricCollection(String name, {Pattern? namePattern}) {
+    List<PerformanceMetric> metrics;
+    
+    if (namePattern != null) {
+      metrics = _typedMetrics.values
+          .where((m) => namePattern.allMatches(m.name).isNotEmpty)
+          .toList();
+    } else {
+      metrics = _typedMetrics.values.toList();
+    }
+    
+    final collection = MetricCollection(name: name, metrics: metrics);
+    _metricCollections[name] = collection;
+    
+    return collection;
+  }
+
+  /// Get metric collection by name
+  MetricCollection? getMetricCollection(String name) {
+    return _metricCollections[name];
+  }
+
+  /// Get typed metrics summary
+  Map<String, dynamic> getTypedMetricsSummary() {
+    final summary = <String, dynamic>{};
+    
+    // Group by metric type
+    final byType = <MetricType, List<PerformanceMetric>>{};
+    for (final metric in _typedMetrics.values) {
+      byType.putIfAbsent(metric.type, () => []).add(metric);
+    }
+    
+    // Calculate summaries for each type
+    for (final entry in byType.entries) {
+      final type = entry.key;
+      final metrics = entry.value;
+      
+      if (metrics.isNotEmpty) {
+        final values = metrics.map((m) => m.value).toList();
+        values.sort();
+        
+        summary[type.name] = {
+          'count': metrics.length,
+          'sum': values.reduce((a, b) => a + b),
+          'avg': values.reduce((a, b) => a + b) / values.length,
+          'min': values.first,
+          'max': values.last,
+          'median': values[values.length ~/ 2],
+        };
+      }
+    }
+    
+    return summary;
   }
 
   /// Get metrics report
@@ -265,6 +492,8 @@ class PerformanceMonitor {
       'resources': _resources.map((key, value) => MapEntry(key, value.toJson())),
       'recent_operations': _recentOperations.map((op) => op.toJson()).toList(),
       'caching_topics': _cachingTopics.toList(),
+      'typed_metrics': _typedMetrics.map((key, value) => MapEntry(key, value.toMap())),
+      'metric_collections': _metricCollections.map((key, value) => MapEntry(key, value.toMap())),
     };
   }
 
@@ -307,11 +536,19 @@ class PerformanceMonitor {
     return summary;
   }
 
-  /// Export metrics to JSON file
-  Future<bool> exportMetrics([String? filePath]) async {
+  /// Export metrics to JSON file or string (for web)
+  Future<dynamic> exportMetrics([String? filePath]) async {
     if (kIsWeb) {
-      _logger.warning('Cannot export metrics to file in web platform');
-      return false;
+      // On web, return JSON string instead of writing to file
+      try {
+        final report = getMetricsReport();
+        final json = jsonEncode(report);
+        _logger.info('Metrics exported as JSON string for web');
+        return json;
+      } catch (e, stackTrace) {
+        _logger.severe('Failed to export metrics for web', e, stackTrace);
+        return null;
+      }
     }
 
     final path = filePath ?? _exportPath;
@@ -330,7 +567,40 @@ class PerformanceMonitor {
       _logger.info('Metrics exported to $path');
       return true;
     } catch (e, stackTrace) {
-      _logger.error('Failed to export metrics to file', e, stackTrace);
+      _logger.severe('Failed to export metrics to file', e, stackTrace);
+      return false;
+    }
+  }
+  
+  /// Export metrics as JSON string (cross-platform)
+  String exportMetricsAsJson() {
+    try {
+      final report = getMetricsReport();
+      return jsonEncode(report);
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to export metrics as JSON', e, stackTrace);
+      return '{}';
+    }
+  }
+  
+  /// Import metrics from JSON string (useful for web)
+  bool importMetricsFromJson(String jsonString) {
+    try {
+      final data = jsonDecode(jsonString) as Map<String, dynamic>;
+      
+      // Import counters
+      if (data.containsKey('counters')) {
+        final counters = data['counters'] as Map<String, dynamic>;
+        counters.forEach((key, value) {
+          _counters[key] = _MetricCounter(key);
+          _counters[key]!._value = value['value'] ?? 0;
+        });
+      }
+      
+      _logger.info('Metrics imported from JSON');
+      return true;
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to import metrics from JSON', e, stackTrace);
       return false;
     }
   }
@@ -358,7 +628,7 @@ class PerformanceMonitor {
       exportMetrics(filePath);
     });
 
-    _logger.debug('Auto-export timer set up with interval: ${interval.inSeconds}s');
+    _logger.fine('Auto-export timer set up with interval: ${interval.inSeconds}s');
   }
 
   /// Reset all metrics
@@ -368,6 +638,8 @@ class PerformanceMonitor {
     _timers.clear();
     _resources.clear();
     _recentOperations.clear();
+    _typedMetrics.clear();
+    _metricCollections.clear();
 
     _logger.info('Performance metrics reset');
   }

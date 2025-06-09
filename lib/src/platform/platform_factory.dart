@@ -9,7 +9,7 @@ import 'notification/notification_manager.dart';
 import 'tray/tray_manager.dart';
 
 // Native implementations
-import 'background/android_background.dart';
+import 'background/android_enhanced_background.dart' as android_enhanced;
 import 'background/ios_background.dart';
 import 'background/desktop_background.dart';
 import 'background/web_background.dart';
@@ -17,7 +17,7 @@ import 'notification/android_notification.dart';
 import 'notification/ios_notification.dart';
 import 'notification/web_notification.dart';
 import 'notification/desktop_notification.dart';
-import 'tray/macos_tray.dart';
+import 'tray/macos_enhanced_tray.dart';
 import 'tray/windows_tray.dart';
 import 'tray/linux_tray.dart';
 import 'storage/secure_storage.dart';
@@ -25,24 +25,24 @@ import 'storage/web_storage.dart';
 
 /// Factory for creating platform-specific implementations
 class PlatformFactory {
-  final MCPLogger _logger = MCPLogger('mcp.platform_factory');
+  final Logger _logger = Logger('flutter_mcp.platform_factory');
 
   /// Create appropriate background service for current platform
   BackgroundService createBackgroundService() {
     if (kIsWeb) {
-      _logger.debug('Creating web background service');
+      _logger.fine('Creating web background service');
       return WebBackgroundService();
     }
 
     try {
       if (io.Platform.isAndroid) {
-        _logger.debug('Creating Android background service');
-        return AndroidBackgroundService();
+        _logger.fine('Creating Android enhanced background service');
+        return android_enhanced.AndroidEnhancedBackgroundService();
       } else if (io.Platform.isIOS) {
-        _logger.debug('Creating iOS background service');
+        _logger.fine('Creating iOS background service');
         return IOSBackgroundService();
       } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
-        _logger.debug('Creating desktop background service');
+        _logger.fine('Creating desktop background service');
         return DesktopBackgroundService();
       } else {
         _logger.warning('Unsupported platform for background service, using no-op implementation');
@@ -57,19 +57,19 @@ class PlatformFactory {
   /// Create appropriate notification manager for current platform
   NotificationManager createNotificationManager() {
     if (kIsWeb) {
-      _logger.debug('Creating web notification manager');
+      _logger.fine('Creating web notification manager');
       return WebNotificationManager();
     }
 
     try {
       if (io.Platform.isAndroid) {
-        _logger.debug('Creating Android notification manager');
+        _logger.fine('Creating Android notification manager');
         return AndroidNotificationManager();
       } else if (io.Platform.isIOS) {
-        _logger.debug('Creating iOS notification manager');
+        _logger.fine('Creating iOS notification manager');
         return IOSNotificationManager();
       } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
-        _logger.debug('Creating desktop notification manager');
+        _logger.fine('Creating desktop notification manager');
         return DesktopNotificationManager();
       } else {
         _logger.warning('Unsupported platform for notification manager, using no-op implementation');
@@ -90,13 +90,13 @@ class PlatformFactory {
 
     try {
       if (io.Platform.isMacOS) {
-        _logger.debug('Creating macOS tray manager');
-        return MacOSTrayManager();
+        _logger.fine('Creating macOS enhanced tray manager');
+        return MacOSEnhancedTrayManager();
       } else if (io.Platform.isWindows) {
-        _logger.debug('Creating Windows tray manager');
+        _logger.fine('Creating Windows tray manager');
         return WindowsTrayManager();
       } else if (io.Platform.isLinux) {
-        _logger.debug('Creating Linux tray manager');
+        _logger.fine('Creating Linux tray manager');
         return LinuxTrayManager();
       } else {
         _logger.warning('Unsupported platform for tray manager, using no-op implementation');
@@ -111,11 +111,11 @@ class PlatformFactory {
   /// Create appropriate storage manager for current platform
   SecureStorageManager createStorageManager() {
     if (kIsWeb) {
-      _logger.debug('Creating web storage manager');
+      _logger.fine('Creating web storage manager');
       return WebStorageManager(useLocalStorage: true);
     } else {
-      _logger.debug('Creating secure storage manager');
-      return SecureStorageFactory.create();
+      _logger.fine('Creating secure storage manager');
+      return SecureStorageManagerImpl();
     }
   }
 

@@ -10,7 +10,7 @@ import 'mcp_integration_test.dart';
 import 'mcp_integration_test.mocks.dart';
 
 class ConcurrentOperationsFlutterMCP extends TestFlutterMCP {
-  final ResourceManager resourceManager = ResourceManager();
+  final ResourceManager resourceManager = ResourceManager.instance;
   
   ConcurrentOperationsFlutterMCP(super.platformServices);
 
@@ -311,7 +311,7 @@ void main() {
         (value) async {
           flutterMcp.operationLog.add('Disposed parent resource');
         },
-        priority: ResourceManager.HIGH_PRIORITY,
+        priority: ResourceManager.highPriority,
       );
       
       // Execute operations in parallel
@@ -330,19 +330,32 @@ void main() {
       
       // Verify dependent resources were disposed first
       final logs = flutterMcp.operationLog.where((log) => log.startsWith('Disposed')).toList();
+      print('Disposal logs: $logs');
+      
       final parentIndex = logs.indexWhere((log) => log.contains('parent resource'));
+      print('Parent disposed at index: $parentIndex');
       
       // Check that at least one dependent was disposed before parent
       bool atLeastOneDependentBeforeParent = false;
       for (int i = 0; i < 5; i++) {
-        final dependentIndex = logs.indexWhere((log) => log.contains('task_op_$i'));
-        if (dependentIndex != -1 && dependentIndex < parentIndex) {
+        final dependentIndex = logs.indexWhere((log) => log.contains('task op_$i'));
+        print('Dependent task_op_$i disposed at index: $dependentIndex');
+        if (dependentIndex != -1 && parentIndex != -1 && dependentIndex < parentIndex) {
           atLeastOneDependentBeforeParent = true;
           break;
         }
       }
       
-      expect(atLeastOneDependentBeforeParent, isTrue);
+      // If test fails, provide more detailed information
+      if (!atLeastOneDependentBeforeParent) {
+        print('Test failure details:');
+        print('  All disposal logs: $logs');
+        print('  Parent index: $parentIndex');
+        print('  Expected at least one dependent to be disposed before parent');
+      }
+      
+      expect(atLeastOneDependentBeforeParent, isTrue, 
+        reason: 'Dependent resources should be disposed before parent resource');
       
       // Clean up remaining resources
       await flutterMcp.shutdown();

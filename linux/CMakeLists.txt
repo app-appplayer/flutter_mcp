@@ -41,6 +41,22 @@ target_include_directories(${PLUGIN_NAME} INTERFACE
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
 
+# Find and link required packages
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBNOTIFY REQUIRED libnotify)
+pkg_check_modules(LIBSECRET REQUIRED libsecret-1)
+pkg_check_modules(APPINDICATOR REQUIRED appindicator3-0.1)
+
+target_include_directories(${PLUGIN_NAME} PRIVATE 
+  ${LIBNOTIFY_INCLUDE_DIRS}
+  ${LIBSECRET_INCLUDE_DIRS}
+  ${APPINDICATOR_INCLUDE_DIRS})
+
+target_link_libraries(${PLUGIN_NAME} PRIVATE
+  ${LIBNOTIFY_LIBRARIES}
+  ${LIBSECRET_LIBRARIES}
+  ${APPINDICATOR_LIBRARIES})
+
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
 # external build triggered from this build file.
@@ -82,8 +98,16 @@ add_executable(${TEST_RUNNER}
 )
 apply_standard_settings(${TEST_RUNNER})
 target_include_directories(${TEST_RUNNER} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(${TEST_RUNNER} PRIVATE 
+  ${LIBNOTIFY_INCLUDE_DIRS}
+  ${LIBSECRET_INCLUDE_DIRS}
+  ${APPINDICATOR_INCLUDE_DIRS})
 target_link_libraries(${TEST_RUNNER} PRIVATE flutter)
 target_link_libraries(${TEST_RUNNER} PRIVATE PkgConfig::GTK)
+target_link_libraries(${TEST_RUNNER} PRIVATE
+  ${LIBNOTIFY_LIBRARIES}
+  ${LIBSECRET_LIBRARIES}
+  ${APPINDICATOR_LIBRARIES})
 target_link_libraries(${TEST_RUNNER} PRIVATE gtest_main gmock)
 
 # Enable automatic test discovery.

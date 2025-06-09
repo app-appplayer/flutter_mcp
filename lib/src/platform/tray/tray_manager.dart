@@ -4,6 +4,9 @@ import '../../config/tray_config.dart';
 class TrayMenuItem {
   /// Menu item label
   final String? label;
+  
+  /// Menu item ID for event handling
+  final String? id;
 
   /// Menu item click handler
   final Function()? onTap;
@@ -17,6 +20,7 @@ class TrayMenuItem {
   /// Create menu item
   TrayMenuItem({
     this.label,
+    this.id,
     this.onTap,
     this.disabled = false,
   }) : isSeparator = false;
@@ -24,9 +28,18 @@ class TrayMenuItem {
   /// Create separator
   TrayMenuItem.separator()
       : label = null,
+        id = null,
         onTap = null,
         disabled = false,
         isSeparator = true;
+  
+  /// Convert to JSON for platform channel
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'id': id ?? label?.replaceAll(' ', '_').toLowerCase(),
+    'disabled': disabled,
+    'isSeparator': isSeparator,
+  };
 }
 
 /// Tray manager interface

@@ -12,7 +12,7 @@ import 'dart:convert' show json;
 
 /// Enhanced manager for integrating mcp_llm plugins with flutter_mcp
 class LlmPluginIntegrator {
-  final MCPLogger _logger = MCPLogger('mcp.llm_plugin_integrator');
+  final Logger _logger = Logger('flutter_mcp.llm_plugin_integrator');
   final MCPPluginRegistry _pluginRegistry;
 
   // Cache of registered LLM plugins
@@ -29,7 +29,7 @@ class LlmPluginIntegrator {
     final String llmPluginName = llmPlugin.name;
 
     try {
-      _logger.debug('Registering mcp_llm plugin as flutter_mcp plugin: $llmPluginName');
+      _logger.fine('Registering mcp_llm plugin as flutter_mcp plugin: $llmPluginName');
 
       // Create appropriate adapter based on plugin type
       MCPPlugin mcpPlugin;
@@ -60,7 +60,7 @@ class LlmPluginIntegrator {
       _logger.info('Successfully registered mcp_llm plugin $llmPluginName as flutter_mcp plugin ${mcpPlugin.name}');
       return true;
     } catch (e, stackTrace) {
-      _logger.error('Failed to register mcp_llm plugin: $llmPluginName', e, stackTrace);
+      _logger.severe('Failed to register mcp_llm plugin: $llmPluginName', e, stackTrace);
       return false;
     }
   }
@@ -111,7 +111,7 @@ class LlmPluginIntegrator {
 
       return results;
     } catch (e, stackTrace) {
-      _logger.error('Failed to register plugins from LLM client $llmClientId', e, stackTrace);
+      _logger.severe('Failed to register plugins from LLM client $llmClientId', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register plugins from LLM client $llmClientId',
           e,
@@ -151,7 +151,7 @@ class LlmPluginIntegrator {
 
       return results;
     } catch (e, stackTrace) {
-      _logger.error('Failed to register plugins from LLM server $llmServerId', e, stackTrace);
+      _logger.severe('Failed to register plugins from LLM server $llmServerId', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register plugins from LLM server $llmServerId',
           e,
@@ -193,7 +193,7 @@ class LlmPluginIntegrator {
 
       return results;
     } catch (e, stackTrace) {
-      _logger.error('Failed to register core LLM plugins', e, stackTrace);
+      _logger.severe('Failed to register core LLM plugins', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register core LLM plugins',
           e,
@@ -228,7 +228,7 @@ class LlmPluginIntegrator {
       // Register with mcp_llm plugin manager
       await llmPluginManager.registerPlugin(adapter);
 
-      _logger.debug('Registered flutter_mcp tool plugin ${toolPlugin.name} with LLM plugin manager');
+      _logger.fine('Registered flutter_mcp tool plugin ${toolPlugin.name} with LLM plugin manager');
     }
 
     // Get all resource plugins from flutter_mcp
@@ -245,7 +245,7 @@ class LlmPluginIntegrator {
       // Register with mcp_llm plugin manager
       await llmPluginManager.registerPlugin(adapter);
 
-      _logger.debug('Registered flutter_mcp resource plugin ${resourcePlugin.name} with LLM plugin manager');
+      _logger.fine('Registered flutter_mcp resource plugin ${resourcePlugin.name} with LLM plugin manager');
     }
 
     // Get all prompt plugins from flutter_mcp
@@ -262,7 +262,7 @@ class LlmPluginIntegrator {
       // Register with mcp_llm plugin manager
       await llmPluginManager.registerPlugin(adapter);
 
-      _logger.debug('Registered flutter_mcp prompt plugin ${promptPlugin.name} with LLM plugin manager');
+      _logger.fine('Registered flutter_mcp prompt plugin ${promptPlugin.name} with LLM plugin manager');
     }
   }
 
@@ -308,7 +308,7 @@ class LlmPluginIntegrator {
       _logger.info('Successfully unregistered LLM plugin: $llmPluginName');
       return true;
     } catch (e, stackTrace) {
-      _logger.error('Failed to unregister LLM plugin: $llmPluginName', e, stackTrace);
+      _logger.severe('Failed to unregister LLM plugin: $llmPluginName', e, stackTrace);
       return false;
     }
   }
@@ -320,7 +320,7 @@ class LlmPluginIntegrator {
 
   /// Clean up resources
   Future<void> shutdown() async {
-    _logger.debug('Shutting down LLM Plugin Integrator');
+    _logger.fine('Shutting down LLM Plugin Integrator');
 
     // Clear caches
     _llmPluginsCache.clear();
@@ -332,7 +332,7 @@ class LlmPluginIntegrator {
 /// Adapter from flutter_mcp MCPToolPlugin to mcp_llm ToolPlugin
 class McpToolPluginAdapter implements llm.ToolPlugin {
   final MCPToolPlugin _mcpToolPlugin;
-  final MCPLogger _logger = MCPLogger('mcp.adapter.mcp_tool_plugin');
+  final Logger _logger = Logger('flutter_mcp.adapter.mcp_tool_plugin');
 
   McpToolPluginAdapter(this._mcpToolPlugin);
 
@@ -374,7 +374,7 @@ class McpToolPluginAdapter implements llm.ToolPlugin {
       // Convert to LlmCallToolResult
       return _convertToLlmCallToolResult(result);
     } catch (e, stackTrace) {
-      _logger.error('Error executing MCP tool plugin ${_mcpToolPlugin.name}', e, stackTrace);
+      _logger.severe('Error executing MCP tool plugin ${_mcpToolPlugin.name}', e, stackTrace);
       return llm.LlmCallToolResult(
         [llm.LlmTextContent(text: 'Error: ${e.toString()}')],
         isError: true,
@@ -413,7 +413,7 @@ class McpToolPluginAdapter implements llm.ToolPlugin {
 /// Adapter from flutter_mcp MCPResourcePlugin to mcp_llm ResourcePlugin
 class McpResourcePluginAdapter implements llm.ResourcePlugin {
   final MCPResourcePlugin _mcpResourcePlugin;
-  final MCPLogger _logger = MCPLogger('mcp.adapter.mcp_resource_plugin');
+  final Logger _logger = Logger('flutter_mcp.adapter.mcp_resource_plugin');
 
   McpResourcePluginAdapter(this._mcpResourcePlugin);
 
@@ -459,7 +459,7 @@ class McpResourcePluginAdapter implements llm.ResourcePlugin {
       // Convert to LlmReadResourceResult
       return _convertToLlmReadResourceResult(result);
     } catch (e, stackTrace) {
-      _logger.error('Error reading from MCP resource plugin ${_mcpResourcePlugin.name}', e, stackTrace);
+      _logger.severe('Error reading from MCP resource plugin ${_mcpResourcePlugin.name}', e, stackTrace);
       return llm.LlmReadResourceResult(
         content: 'Error: ${e.toString()}',
         mimeType: 'text/plain',
@@ -515,7 +515,7 @@ class McpResourcePluginAdapter implements llm.ResourcePlugin {
 /// Adapter from flutter_mcp MCPPromptPlugin to mcp_llm PromptPlugin
 class McpPromptPluginAdapter implements llm.PromptPlugin {
   final MCPPromptPlugin _mcpPromptPlugin;
-  final MCPLogger _logger = MCPLogger('mcp.adapter.mcp_prompt_plugin');
+  final Logger _logger = Logger('flutter_mcp.adapter.mcp_prompt_plugin');
 
   McpPromptPluginAdapter(this._mcpPromptPlugin);
 
@@ -571,7 +571,7 @@ class McpPromptPluginAdapter implements llm.PromptPlugin {
       // Convert to LlmGetPromptResult
       return _convertToLlmGetPromptResult(result);
     } catch (e, stackTrace) {
-      _logger.error('Error executing MCP prompt plugin ${_mcpPromptPlugin.name}', e, stackTrace);
+      _logger.severe('Error executing MCP prompt plugin ${_mcpPromptPlugin.name}', e, stackTrace);
       return llm.LlmGetPromptResult(
         description: 'Error: ${e.toString()}',
         messages: [llm.LlmMessage.system('Error: ${e.toString()}')],

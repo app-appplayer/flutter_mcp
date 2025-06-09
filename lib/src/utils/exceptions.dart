@@ -484,3 +484,30 @@ class MCPSecurityException extends MCPException {
     resolution: resolution,
   );
 }
+
+/// Transport creation error
+class MCPTransportException extends MCPException {
+  MCPTransportException(
+    String message, [
+    dynamic originalError, 
+    StackTrace? stackTrace,
+  ]) : super('Transport error: $message', originalError, stackTrace);
+  
+  MCPTransportException.withContext(
+    String message, {
+    dynamic originalError, 
+    StackTrace? originalStackTrace,
+    String? errorCode,
+    Map<String, dynamic>? context,
+    bool recoverable = false,
+    String? resolution,
+  }) : super.withContext(
+    'Transport error: $message', 
+    originalError: originalError, 
+    originalStackTrace: originalStackTrace,
+    errorCode: errorCode ?? 'TRANSPORT_ERROR',
+    context: context,
+    recoverable: recoverable,
+    resolution: resolution ?? 'Check transport configuration and network connectivity',
+  );
+}

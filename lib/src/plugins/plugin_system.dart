@@ -107,7 +107,7 @@ abstract class MCPTrayPlugin extends MCPPlugin {
 
 /// MCP Plugin registry
 class MCPPluginRegistry {
-  final MCPLogger _logger = MCPLogger('mcp.plugin_registry');
+  final Logger _logger = Logger('flutter_mcp.plugin_registry');
 
   /// Registered plugins by type and name
   final Map<Type, Map<String, MCPPlugin>> _plugins = {};
@@ -127,14 +127,18 @@ class MCPPluginRegistry {
     final typeName = _getPluginTypeName(plugin);
     final pluginName = plugin.name;
 
-    _logger.debug('Registering $typeName plugin: $pluginName v${plugin.version}');
+    _logger.fine('Registering $typeName plugin: $pluginName v${plugin.version}');
 
     // Initialize plugin type map if not exists
     _plugins.putIfAbsent(pluginType, () => {});
 
     // Check if plugin with same name already exists
     if (_plugins[pluginType]!.containsKey(pluginName)) {
-      _logger.warning('Plugin $pluginName already registered, replacing existing plugin');
+      _logger.warning('Plugin $pluginName already registered');
+      throw MCPPluginException(
+        pluginName,
+        'Plugin with name "$pluginName" is already registered',
+      );
     }
 
     // Store configuration
@@ -153,7 +157,7 @@ class MCPPluginRegistry {
 
       _logger.info('Plugin $pluginName successfully initialized');
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize plugin $pluginName', e, stackTrace);
+      _logger.severe('Failed to initialize plugin $pluginName', e, stackTrace);
       throw MCPPluginException(
         pluginName,
         'Failed to initialize plugin: ${e.toString()}',
@@ -165,7 +169,7 @@ class MCPPluginRegistry {
 
   /// Unregister a plugin
   Future<void> unregisterPlugin(String pluginName) async {
-    _logger.debug('Unregistering plugin: $pluginName');
+    _logger.fine('Unregistering plugin: $pluginName');
 
     MCPPlugin? foundPlugin;
     Type? foundType;
@@ -187,28 +191,25 @@ class MCPPluginRegistry {
     // Shutdown the plugin
     try {
       await foundPlugin.shutdown();
-      _plugins[foundType]!.remove(pluginName);
-      _configurations.remove(pluginName);
-
-      // Remove from load order
-      _loadOrder.remove(pluginName);
-
-      // Remove dependencies
-      _dependencies.remove(pluginName);
-      for (final deps in _dependencies.values) {
-        deps.remove(pluginName);
-      }
-
-      _logger.info('Plugin $pluginName successfully unregistered');
     } catch (e, stackTrace) {
-      _logger.error('Failed to shutdown plugin $pluginName', e, stackTrace);
-      throw MCPPluginException(
-        pluginName,
-        'Failed to shutdown plugin: ${e.toString()}',
-        e,
-        stackTrace,
-      );
+      _logger.severe('Failed to shutdown plugin $pluginName', e, stackTrace);
+      // Continue with cleanup even if shutdown failed
     }
+    
+    // Always clean up resources regardless of shutdown result
+    _plugins[foundType]!.remove(pluginName);
+    _configurations.remove(pluginName);
+
+    // Remove from load order
+    _loadOrder.remove(pluginName);
+
+    // Remove dependencies
+    _dependencies.remove(pluginName);
+    for (final deps in _dependencies.values) {
+      deps.remove(pluginName);
+    }
+
+    _logger.info('Plugin $pluginName successfully unregistered');
   }
 
   /// Get a plugin by name and type
@@ -251,7 +252,7 @@ class MCPPluginRegistry {
         maxRetries: 2,
       );
     } catch (e, stackTrace) {
-      _logger.error('Error executing tool plugin $name', e, stackTrace);
+      _logger.severe('Error executing tool plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error executing tool plugin: ${e.toString()}',
@@ -276,7 +277,7 @@ class MCPPluginRegistry {
         maxRetries: 2,
       );
     } catch (e, stackTrace) {
-      _logger.error('Error executing prompt plugin $name', e, stackTrace);
+      _logger.severe('Error executing prompt plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error executing prompt plugin: ${e.toString()}',
@@ -305,7 +306,7 @@ class MCPPluginRegistry {
         maxRetries: 2,
       );
     } catch (e, stackTrace) {
-      _logger.error('Error getting resource from plugin $name', e, stackTrace);
+      _logger.severe('Error getting resource from plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error getting resource: ${e.toString()}',
@@ -339,7 +340,7 @@ class MCPPluginRegistry {
         additionalData: additionalData,
       );
     } catch (e, stackTrace) {
-      _logger.error('Error showing notification with plugin $name', e, stackTrace);
+      _logger.severe('Error showing notification with plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error showing notification: ${e.toString()}',
@@ -360,7 +361,7 @@ class MCPPluginRegistry {
     try {
       return await plugin.start();
     } catch (e, stackTrace) {
-      _logger.error('Error starting background plugin $name', e, stackTrace);
+      _logger.severe('Error starting background plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error starting background plugin: ${e.toString()}',
@@ -381,7 +382,7 @@ class MCPPluginRegistry {
     try {
       return await plugin.stop();
     } catch (e, stackTrace) {
-      _logger.error('Error stopping background plugin $name', e, stackTrace);
+      _logger.severe('Error stopping background plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error stopping background plugin: ${e.toString()}',
@@ -402,7 +403,7 @@ class MCPPluginRegistry {
     try {
       await plugin.setIcon(iconPath);
     } catch (e, stackTrace) {
-      _logger.error('Error updating tray icon with plugin $name', e, stackTrace);
+      _logger.severe('Error updating tray icon with plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error updating tray icon: ${e.toString()}',
@@ -423,7 +424,7 @@ class MCPPluginRegistry {
     try {
       await plugin.setMenuItems(items);
     } catch (e, stackTrace) {
-      _logger.error('Error setting tray menu items with plugin $name', e, stackTrace);
+      _logger.severe('Error setting tray menu items with plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error setting tray menu items: ${e.toString()}',
@@ -468,7 +469,7 @@ class MCPPluginRegistry {
 
   /// Shutdown all plugins
   Future<void> shutdownAll() async {
-    _logger.debug('Shutting down all plugins');
+    _logger.fine('Shutting down all plugins');
 
     final errors = <String, dynamic>{};
 
@@ -487,7 +488,7 @@ class MCPPluginRegistry {
         try {
           await plugin.shutdown();
         } catch (e) {
-          _logger.error('Error shutting down plugin $pluginName', e);
+          _logger.severe('Error shutting down plugin $pluginName', e);
           errors[pluginName] = e;
         }
       }
@@ -549,7 +550,7 @@ class MCPPluginRegistry {
       await plugin.initialize(config);
       _logger.info('Plugin $pluginName configuration updated successfully');
     } catch (e, stackTrace) {
-      _logger.error('Failed to update plugin configuration', e, stackTrace);
+      _logger.severe('Failed to update plugin configuration', e, stackTrace);
       throw MCPOperationFailedException(
         'Failed to update plugin configuration',
         e,
@@ -625,7 +626,9 @@ class LlmToolPluginAdapter implements MCPToolPlugin {
 
       try {
         return jsonDecode(textContent.text);
-      } catch (_) {
+      } catch (e) {
+        // Text content is not valid JSON, return as plain text result
+        Logger('flutter_mcp.plugin_system').finest('Tool result is not JSON, returning as text: $e');
         return {'result': textContent.text};
       }
     }

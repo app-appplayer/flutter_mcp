@@ -27,7 +27,7 @@ void main() {
 
   setUp(() {
     // Set up logging for tests
-    MCPLogger.setDefaultLevel(MCPLogLevel.debug);
+    FlutterMcpLogging.configure(level: Level.FINE, enableDebugLogging: true);
 
     // Initialize mocks
     mockBackgroundService = MockBackgroundService();

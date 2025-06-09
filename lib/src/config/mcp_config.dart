@@ -4,6 +4,7 @@ import 'package:mcp_server/mcp_server.dart';
 import 'package:mcp_llm/mcp_llm.dart';
 
 import '../utils/logger.dart';
+import 'package:logging/logging.dart' show Level;
 import 'background_config.dart';
 import 'notification_config.dart';
 import 'tray_config.dart';
@@ -20,13 +21,16 @@ class MCPClientConfig {
   /// Client capabilities
   final ClientCapabilities? capabilities;
 
-  /// Transport command for subprocess transport
+  /// Transport type to use (stdio, sse, streamablehttp)
+  final String transportType;
+
+  /// Transport command for stdio transport
   final String? transportCommand;
 
   /// Transport command arguments
   final List<String>? transportArgs;
 
-  /// Server URL for SSE transport
+  /// Server URL for SSE/streamablehttp transport
   final String? serverUrl;
 
   /// Authentication token for the transport
@@ -37,17 +41,21 @@ class MCPClientConfig {
     required this.name,
     required this.version,
     this.capabilities,
+    String? transportType,
     this.transportCommand,
     this.transportArgs,
     this.serverUrl,
     this.authToken,
-  });
+  }) : transportType = transportType ?? 
+         (transportCommand != null ? 'stdio' : 
+          serverUrl != null ? 'sse' : 'stdio');
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = {
       'name': name,
       'version': version,
+      'transportType': transportType,
     };
 
     if (capabilities != null) {
@@ -85,13 +93,20 @@ class MCPServerConfig {
   /// Server capabilities
   final ServerCapabilities? capabilities;
 
-  /// Whether to use stdio transport
-  final bool useStdioTransport;
+  /// Transport type to use (stdio, sse, streamablehttp)
+  final String transportType;
+
+  /// Whether to use stdio transport (deprecated - use transportType)
+  @Deprecated('Use transportType instead')
+  bool get useStdioTransport => transportType == 'stdio';
 
   /// SSE port for SSE transport
   final int? ssePort;
 
-  /// Fallback ports for SSE transport
+  /// Streamable HTTP port for streamablehttp transport
+  final int? streamableHttpPort;
+
+  /// Fallback ports for SSE/streamablehttp transport
   final List<int>? fallbackPorts;
 
   /// Authentication token for the transport
@@ -102,18 +117,23 @@ class MCPServerConfig {
     required this.name,
     required this.version,
     this.capabilities,
-    this.useStdioTransport = true,
+    String? transportType,
+    bool? useStdioTransport,
     this.ssePort,
+    this.streamableHttpPort,
     this.fallbackPorts,
     this.authToken,
-  });
+  }) : transportType = transportType ?? 
+         (useStdioTransport == true ? 'stdio' : 
+          ssePort != null ? 'sse' : 
+          streamableHttpPort != null ? 'streamablehttp' : 'stdio');
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = {
       'name': name,
       'version': version,
-      'useStdioTransport': useStdioTransport,
+      'transportType': transportType,
     };
 
     if (capabilities != null) {
@@ -122,6 +142,10 @@ class MCPServerConfig {
 
     if (ssePort != null) {
       json['ssePort'] = ssePort;
+    }
+
+    if (streamableHttpPort != null) {
+      json['streamableHttpPort'] = streamableHttpPort;
     }
 
     if (fallbackPorts != null) {
@@ -225,7 +249,7 @@ class MCPConfig {
   final bool autoStart;
 
   /// Logging level
-  final MCPLogLevel? loggingLevel;
+  final Level? loggingLevel;
 
   /// Whether to enable performance monitoring
   final bool? enablePerformanceMonitoring;
@@ -492,7 +516,7 @@ class MCPConfig {
     bool? secure,
     bool? lifecycleManaged,
     bool? autoStart,
-    MCPLogLevel? loggingLevel,
+    Level? loggingLevel,
     bool? enablePerformanceMonitoring,
     bool? enableMetricsExport,
     String? metricsExportPath,

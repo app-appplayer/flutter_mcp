@@ -1,3 +1,39 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   package="com.example.flutter_mcp">
+  
+  <!-- Permissions -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  
+  <application>
+    <!-- Background Service -->
+    <service
+        android:name=".background.BackgroundService"
+        android:enabled="true"
+        android:exported="false"
+        android:foregroundServiceType="${foregroundServiceType}" />
+    
+    <!-- Boot Receiver -->
+    <receiver
+        android:name=".background.BootReceiver"
+        android:enabled="true"
+        android:exported="true"
+        android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+        <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+            <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+        </intent-filter>
+    </receiver>
+    
+    <!-- WorkManager -->
+    <provider
+        android:name="androidx.work.impl.WorkManagerInitializer"
+        android:authorities="${applicationId}.workmanager-init"
+        android:exported="false"
+        android:enabled="false" />
+  </application>
 </manifest>

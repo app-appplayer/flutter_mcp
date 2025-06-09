@@ -1,22 +1,22 @@
 import 'package:mcp_server/mcp_server.dart';
-import 'package:mcp_llm/mcp_llm.dart';
+import 'package:mcp_llm/mcp_llm.dart' hide ServerInfo;
 import '../managers/server_info.dart';
-import '../utils/logger.dart';
+import 'base_manager.dart';
+import '../types/health_types.dart';
 
 /// MCP Server Manager
-class MCPServerManager {
+class MCPServerManager extends BaseManager {
   /// Registered servers
   final Map<String, ServerInfo> _servers = {};
 
   /// Server counter (for ID generation)
   int _counter = 0;
 
-  /// Logger
-  final MCPLogger _logger = MCPLogger('mcp.server_manager');
+  MCPServerManager() : super('server_manager');
 
-  /// Initialization
-  Future<void> initialize() async {
-    _logger.debug('Server manager initialization');
+  @override
+  Future<void> onInitialize() async {
+    logger.fine('Server manager initialization');
   }
 
   /// Generate new server ID
@@ -29,17 +29,20 @@ class MCPServerManager {
 
   /// Register server
   void registerServer(String id, Server server, ServerTransport? transport) {
-    _logger.debug('Server registered: $id');
+    logger.fine('Server registered: $id');
     _servers[id] = ServerInfo(
       id: id,
       server: server,
       transport: transport,
     );
+    
+    // Report health status
+    reportHealthy('Server registered: $id');
   }
 
   /// Set LLM server
   void setLlmServer(String id, LlmServer llmServer) {
-    _logger.debug('LLM server set: $id');
+    logger.fine('LLM server set: $id');
     final serverInfo = _servers[id];
     if (serverInfo != null) {
       serverInfo.llmServer = llmServer;
@@ -63,7 +66,7 @@ class MCPServerManager {
 
   /// Close server
   Future<void> closeServer(String id) async {
-    _logger.debug('Closing server: $id');
+    logger.fine('Closing server: $id');
     final serverInfo = _servers[id];
     if (serverInfo != null) {
       serverInfo.server.disconnect();
@@ -71,20 +74,31 @@ class MCPServerManager {
         await serverInfo.llmServer!.close();
       }
       _servers.remove(id);
+      
+      // Report health status
+      reportHealthy('Server closed: $id');
     }
   }
 
   /// Close all servers
   Future<void> closeAll() async {
-    _logger.debug('Closing all servers');
+    logger.fine('Closing all servers');
     for (final id in _servers.keys.toList()) {
       await closeServer(id);
     }
   }
 
+  @override
+  Future<void> onDispose() async {
+    await closeAll();
+  }
+
   /// Get status information
+  @override
   Map<String, dynamic> getStatus() {
+    final baseStatus = super.getStatus();
     return {
+      ...baseStatus,
       'total': _servers.length,
       'servers': _servers.map((key, value) =>
           MapEntry(key, {
@@ -102,5 +116,55 @@ class MCPServerManager {
             'hasLlmServer': value.llmServer != null,
           })),
     };
+  }
+  
+  @override
+  Future<MCPHealthCheckResult> performHealthCheck() async {
+    final baseHealth = await super.performHealthCheck();
+    if (baseHealth.status == MCPHealthStatus.unhealthy) {
+      return baseHealth;
+    }
+    
+    // Check specific health metrics
+    final totalCount = _servers.length;
+    
+    if (totalCount == 0) {
+      return MCPHealthCheckResult(
+        status: MCPHealthStatus.healthy,
+        message: 'No servers configured',
+        details: getStatus(),
+      );
+    }
+    
+    // Check if any server has issues
+    int serversWithIssues = 0;
+    for (final serverInfo in _servers.values) {
+      // Basic health check - could be enhanced with actual server status checks
+      if (serverInfo.server.getTools().isEmpty && 
+          serverInfo.server.getResources().isEmpty && 
+          serverInfo.server.getPrompts().isEmpty) {
+        serversWithIssues++;
+      }
+    }
+    
+    if (serversWithIssues == totalCount) {
+      return MCPHealthCheckResult(
+        status: MCPHealthStatus.degraded,
+        message: 'All servers have no capabilities registered',
+        details: getStatus(),
+      );
+    } else if (serversWithIssues > 0) {
+      return MCPHealthCheckResult(
+        status: MCPHealthStatus.degraded,
+        message: '$serversWithIssues/$totalCount servers have no capabilities',
+        details: getStatus(),
+      );
+    }
+    
+    return MCPHealthCheckResult(
+      status: MCPHealthStatus.healthy,
+      message: '$totalCount servers configured and operational',
+      details: getStatus(),
+    );
   }
 }

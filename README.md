@@ -1,27 +1,46 @@
 # Flutter MCP
 
+## 🙌 Support This Project
+
+If you find this package useful, consider supporting ongoing development on Patreon.
+
+[![Support on Patreon](https://c5.patreon.com/external/logo/become_a_patron_button.png)](https://www.patreon.com/mcpdevstudio)
+
+### 🔗 MCP Dart Package Family
+
+- [`mcp_server`](https://pub.dev/packages/mcp_server): Exposes tools, resources, and prompts to LLMs. Acts as the AI server.
+- [`mcp_client`](https://pub.dev/packages/mcp_client): Connects Flutter/Dart apps to MCP servers. Acts as the client interface.
+- [`mcp_llm`](https://pub.dev/packages/mcp_llm): Bridges LLMs (Claude, OpenAI, etc.) to MCP clients/servers. Acts as the LLM brain.
+
+---
+
 A Flutter plugin for integrating Large Language Models (LLMs) with [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). This plugin provides comprehensive integration between MCP components and platform-specific features like background execution, notifications, system tray, and lifecycle management.
 
 ## Features
 
 - **MCP Integration**:
-  - Seamless integration with `mcp_client`, `mcp_server`, and `mcp_llm`
+  - Built-in MCP client, server, and LLM capabilities (no need for separate packages)
   - Support for multiple simultaneous MCP clients and servers
   - LLM integration with MCP components
+  - Enhanced batch processing with priority-based deduplication
 
 - **Platform Features**:
-  - Background service execution
-  - Local notifications
-  - System tray support (on desktop platforms)
-  - Application lifecycle management
+  - Background service execution with task queuing
+  - Local notifications with enhanced configuration
+  - System tray support with dynamic menu management (desktop platforms)
+  - Application lifecycle management with health monitoring
   - Secure storage for credentials and configuration
 
 - **Advanced Capabilities**:
-  - Task scheduling
-  - Memory management with high-memory protections
-  - Performance monitoring and metrics
-  - Configurable logging
-  - Cross-platform support: Android, iOS, macOS, Windows, Linux
+  - **Real-time Health Monitoring**: Component-level health tracking with event-driven updates
+  - **Enhanced Error Handling**: Circuit breaker pattern with automatic recovery strategies
+  - **Resource Management**: Automatic cleanup with leak detection and memory optimization
+  - **Performance Monitoring**: Advanced metrics with aggregation, anomaly detection, and threshold alerts
+  - **Plugin System**: Version management, sandboxing, and dependency resolution
+  - **Security Features**: Comprehensive audit logging, encryption management, and risk assessment
+  - **Type Safety**: Typed platform channels eliminating manual JSON handling
+  - **Dynamic Configuration**: Runtime config updates with validation and rollback support
+  - Cross-platform support: Android, iOS, macOS, Windows, Linux, Web
 
 ## Getting Started
 
@@ -31,7 +50,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_mcp: ^0.1.0
+  flutter_mcp: ^1.0.0
 ```
 
 Or install via command line:
@@ -40,14 +59,44 @@ Or install via command line:
 flutter pub add flutter_mcp
 ```
 
+### Platform Setup (Optional)
+
+#### Android Configuration
+You can configure Android-specific settings in your `pubspec.yaml`:
+
+##### Foreground Service Types
+By default, flutter_mcp uses `dataSync` foreground service type which works for most use cases. If you need additional service types (e.g., location, mediaPlayback), add this to your `pubspec.yaml`:
+
+```yaml
+flutter_mcp:
+  android:
+    foreground_service_types:
+      - dataSync      # Default - data synchronization
+      - location      # For location-based services
+      - mediaPlayback # For media playback
+      - microphone    # For audio recording
+```
+
+##### Additional Permissions (Coming Soon)
+In future versions, you'll be able to request additional Android permissions through pubspec.yaml:
+
+```yaml
+flutter_mcp:
+  android:
+    permissions:
+      - camera        # For camera access
+      - location      # For location services
+      - microphone    # For audio recording
+      - storage       # For file access
+```
+
+These configurations are automatically applied during build time. No manual AndroidManifest.xml changes needed!
+
 ### Basic Usage
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
-import 'package:mcp_client/mcp_client.dart';
-import 'package:mcp_server/mcp_server.dart';
-import 'package:mcp_llm/mcp_llm.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -130,6 +179,11 @@ void main() async {
 You can also manually create and manage MCP components:
 
 ```dart
+import 'package:logging/logging.dart';
+
+// Create a logger
+final logger = Logger('flutter_mcp.example');
+
 // Create a server
 final serverId = await FlutterMCP.instance.createServer(
   name: 'MCP Server',
@@ -179,7 +233,7 @@ final response = await FlutterMCP.instance.chat(
   'Hello, how are you today?',
   useCache: true, // Enable caching for repeated questions
 );
-_logger('AI: ${response.text}');
+logger.info('AI: ${response.text}');
 
 // Stream responses from LLM
 Stream<LlmResponseChunk> responseStream = FlutterMCP.instance.streamChat(
@@ -188,7 +242,7 @@ Stream<LlmResponseChunk> responseStream = FlutterMCP.instance.streamChat(
 );
 
 responseStream.listen((chunk) {
-  _logger(chunk.textChunk); // Process each chunk as it arrives
+  logger.info(chunk.textChunk); // Process each chunk as it arrives
 });
 
 // Clean up when done
@@ -205,6 +259,40 @@ await FlutterMCP.instance.shutdown();
 | Windows  | ✅                | ✅             | ✅          |
 | Linux    | ✅                | ✅             | ✅          |
 
+## Permissions
+
+Flutter MCP automatically requests necessary permissions based on your configuration:
+
+### Automatic Permission Handling
+When you enable features in `MCPConfig`, permissions are requested automatically during initialization:
+- `useNotification: true` → Requests notification permission
+- `useBackgroundService: true` → Requests background execution permissions (Android 13+)
+
+### Manual Permission Management
+You can also manage permissions manually:
+
+```dart
+// Check specific permission
+bool hasNotificationPermission = await FlutterMCP.instance.checkPermission('notification');
+
+// Request specific permission
+bool granted = await FlutterMCP.instance.requestPermission('notification');
+
+// Request multiple permissions
+Map<String, bool> results = await FlutterMCP.instance.requestPermissions([
+  'notification',
+  'location',
+]);
+
+// Request all required permissions based on current config
+Map<String, bool> results = await FlutterMCP.instance.requestRequiredPermissions();
+```
+
+### Platform-specific Notes
+- **Android**: Permissions are defined in AndroidManifest.xml. Runtime permissions (like notifications on Android 13+) are requested automatically.
+- **iOS**: Permissions must be described in Info.plist. Runtime permissions are requested when needed.
+- **Desktop**: Most features don't require explicit permissions, except for system tray on some Linux distributions.
+
 ## Configuration Options
 
 ### MCPConfig Options
@@ -219,7 +307,6 @@ MCPConfig(
   secure: true,
   lifecycleManaged: true,
   autoStart: true,
-  loggingLevel: LogLevel.debug,
   enablePerformanceMonitoring: true,
   enableMetricsExport: false,
   highMemoryThresholdMB: 512,
@@ -233,6 +320,37 @@ MCPConfig(
   autoStartServer: [...],
   autoStartClient: [...],
 )
+```
+
+### Logging Configuration
+
+Flutter MCP uses the standard Dart `logging` package following MCP conventions:
+
+```dart
+import 'package:flutter_mcp/flutter_mcp.dart';
+import 'package:logging/logging.dart';
+
+// Configure logging
+FlutterMcpLogging.configure(
+  level: Level.INFO,
+  enableDebugLogging: true, // Sets level to FINE
+);
+
+// Create a logger with MCP naming convention
+final Logger logger = Logger('flutter_mcp.my_component');
+
+// Use the logger
+logger.info('Information message');
+logger.warning('Warning message');
+logger.severe('Error message');
+logger.fine('Debug message');
+logger.finest('Trace message');
+
+// Extension methods for compatibility
+logger.debug('Debug message');  // Maps to fine()
+logger.error('Error message');  // Maps to severe()
+logger.warn('Warning message'); // Maps to warning()
+logger.trace('Trace message');  // Maps to finest()
 ```
 
 ### Background Service Configuration
@@ -310,10 +428,14 @@ final response = await FlutterMCP.instance.chat(
 ### Performance Monitoring
 
 ```dart
+import 'package:logging/logging.dart';
+
+final logger = Logger('flutter_mcp.example');
+
 // Get system performance metrics
 final status = FlutterMCP.instance.getSystemStatus();
-_logger('Memory usage: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
-_logger('LLM response time: ${status['performanceMetrics']['timers']['llm.chat']['avg_ms']}ms');
+logger.info('Memory usage: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
+logger.info('LLM response time: ${status['performanceMetrics']['timers']['llm.chat']['avg_ms']}ms');
 ```
 
 ### Secure Storage
@@ -356,13 +478,17 @@ FlutterMCP.instance.removeScheduledJob(jobId);
 ### System Status
 
 ```dart
+import 'package:logging/logging.dart';
+
+final logger = Logger('flutter_mcp.example');
+
 // Get system status
 final status = FlutterMCP.instance.getSystemStatus();
-_logger('Clients: ${status['clients']}');
-_logger('Servers: ${status['servers']}');
-_logger('LLMs: ${status['llms']}');
-_logger('Platform: ${status['platformName']}');
-_logger('Memory: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
+logger.info('Clients: ${status['clients']}');
+logger.info('Servers: ${status['servers']}');
+logger.info('LLMs: ${status['llms']}');
+logger.info('Platform: ${status['platformName']}');
+logger.info('Memory: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
 ```
 
 ### Plugin Registration
@@ -385,19 +511,195 @@ final result = await FlutterMCP.instance.executeToolPlugin(
 
 Check out the [example](https://github.com/app-appplayer/flutter_mcp/tree/main/example) directory for a complete sample application.
 
+### Configuration Examples
+
+#### Scheduled Tasks Configuration
+```json
+{
+  "schedule": [
+    {
+      "id": "health_check",
+      "name": "System Health Check",
+      "intervalMinutes": 15,
+      "taskType": "healthcheck",
+      "taskConfig": {
+        "checks": ["memory", "connectivity", "services"]
+      }
+    },
+    {
+      "id": "cleanup_task",
+      "name": "Cleanup Temporary Files",
+      "intervalHours": 6,
+      "taskType": "cleanup",
+      "taskConfig": {
+        "targets": ["temp", "cache", "logs"]
+      }
+    },
+    {
+      "id": "memory_monitor",
+      "name": "Memory Usage Check",
+      "intervalMinutes": 5,
+      "taskType": "memory_check",
+      "taskConfig": {
+        "thresholdMB": 512
+      }
+    }
+  ]
+}
+```
+
+#### Platform Version Checking
+```dart
+// Check platform compatibility
+if (await PlatformUtils.isAndroidAtLeast(31)) {
+  // Use Android 12+ features
+}
+
+if (await PlatformUtils.isIOSAtLeast('15.0')) {
+  // Use iOS 15+ features
+}
+
+// Create a logger
+final logger = Logger('flutter_mcp.example');
+
+// Get detailed platform info
+final platformInfo = await PlatformUtils.getPlatformVersionInfo();
+logger.info('Platform: ${platformInfo['platform']}');
+logger.info('OS Version: ${platformInfo['operatingSystemVersion']}');
+```
+
+#### Web Memory Monitoring
+```dart
+// Enhanced web memory monitoring
+final webMonitor = WebMemoryMonitor.instance;
+
+// Start monitoring with improved accuracy
+webMonitor.startMonitoring();
+
+// Create a logger
+final logger = Logger('flutter_mcp.example');
+
+// Get real-time memory statistics
+final stats = webMonitor.getStatistics();
+logger.info('Memory Usage: ${stats['currentUsageMB']}MB');
+logger.info('Source: ${stats['source']}'); // performance.memory, performance_observer, etc.
+
+// Export detailed memory data
+final exportData = webMonitor.exportData();
+```
+
+## Architecture
+
+For a detailed understanding of the Flutter MCP architecture, please refer to [ARCHITECTURE.md](ARCHITECTURE.md).
+
+### Key Architectural Features
+
+- **Modular Design**: Clean separation between MCP components and platform services
+- **Cross-Platform**: Native implementations for all supported platforms
+- **Plugin System**: Extensible architecture for custom functionality
+- **Performance Optimized**: Memory management and real-time monitoring
+- **Configuration-Driven**: YAML/JSON configuration with task automation
+
+## Testing
+
+The project includes comprehensive test coverage:
+
+```bash
+# Run all tests
+flutter test
+
+# Run specific test suites
+flutter test test/config_task_execution_test.dart
+flutter test test/platform_version_test.dart
+flutter test test/web_memory_monitor_test.dart
+```
+
+### Test Coverage Areas
+
+- **Configuration Task Execution**: Automated task scheduling and execution
+- **Platform Version Detection**: Cross-platform version compatibility
+- **Web Memory Monitoring**: Enhanced browser memory tracking
+- **Integration Tests**: End-to-end functionality validation
+
+## Performance Monitoring
+
+Flutter MCP includes advanced performance monitoring capabilities:
+
+### Real-time Metrics
+- Memory usage tracking with platform-specific APIs
+- CPU utilization monitoring
+- Network request tracking
+- Error rate monitoring
+
+### Automated Optimization
+- Memory-aware caching with automatic eviction
+- Background task throttling based on system resources
+- Circuit breaker pattern for error recovery
+- Performance-based configuration adjustments
+
+## Troubleshooting
+
+### Common Issues
+
+#### Memory Issues
+```dart
+// Enable aggressive memory monitoring
+await FlutterMCP.instance.init(MCPConfig(
+  highMemoryThresholdMB: 256, // Lower threshold for stricter monitoring
+  enablePerformanceMonitoring: true,
+));
+```
+
+#### Platform Compatibility
+```dart
+// Check platform support before using features
+if (PlatformUtils.supportsNotifications) {
+  await FlutterMCP.instance.showNotification(
+    title: 'Test',
+    body: 'Platform supports notifications',
+  );
+}
+```
+
+#### Configuration Issues
+```dart
+// Validate configuration before initialization
+try {
+  final config = await ConfigLoader.loadFromJsonFile('assets/mcp_config.json');
+  await FlutterMCP.instance.init(config);
+} catch (e) {
+  final logger = Logger('flutter_mcp.example');
+  logger.error('Configuration error: $e');
+  // Fallback to default configuration
+  await FlutterMCP.instance.init(MCPConfig.defaultConfig());
+}
+```
+
 ## Issues and Feedback
 
 Please file any issues, bugs, or feature requests in our [issue tracker](https://github.com/app-appplayer/flutter_mcp/issues).
 
-## Platform Service Libraries
+## Architecture
 
-This package uses the following external packages:
+### MCP Core Integration
+Flutter MCP includes built-in MCP protocol support:
 
-- `flutter_foreground_task`: ^8.17.0 - For Android background services
-- `flutter_local_notifications`: ^19.0.0 - For notifications
-- `tray_manager`: ^0.4.0 - For system tray on desktop
-- `flutter_secure_storage`: ^9.2.4 - For secure storage
-- `path_provider`: ^2.1.5 - For file system access
+- **MCP Client**: Built-in client implementation with transport layer support
+- **MCP Server**: Built-in server implementation with capability management  
+- **MCP LLM**: Built-in LLM integration layer for MCP protocol communication
+
+These capabilities are included in the flutter_mcp package - no additional dependencies needed!
+
+### Native Platform Implementation
+Version 1.0.0 implements platform-specific features using native code instead of external Flutter packages:
+
+- **Background Services**: Native Android (Kotlin), iOS (Swift), Windows (C++), Linux (C++), and macOS (Swift) implementations
+- **Notifications**: Platform-native notification systems with full customization support
+- **System Tray**: Native system tray integration for desktop platforms (Windows, macOS, Linux)
+- **Secure Storage**: Direct integration with platform keychain/credential systems
+- **File System**: Uses `path_provider`: ^2.1.5 for cross-platform file access
+
+This native approach provides better performance, reduced dependencies, and platform-optimized user experiences.
 
 ## License
 

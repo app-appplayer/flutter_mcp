@@ -9,7 +9,7 @@ import '../../utils/exceptions.dart';
 
 /// Web notification manager implementation using modern Web APIs
 class WebNotificationManager implements NotificationManager {
-  final MCPLogger _logger = MCPLogger('mcp.web_notification');
+  final Logger _logger = Logger('flutter_mcp.web_notification');
   bool _permissionGranted = false;
 
   /// Map of active notifications
@@ -23,7 +23,7 @@ class WebNotificationManager implements NotificationManager {
 
   @override
   Future<void> initialize(NotificationConfig? config) async {
-    _logger.debug('Initializing web notification manager');
+    _logger.fine('Initializing web notification manager');
 
     // Check if browser supports notifications
     if (!_isSupported()) {
@@ -41,13 +41,13 @@ class WebNotificationManager implements NotificationManager {
 
     if (permission == 'granted') {
       _permissionGranted = true;
-      _logger.debug('Notification permission already granted');
+      _logger.fine('Notification permission already granted');
     } else if (permission == 'denied') {
       _permissionGranted = false;
       _logger.warning('Notification permission denied');
     } else {
       // Will need to request permission when showing notification
-      _logger.debug('Notification permission not determined yet');
+      _logger.fine('Notification permission not determined yet');
     }
   }
 
@@ -59,7 +59,7 @@ class WebNotificationManager implements NotificationManager {
     String id = 'mcp_notification',
     Map<String, dynamic>? additionalData,
   }) async {
-    _logger.debug('Showing web notification: $title');
+    _logger.fine('Showing web notification: $title');
 
     if (!_isSupported()) {
       _logger.warning('Web notifications are not supported');
@@ -68,7 +68,7 @@ class WebNotificationManager implements NotificationManager {
 
     // Request permission if not granted yet
     if (!_permissionGranted) {
-      _logger.debug('Requesting notification permission');
+      _logger.fine('Requesting notification permission');
 
       final permission = await Notification.requestPermission();
       _permissionGranted = permission == 'granted';
@@ -108,28 +108,28 @@ class WebNotificationManager implements NotificationManager {
 
       // Set up click handler
       notification.onClick.listen((_) {
-        _logger.debug('Notification clicked: $id');
+        _logger.fine('Notification clicked: $id');
         _handleNotificationTap(id);
       });
 
       // Return immediately as the notification has been displayed
       return;
     } catch (e, stackTrace) {
-      _logger.error('Failed to show web notification', e, stackTrace);
+      _logger.severe('Failed to show web notification', e, stackTrace);
       throw MCPException('Failed to show web notification: ${e.toString()}', e, stackTrace);
     }
   }
 
   @override
   Future<void> hideNotification(String id) async {
-    _logger.debug('Hiding web notification: $id');
+    _logger.fine('Hiding web notification: $id');
 
     if (_activeNotifications.containsKey(id)) {
       try {
         _activeNotifications[id]!.close();
         _activeNotifications.remove(id);
       } catch (e, stackTrace) {
-        _logger.error('Failed to hide web notification', e, stackTrace);
+        _logger.severe('Failed to hide web notification', e, stackTrace);
         throw MCPException('Failed to hide web notification: ${e.toString()}', e, stackTrace);
       }
     }
@@ -147,7 +147,7 @@ class WebNotificationManager implements NotificationManager {
 
   /// Clear all notifications
   Future<void> clearAll() async {
-    _logger.debug('Clearing all web notifications');
+    _logger.fine('Clearing all web notifications');
 
     for (final id in _activeNotifications.keys.toList()) {
       await hideNotification(id);
@@ -160,7 +160,7 @@ class WebNotificationManager implements NotificationManager {
       return false;
     }
 
-    _logger.debug('Explicitly requesting notification permission');
+    _logger.fine('Explicitly requesting notification permission');
     final permission = await Notification.requestPermission();
     _permissionGranted = permission == 'granted';
 

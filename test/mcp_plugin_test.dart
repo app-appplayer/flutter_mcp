@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
 
@@ -130,6 +131,32 @@ void main() {
 
   // 모든 테스트 전에 한 번만 초기화
   setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    
+    // Mock method channel for platform interface
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('flutter_mcp'),
+      (MethodCall methodCall) async {
+        switch (methodCall.method) {
+          case 'initialize':
+            return null;
+          case 'startBackgroundService':
+            return true;
+          case 'stopBackgroundService':
+            return true;
+          case 'showNotification':
+            return null;
+          case 'cancelAllNotifications':
+            return null;
+          case 'shutdown':
+            return null;
+          default:
+            return null;
+        }
+      },
+    );
+    
     // Initialize FlutterMCP
     flutterMcp = FlutterMCP.instance;
 
@@ -138,7 +165,7 @@ void main() {
       appName: 'MCP Plugin Test',
       appVersion: '1.0.0',
       autoStart: false,
-      loggingLevel: MCPLogLevel.debug,
+      loggingLevel: Level.FINE,
       secure: false,
       autoRegisterLlmPlugins: false,
       registerMcpPluginsWithLlm: false,
@@ -152,32 +179,46 @@ void main() {
   tearDownAll(() async {
     // Clean up after tests
     await flutterMcp.shutdown();
+    
+    // Clear method channel mock
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('flutter_mcp'),
+      null,
+    );
   });
 
   // 각 테스트 간에 플러그인 정리
   tearDown(() async {
-    // 모든 플러그인 정보 가져오기
-    final pluginInfo = flutterMcp.getAllPluginInfo();
+    try {
+      // FlutterMCP가 초기화되었는지 확인
+      if (flutterMcp.isInitialized) {
+        // 모든 플러그인 정보 가져오기
+        final pluginInfo = flutterMcp.getAllPluginInfo();
 
-    // 도구 플러그인 정리
-    if (pluginInfo['tool_plugins'] != null) {
-      for (var plugin in pluginInfo['tool_plugins']!) {
-        await flutterMcp.unregisterPlugin(plugin['name'] as String);
-      }
-    }
+        // 도구 플러그인 정리
+        if (pluginInfo['tool_plugins'] != null) {
+          for (var plugin in pluginInfo['tool_plugins']!) {
+            await flutterMcp.unregisterPlugin(plugin['name'] as String);
+          }
+        }
 
-    // 리소스 플러그인 정리
-    if (pluginInfo['resource_plugins'] != null) {
-      for (var plugin in pluginInfo['resource_plugins']!) {
-        await flutterMcp.unregisterPlugin(plugin['name'] as String);
-      }
-    }
+        // 리소스 플러그인 정리
+        if (pluginInfo['resource_plugins'] != null) {
+          for (var plugin in pluginInfo['resource_plugins']!) {
+            await flutterMcp.unregisterPlugin(plugin['name'] as String);
+          }
+        }
 
-    // 프롬프트 플러그인 정리
-    if (pluginInfo['prompt_plugins'] != null) {
-      for (var plugin in pluginInfo['prompt_plugins']!) {
-        await flutterMcp.unregisterPlugin(plugin['name'] as String);
+        // 프롬프트 플러그인 정리
+        if (pluginInfo['prompt_plugins'] != null) {
+          for (var plugin in pluginInfo['prompt_plugins']!) {
+            await flutterMcp.unregisterPlugin(plugin['name'] as String);
+          }
+        }
       }
+    } catch (e) {
+      // FlutterMCP가 종료된 경우 무시
     }
   });
 

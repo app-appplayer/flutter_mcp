@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 
 /// Error recovery utility for handling retries and fallbacks
 class ErrorRecovery {
-  static final MCPLogger _logger = MCPLogger('mcp.error_recovery');
+  static final Logger _logger = Logger('flutter_mcp.error_recovery');
 
   /// Try an operation with automatic retries
   static Future<T> tryWithRetry<T>(
@@ -23,7 +23,7 @@ class ErrorRecovery {
     int attempt = 0;
     Exception? lastException;
 
-    while (true) {
+    while (attempt <= maxRetries) {
       attempt++;
 
       try {
@@ -32,7 +32,7 @@ class ErrorRecovery {
       } catch (e, stackTrace) {
         // If we've reached max retries, rethrow
         if (attempt > maxRetries) {
-          _logger.error('$name failed after $maxRetries attempts', e, stackTrace);
+          _logger.severe('$name failed after $maxRetries attempts', e, stackTrace);
           if (e is Exception) {
             throw MCPOperationFailedException(
               'Failed to complete $name after $maxRetries attempts',
@@ -54,7 +54,7 @@ class ErrorRecovery {
           }
 
           if (retryIf != null && !retryIf(e)) {
-            _logger.error('$name failed with non-retryable exception', e, stackTrace);
+            _logger.severe('$name failed with non-retryable exception', e, stackTrace);
             throw MCPOperationFailedException(
               'Failed to complete $name with non-retryable exception',
               e,
@@ -63,7 +63,7 @@ class ErrorRecovery {
           }
         } else {
           // For non-Exception errors (like Error types), don't retry
-          _logger.error('$name failed with non-Exception error', e, stackTrace);
+          _logger.severe('$name failed with non-Exception error', e, stackTrace);
           rethrow;
         }
 
@@ -85,6 +85,14 @@ class ErrorRecovery {
         await Future.delayed(delay);
       }
     }
+    
+    // This point should never be reached due to the throw statements above,
+    // but adding for completeness
+    throw MCPOperationFailedException(
+      'Failed to complete $name - unexpected state',
+      lastException ?? Exception('Unknown error'),
+      StackTrace.current,
+    );
   }
 
   /// Try an operation with fallback
@@ -107,9 +115,7 @@ class ErrorRecovery {
         return await fallbackOperation();
       } catch (fallbackError, fallbackStackTrace) {
         _logger.error(
-          '$name fallback also failed',
-          fallbackError,
-          fallbackStackTrace,
+          '$name fallback also failed: $fallbackError\nStack trace: $fallbackStackTrace'
         );
 
         throw MCPOperationFailedException.withContext(
@@ -143,13 +149,13 @@ class ErrorRecovery {
       );
     } catch (e, stackTrace) {
       if (e is TimeoutException) {
-        _logger.error('$name timed out after ${timeout.inMilliseconds}ms');
+        _logger.severe('$name timed out after ${timeout.inMilliseconds}ms');
         throw MCPTimeoutException(
           '$name timed out after ${timeout.inMilliseconds}ms',
           timeout,
         );
       } else {
-        _logger.error('$name failed', e, stackTrace);
+        _logger.severe('$name failed', e, stackTrace);
         throw MCPOperationFailedException(
           'Failed to complete $name',
           e,
@@ -179,7 +185,7 @@ class ErrorRecovery {
     try {
       return await operation();
     } catch (e, stackTrace) {
-      _logger.error('$name failed after jitter delay', e, stackTrace);
+      _logger.severe('$name failed after jitter delay', e, stackTrace);
       throw MCPOperationFailedException(
         'Failed to complete $name after jitter delay',
         e,
@@ -199,16 +205,14 @@ class ErrorRecovery {
     try {
       return await operation();
     } catch (e, stackTrace) {
-      _logger.error('$name failed, executing compensation action', e, stackTrace);
+      _logger.severe('$name failed, executing compensation action', e, stackTrace);
 
       try {
         await compensationAction();
         _logger.info('Compensation action for $name completed successfully');
       } catch (compensationError, compensationStackTrace) {
         _logger.error(
-          'Compensation action for $name also failed',
-          compensationError,
-          compensationStackTrace,
+          'Compensation action for $name also failed: $compensationError\nStack trace: $compensationStackTrace'
         );
       }
 
@@ -236,7 +240,7 @@ class ErrorRecovery {
     int attempt = 0;
     Exception? lastException;
 
-    while (true) {
+    while (attempt <= maxRetries) {
       attempt++;
 
       try {
@@ -254,7 +258,7 @@ class ErrorRecovery {
       } catch (e, stackTrace) {
         // If we've reached max retries, rethrow
         if (attempt > maxRetries) {
-          _logger.error('$name failed after $maxRetries attempts', e, stackTrace);
+          _logger.severe('$name failed after $maxRetries attempts', e, stackTrace);
           if (e is Exception) {
             throw MCPOperationFailedException(
               'Failed to complete $name after $maxRetries attempts',
@@ -271,7 +275,7 @@ class ErrorRecovery {
           lastException = e;
 
           if (retryIf != null && !retryIf(e)) {
-            _logger.error('$name failed with non-retryable exception', e, stackTrace);
+            _logger.severe('$name failed with non-retryable exception', e, stackTrace);
             throw MCPOperationFailedException(
               'Failed to complete $name with non-retryable exception',
               e,
@@ -280,7 +284,7 @@ class ErrorRecovery {
           }
         } else {
           // For non-Exception errors (like Error types), don't retry
-          _logger.error('$name failed with non-Exception error', e, stackTrace);
+          _logger.severe('$name failed with non-Exception error', e, stackTrace);
           rethrow;
         }
 
@@ -308,6 +312,14 @@ class ErrorRecovery {
         await Future.delayed(delay);
       }
     }
+    
+    // This point should never be reached due to the throw statements above,
+    // but adding for completeness
+    throw MCPOperationFailedException(
+      'Failed to complete $name - unexpected state',
+      lastException ?? Exception('Unknown error'),
+      StackTrace.current,
+    );
   }
 
   /// Calculate delay for retry with optional exponential backoff
@@ -350,7 +362,7 @@ class ErrorRecovery {
     try {
       return operation();
     } catch (e, stackTrace) {
-      _logger.error('$name failed', e, stackTrace);
+      _logger.severe('$name failed', e, stackTrace);
 
       if (e is Exception && onException != null) {
         return onException(e);
@@ -380,9 +392,9 @@ class ErrorRecovery {
       return await operation();
     } catch (e, stackTrace) {
       if (includeStackTrace) {
-        _logger.error('$name failed', e, stackTrace);
+        _logger.severe('$name failed', e, stackTrace);
       } else {
-        _logger.error('$name failed: ${e.toString()}');
+        _logger.severe('$name failed: ${e.toString()}');
       }
 
       // Add debugging info in debug mode

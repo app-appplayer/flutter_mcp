@@ -1,4 +1,4 @@
-import '../../flutter_mcp.dart';
+import '../plugins/plugin_system.dart';
 
 class PluginConfig {
   final MCPPlugin plugin;

@@ -13,7 +13,7 @@ class WebBackgroundService implements BackgroundService {
   bool _isRunning = false;
   Worker? _worker;
   Timer? _periodicTimer;
-  final MCPLogger _logger = MCPLogger('mcp.web_background');
+  final Logger _logger = Logger('flutter_mcp.web_background');
 
   // Configuration
   int _intervalMs = 5000;
@@ -28,7 +28,7 @@ class WebBackgroundService implements BackgroundService {
 
   @override
   Future<void> initialize(BackgroundConfig? config) async {
-    _logger.debug('Initializing web background service');
+    _logger.fine('Initializing web background service');
 
     _config = config;
     if (config != null) {
@@ -39,16 +39,16 @@ class WebBackgroundService implements BackgroundService {
     if (!_supportsWebWorkers()) {
       _logger.warning('Web Workers are not supported in this browser, using fallback Timer');
     } else {
-      _logger.debug('Web Workers are supported');
+      _logger.fine('Web Workers are supported');
     }
   }
 
   @override
   Future<bool> start() async {
-    _logger.debug('Starting web background service');
+    _logger.fine('Starting web background service');
 
     if (_isRunning) {
-      _logger.debug('Web background service is already running');
+      _logger.fine('Web background service is already running');
       return true;
     }
 
@@ -68,17 +68,17 @@ class WebBackgroundService implements BackgroundService {
         maxRetries: 2,
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to start web background service', e, stackTrace);
+      _logger.severe('Failed to start web background service', e, stackTrace);
       return false;
     }
   }
 
   @override
   Future<bool> stop() async {
-    _logger.debug('Stopping web background service');
+    _logger.fine('Stopping web background service');
 
     if (!_isRunning) {
-      _logger.debug('Web background service is not running');
+      _logger.fine('Web background service is not running');
       return true;
     }
 
@@ -111,14 +111,14 @@ class WebBackgroundService implements BackgroundService {
         maxRetries: 2,
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to stop web background service', e, stackTrace);
+      _logger.severe('Failed to stop web background service', e, stackTrace);
       return false;
     }
   }
 
   /// Start background service using a Web Worker with improved error handling
   Future<void> _startWithWorker() async {
-    _logger.debug('Starting web background service with Web Worker');
+    _logger.fine('Starting web background service with Web Worker');
 
     // Create a proper worker script with more robust error handling
     final workerScript = '''
@@ -236,7 +236,7 @@ class WebBackgroundService implements BackgroundService {
             try {
               callback(data);
             } catch (e) {
-              _logger.error('Error in pending worker callback', e);
+              _logger.severe('Error in pending worker callback', e);
             }
           }
           _pendingCallbacks.clear();
@@ -252,7 +252,7 @@ class WebBackgroundService implements BackgroundService {
       // Set up error handler
       _worker!.onError.listen((Event event) {
         final errorEvent = event as ErrorEvent;
-        _logger.error('Web Worker error: ${errorEvent.message}');
+        _logger.severe('Web Worker error: ${errorEvent.message}');
 
         if (!completer.isCompleted) {
           completer.completeError(Exception('Web Worker initialization failed: ${errorEvent.message}'));
@@ -273,7 +273,7 @@ class WebBackgroundService implements BackgroundService {
           }
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to create Web Worker, falling back to timer', e, stackTrace);
+      _logger.severe('Failed to create Web Worker, falling back to timer', e, stackTrace);
 
       // Clean up
       if (_worker != null) {
@@ -291,7 +291,7 @@ class WebBackgroundService implements BackgroundService {
 
   /// Start background service using a Timer (fallback)
   void _startWithTimer() {
-    _logger.debug('Starting web background service with Timer (fallback)');
+    _logger.fine('Starting web background service with Timer (fallback)');
 
     // Cancel any existing timer
     _periodicTimer?.cancel();
@@ -318,16 +318,16 @@ class WebBackgroundService implements BackgroundService {
           break;
 
         case 'started':
-          _logger.debug('Web Worker started successfully at ${DateTime.fromMillisecondsSinceEpoch(timestamp)}');
+          _logger.fine('Web Worker started successfully at ${DateTime.fromMillisecondsSinceEpoch(timestamp)}');
           break;
 
         case 'stopped':
-          _logger.debug('Web Worker stopped successfully at ${DateTime.fromMillisecondsSinceEpoch(timestamp)}');
+          _logger.fine('Web Worker stopped successfully at ${DateTime.fromMillisecondsSinceEpoch(timestamp)}');
           break;
 
         case 'error':
           final error = data['error'];
-          _logger.error('Web Worker error: $error');
+          _logger.severe('Web Worker error: $error');
 
           // If we receive multiple errors, consider falling back to timer
           // This would need to be implemented with an error counter
@@ -335,24 +335,24 @@ class WebBackgroundService implements BackgroundService {
 
         case 'pong':
         // Handle health check response
-          _logger.debug('Web Worker health check passed');
+          _logger.fine('Web Worker health check passed');
           break;
 
         case 'intervalUpdated':
-          _logger.debug('Web Worker interval updated to ${data['interval']}ms');
+          _logger.fine('Web Worker interval updated to ${data['interval']}ms');
           break;
 
         default:
           _logger.warning('Unknown message type from Web Worker: $type');
       }
     } catch (e, stackTrace) {
-      _logger.error('Error processing Web Worker message', e, stackTrace);
+      _logger.severe('Error processing Web Worker message', e, stackTrace);
     }
   }
 
   /// Perform the background task with improved error handling
   void _performBackgroundTask() {
-    _logger.debug('Performing web background task');
+    _logger.fine('Performing web background task');
 
     try {
       // In a real implementation, this would:
@@ -363,12 +363,12 @@ class WebBackgroundService implements BackgroundService {
 
       // For demo purposes, we're just logging
       final now = DateTime.now();
-      _logger.debug('Background task executed at $now');
+      _logger.fine('Background task executed at $now');
 
       // Check worker health periodically
       _checkWorkerHealth();
     } catch (e, stackTrace) {
-      _logger.error('Error in background task', e, stackTrace);
+      _logger.severe('Error in background task', e, stackTrace);
     }
   }
 
@@ -378,7 +378,7 @@ class WebBackgroundService implements BackgroundService {
       try {
         _worker!.postMessage(jsonEncode({'command': 'ping'}));
       } catch (e) {
-        _logger.error('Failed to send ping to worker, it may be unresponsive', e);
+        _logger.severe('Failed to send ping to worker, it may be unresponsive', e);
 
         // Consider restarting the worker if it's unresponsive
         _restartWorker();
@@ -388,7 +388,7 @@ class WebBackgroundService implements BackgroundService {
 
   /// Restart an unresponsive worker
   Future<void> _restartWorker() async {
-    _logger.debug('Restarting unresponsive Web Worker');
+    _logger.fine('Restarting unresponsive Web Worker');
 
     try {
       // Stop the current worker
@@ -400,7 +400,7 @@ class WebBackgroundService implements BackgroundService {
       // Restart with a worker
       await _startWithWorker();
     } catch (e, stackTrace) {
-      _logger.error('Failed to restart Web Worker, falling back to timer', e, stackTrace);
+      _logger.severe('Failed to restart Web Worker, falling back to timer', e, stackTrace);
       _startWithTimer();
     }
   }
@@ -421,7 +421,7 @@ class WebBackgroundService implements BackgroundService {
         }));
         return true;
       } catch (e, stackTrace) {
-        _logger.error('Failed to update Web Worker interval', e, stackTrace);
+        _logger.severe('Failed to update Web Worker interval', e, stackTrace);
         return false;
       }
     } else if (_periodicTimer != null) {

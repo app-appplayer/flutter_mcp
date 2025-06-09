@@ -35,7 +35,7 @@ class MCPLlmManager {
   int _serverIdCounter = 0;
 
   /// Logger
-  final MCPLogger _logger = MCPLogger('mcp.llm_manager');
+  final Logger _logger = Logger('flutter_mcp.llm_manager');
 
   /// Default plugin registry or provided one
   final MCPPluginRegistry _pluginRegistry;
@@ -48,7 +48,7 @@ class MCPLlmManager {
 
   /// Initialize
   Future<void> initialize() async {
-    _logger.debug('LLM manager initialization');
+    _logger.fine('LLM manager initialization');
     // No additional initialization needed yet
   }
 
@@ -75,7 +75,7 @@ class MCPLlmManager {
   /// Register LLM with flexible initialization
   /// Allows creation with client, server, both, or neither
   void registerLlm(String id, llm.MCPLlm mcpLlm, {llm.LlmClient? initialClient, llm.LlmServer? initialServer}) {
-    _logger.debug('Registering LLM: $id${initialClient != null ? " with initial client" : ""}${initialServer != null ? " with initial server" : ""}');
+    _logger.fine('Registering LLM: $id${initialClient != null ? " with initial client" : ""}${initialServer != null ? " with initial server" : ""}');
 
     _llms[id] = LlmInfo(
       id: id,
@@ -87,7 +87,7 @@ class MCPLlmManager {
 
   /// Add a new LLM client to an existing LLM
   Future<String> addLlmClient(String llmId, String llmClientId, llm.LlmClient client) async {
-    _logger.debug('Adding LLM client to LLM: $llmId');
+    _logger.fine('Adding LLM client to LLM: $llmId');
     final llmInfo = _llms[llmId];
     if (llmInfo == null) {
       throw MCPResourceNotFoundException.withContext(
@@ -108,14 +108,14 @@ class MCPLlmManager {
     // Check for plugin integration capability
     // Register plugins from the client
     await _pluginIntegrator.registerPluginsFromLlmClient(llmClientId, client);
-    _logger.debug('Registered plugins from LLM client $llmClientId');
+    _logger.fine('Registered plugins from LLM client $llmClientId');
 
     return llmClientId;
   }
 
   /// Add a new LLM server to an existing LLM
   Future<String> addLlmServer(String llmId, String llmServerId, llm.LlmServer server) async {
-    _logger.debug('Adding LLM server to LLM: $llmId');
+    _logger.fine('Adding LLM server to LLM: $llmId');
     final llmInfo = _llms[llmId];
     if (llmInfo == null) {
       throw MCPResourceNotFoundException.withContext(
@@ -136,7 +136,7 @@ class MCPLlmManager {
     // Check for plugin integration capability
     // Register plugins from the server
     await _pluginIntegrator.registerPluginsFromLlmServer(llmServerId, server);
-    _logger.debug('Registered plugins from LLM server $llmServerId');
+    _logger.fine('Registered plugins from LLM server $llmServerId');
 
     return llmServerId;
   }
@@ -185,7 +185,7 @@ class MCPLlmManager {
       String mcpClientId,
       client.Client mcpClient
       ) async {
-    _logger.debug('Adding MCP client $mcpClientId to LLM client $llmClientId');
+    _logger.fine('Adding MCP client $mcpClientId to LLM client $llmClientId');
 
     // Find the LLM containing this client
     final (llmInfo, llmId) = _findLlmInfoByClientId(llmClientId);
@@ -215,7 +215,7 @@ class MCPLlmManager {
       llmInfo.mcpLlm.addMcpClientToLlmClient(llmClientId, mcpClientId, mcpClient);
       _logger.info('Added MCP client $mcpClientId directly to LLM client $llmClientId');
     } catch (e) {
-      _logger.error('Failed to add MCP client directly: $e');
+      _logger.severe('Failed to add MCP client directly: $e');
       throw MCPOperationFailedException.withContext(
         'Failed to add MCP client: $e',
         e,
@@ -243,7 +243,7 @@ class MCPLlmManager {
       String mcpServerId,
       server.Server mcpServer
       ) async {
-    _logger.debug('Adding MCP server $mcpServerId to LLM server $llmServerId');
+    _logger.fine('Adding MCP server $mcpServerId to LLM server $llmServerId');
 
     // Find the LLM containing this server
     final (llmInfo, llmId) = _findLlmInfoByServerId(llmServerId);
@@ -273,7 +273,7 @@ class MCPLlmManager {
       llmInfo.mcpLlm.addMcpServerToLlmServer(llmServerId, mcpServerId, mcpServer);
       _logger.info('Added MCP server $mcpServerId directly to LLM server $llmServerId');
     } catch (e) {
-      _logger.error('Failed to add MCP server directly: $e');
+      _logger.severe('Failed to add MCP server directly: $e');
       throw MCPOperationFailedException.withContext(
         'Failed to add MCP server: $e',
         e,
@@ -350,7 +350,7 @@ class MCPLlmManager {
       String llmClientId,
       String mcpClientId
       ) async {
-    _logger.debug('Removing MCP client $mcpClientId from LLM client $llmClientId');
+    _logger.fine('Removing MCP client $mcpClientId from LLM client $llmClientId');
 
     // Find the LLM containing this client
     final (llmInfo, llmId) = _findLlmInfoByClientId(llmClientId);
@@ -372,7 +372,7 @@ class MCPLlmManager {
       llmInfo.mcpLlm.removeMcpClientFromLlmClient(llmClientId, mcpClientId);
       _logger.info('Removed MCP client $mcpClientId from LLM client $llmClientId');
     } catch (e) {
-      _logger.error('Failed to remove MCP client: $e');
+      _logger.severe('Failed to remove MCP client: $e');
     }
 
     // Update tracking
@@ -393,7 +393,7 @@ class MCPLlmManager {
       String llmServerId,
       String mcpServerId
       ) async {
-    _logger.debug('Removing MCP server $mcpServerId from LLM server $llmServerId');
+    _logger.fine('Removing MCP server $mcpServerId from LLM server $llmServerId');
 
     // Find the LLM containing this server
     final (llmInfo, llmId) = _findLlmInfoByServerId(llmServerId);
@@ -415,7 +415,7 @@ class MCPLlmManager {
       llmInfo.mcpLlm.removeMcpServerFromLlmServer(llmServerId, mcpServerId);
       _logger.info('Removed MCP server $mcpServerId from LLM server $llmServerId');
     } catch (e) {
-      _logger.error('Failed to remove MCP server: $e');
+      _logger.severe('Failed to remove MCP server: $e');
     }
 
     // Update tracking
@@ -436,7 +436,7 @@ class MCPLlmManager {
       String llmClientId,
       String mcpClientId
       ) async {
-    _logger.debug('Setting default MCP client $mcpClientId for LLM client $llmClientId');
+    _logger.fine('Setting default MCP client $mcpClientId for LLM client $llmClientId');
 
     // Find the LLM containing this client
     final (llmInfo, llmId) = _findLlmInfoByClientId(llmClientId);
@@ -477,7 +477,7 @@ class MCPLlmManager {
       llmInfo.mcpLlm.setDefaultMcpClient(llmClientId, mcpClientId);
       _logger.info('Set default MCP client to $mcpClientId for LLM client $llmClientId');
     } catch (e) {
-      _logger.error('Failed to set default MCP client: $e');
+      _logger.severe('Failed to set default MCP client: $e');
       throw MCPOperationFailedException.withContext(
         'Failed to set default MCP client: $e',
         e,
@@ -498,7 +498,7 @@ class MCPLlmManager {
       String llmServerId,
       String mcpServerId
       ) async {
-    _logger.debug('Setting default MCP server $mcpServerId for LLM server $llmServerId');
+    _logger.fine('Setting default MCP server $mcpServerId for LLM server $llmServerId');
 
     // Find the LLM containing this server
     final (llmInfo, llmId) = _findLlmInfoByServerId(llmServerId);
@@ -539,7 +539,7 @@ class MCPLlmManager {
       llmInfo.mcpLlm.setDefaultMcpServer(llmServerId, mcpServerId);
       _logger.info('Set default MCP server to $mcpServerId for LLM server $llmServerId');
     } catch (e) {
-      _logger.error('Failed to set default MCP server: $e');
+      _logger.severe('Failed to set default MCP server: $e');
       throw MCPOperationFailedException.withContext(
         'Failed to set default MCP server: $e',
         e,
@@ -719,7 +719,7 @@ class MCPLlmManager {
 
   /// Close all resources and connections for an LLM
   Future<void> closeLlm(String id) async {
-    _logger.debug('Closing LLM: $id');
+    _logger.fine('Closing LLM: $id');
     final llmInfo = _llms[id];
     if (llmInfo == null) {
       return;
@@ -762,7 +762,7 @@ class MCPLlmManager {
 
   /// Close a specific LLM client
   Future<void> closeLlmClient(String llmClientId) async {
-    _logger.debug('Closing LLM client: $llmClientId');
+    _logger.fine('Closing LLM client: $llmClientId');
 
     final (llmInfo, llmId) = _findLlmInfoByClientId(llmClientId);
     if (llmInfo == null || llmId == null) {
@@ -791,7 +791,7 @@ class MCPLlmManager {
 
   /// Close a specific LLM server
   Future<void> closeLlmServer(String llmServerId) async {
-    _logger.debug('Closing LLM server: $llmServerId');
+    _logger.fine('Closing LLM server: $llmServerId');
 
     final (llmInfo, llmId) = _findLlmInfoByServerId(llmServerId);
     if (llmInfo == null || llmId == null) {
@@ -820,7 +820,7 @@ class MCPLlmManager {
 
   /// Close all LLMs
   Future<void> closeAll() async {
-    _logger.debug('Closing all LLMs');
+    _logger.fine('Closing all LLMs');
     final errors = <String, dynamic>{};
 
     // Close all LLM instances
@@ -829,7 +829,7 @@ class MCPLlmManager {
         await closeLlm(id);
       } catch (e) {
         errors[id] = e;
-        _logger.error('Error closing LLM $id: $e');
+        _logger.severe('Error closing LLM $id: $e');
       }
     }
 

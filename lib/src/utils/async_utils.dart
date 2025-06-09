@@ -1,381 +1,347 @@
 import 'dart:async';
-import 'logger.dart';
-import 'exceptions.dart';
+import 'dart:collection';
+import 'dart:math' as math;
+import 'package:meta/meta.dart';
 import 'package:synchronized/synchronized.dart' show Lock;
+import '../config/app_config.dart';
+import 'exceptions.dart';
+import 'logger.dart';
 
-/// Utility class for managing asynchronous operations with advanced error handling
+/// Utility class for managing asynchronous operations
 class AsyncUtils {
-  static final MCPLogger _logger = MCPLogger('mcp.async_utils');
+  static final Logger _logger = Logger('flutter_mcp.async_utils');
 
-  /// A map to track operations in progress
-  static final Map<String, Completer<dynamic>> _operations = {};
+  // Track operations in progress by ID
+  static final Map<String, Completer<dynamic>> _operations = <String, Completer<dynamic>>{};
 
-  /// Locks for thread-safe operations
-  static final Map<String, Lock> _locks = {};
+  // Locks for thread-safe operations by ID
+  static final Map<String, Lock> _locks = <String, Lock>{};
 
-  /// Execute an operation with retry capability
+  /// Execute an operation with retry capability and exponential backoff
   static Future<T> executeWithRetry<T>(
-      Future<T> Function() operation, {
-        String operationName = 'operation',
-        int maxRetries = 3,
-        Duration initialDelay = const Duration(milliseconds: 500),
-        bool useExponentialBackoff = true,
-        Duration? maxDelay,
-        bool Function(Exception)? retryIf,
-      }) async {
-    int attempt = 0;
+    Future<T> Function() operation, {
+    String operationName = 'operation',
+    int? maxRetries,
+    Duration? initialDelay,
+    bool useExponentialBackoff = true,
+    Duration? maxDelay,
+    bool Function(Exception)? retryIf,
+  }) async {
+    // Get configuration values
+    final config = AppConfig.instance.scoped('async');
+    maxRetries ??= config.get<int>('defaultMaxRetries', defaultValue: 3);
+    initialDelay ??= config.getDuration('defaultInitialDelay', defaultValue: const Duration(milliseconds: 500));
+    final backoffFactor = config.get<double>('defaultBackoffFactor', defaultValue: 2.0);
 
-    while (true) {
+    int attempt = 0;
+    Duration currentDelay = initialDelay;
+
+    while (attempt < maxRetries) {
       attempt++;
 
       try {
-        return await operation();
-      } catch (e, stackTrace) {
-        // If we've reached max retries, rethrow
-        if (attempt > maxRetries) {
-          _logger.error('$operationName failed after $maxRetries attempts', e, stackTrace);
-          throw MCPOperationFailedException(
-            'Failed to complete $operationName after $maxRetries attempts',
-            e,
-            stackTrace,
-          );
+        final result = await operation();
+        if (attempt > 1) {
+          _logger.info('Operation "$operationName" succeeded on attempt $attempt');
         }
-
-        // Check if we should retry this exception
-        if (retryIf != null && e is Exception && !retryIf(e)) {
-          _logger.error('$operationName failed with non-retryable exception', e, stackTrace);
-          throw MCPOperationFailedException(
-            'Failed to complete $operationName with non-retryable exception',
-            e,
-            stackTrace,
-          );
-        }
-
-        // Calculate delay for next retry
-        final delay = _calculateDelay(
-          attempt: attempt,
-          initialDelay: initialDelay,
-          useExponentialBackoff: useExponentialBackoff,
-          maxDelay: maxDelay,
-        );
-
-        _logger.warning(
-          '$operationName failed, retrying in ${delay.inMilliseconds}ms '
-              '(attempt $attempt of $maxRetries)',
-          e,
-        );
-
-        await Future.delayed(delay);
-      }
-    }
-  }
-
-  /// Execute operation with timeout
-  static Future<T> executeWithTimeout<T>(
-      Future<T> Function() operation,
-      Duration timeout, {
-        String operationName = 'operation',
-        Future<T> Function()? onTimeout,
-      }) async {
-    try {
-      return await operation().timeout(
-        timeout,
-        onTimeout: onTimeout != null
-            ? () async => await onTimeout()
-            : () {
-          throw TimeoutException('$operationName timed out after ${timeout.inMilliseconds}ms');
-        },
-      );
-    } catch (e, stackTrace) {
-      if (e is TimeoutException) {
-        _logger.error('$operationName timed out after ${timeout.inMilliseconds}ms');
-        throw MCPTimeoutException(
-          '$operationName timed out after ${timeout.inMilliseconds}ms',
-          timeout,
-        );
-      } else {
-        _logger.error('$operationName failed', e, stackTrace);
-        throw MCPOperationFailedException(
-          'Failed to complete $operationName',
-          e,
-          stackTrace,
-        );
-      }
-    }
-  }
-
-  /// Execute operation with fallback
-  static Future<T> executeWithFallback<T>(
-      Future<T> Function() primaryOperation,
-      Future<T> Function() fallbackOperation, {
-        String operationName = 'operation',
-      }) async {
-    try {
-      return await primaryOperation();
-    } catch (e, _) {
-      _logger.warning(
-        '$operationName failed, falling back to alternative implementation',
-        e,
-      );
-
-      try {
-        return await fallbackOperation();
-      } catch (fallbackError, fallbackStackTrace) {
-        _logger.error(
-          '$operationName fallback also failed',
-          fallbackError,
-          fallbackStackTrace,
-        );
-
-        throw MCPOperationFailedException.withContext(
-          'Both primary and fallback $operationName failed',
-          fallbackError,
-          fallbackStackTrace,
-          errorCode: 'FALLBACK_FAILED',
-          resolution: 'Check both primary and fallback implementations'
-        );
-      }
-    }
-  }
-
-  /// Execute operation with cancellation support
-  static Future<T> executeWithCancellation<T>(
-      Future<T> Function() operation,
-      String operationId, {
-        String operationName = 'operation',
-        bool throwIfCancelled = true,
-        T? valueIfCancelled,
-      }) async {
-    // Register operation
-    final completer = Completer<T>();
-    _operations[operationId] = completer;
-
-    try {
-      final result = await operation();
-
-      // If not cancelled, complete and return the result
-      if (!completer.isCompleted) {
-        completer.complete(result);
-        _operations.remove(operationId);
         return result;
-      } else {
-        // Operation was cancelled
-        if (throwIfCancelled) {
-          throw MCPOperationCancelledException('$operationName was cancelled');
-        } else {
-          return valueIfCancelled as T;
+      } on Exception catch (e) {
+        final shouldRetry = retryIf?.call(e) ?? true;
+        
+        if (attempt >= maxRetries || !shouldRetry) {
+          _logger.severe('Operation "$operationName" failed after $attempt attempts', e);
+          rethrow;
+        }
+
+        _logger.warning('Operation "$operationName" failed on attempt $attempt, retrying in ${currentDelay.inMilliseconds}ms: $e');
+
+        // Wait before retrying with jitter
+        await Future.delayed(_addJitter(currentDelay));
+
+        // Update delay for next iteration
+        if (useExponentialBackoff) {
+          currentDelay = Duration(
+            milliseconds: (currentDelay.inMilliseconds * backoffFactor).round(),
+          );
+          if (maxDelay != null && currentDelay > maxDelay) {
+            currentDelay = maxDelay;
+          }
         }
       }
-    } catch (e, stackTrace) {
-      // If not cancelled, complete with error
-      if (!completer.isCompleted) {
-        completer.completeError(e, stackTrace);
-        _operations.remove(operationId);
-      }
+    }
+    
+    // If we've exhausted all retries, this should have been caught above,
+    // but adding for completeness
+    throw Exception('Operation "$operationName" failed after $maxRetries attempts');
+  }
 
+  /// Add jitter to delay to avoid thundering herd problem
+  static Duration _addJitter(Duration delay) {
+    final config = AppConfig.instance.scoped('async');
+    final jitterRange = config.get<int>('defaultJitterRange', defaultValue: 50);
+    final random = math.Random();
+    final jitter = random.nextInt(jitterRange * 2) - jitterRange;
+    return Duration(
+      milliseconds: math.max(0, delay.inMilliseconds + jitter),
+    );
+  }
+
+  /// Execute operation with a unique lock to prevent concurrent execution
+  static Future<T> executeWithLock<T>(
+    String lockId,
+    Future<T> Function() operation, {
+    Duration? timeout,
+  }) async {
+    final lock = _locks.putIfAbsent(lockId, () => Lock());
+
+    try {
+      return await lock.synchronized(() async {
+        if (timeout != null) {
+          return await operation().timeout(timeout);
+        } else {
+          return await operation();
+        }
+      });
+    } catch (e) {
+      _logger.severe('Locked operation "$lockId" failed', e);
       rethrow;
     }
   }
 
-  /// Cancel an operation
-  static void cancelOperation(String operationId) {
-    final completer = _operations[operationId];
-
-    if (completer != null && !completer.isCompleted) {
-      _logger.debug('Cancelling operation: $operationId');
-      completer.completeError(MCPOperationCancelledException('Operation cancelled'));
+  /// Execute operation with timeout and proper error handling
+  static Future<T> executeWithTimeout<T>(
+    Future<T> Function() operation,
+    Duration timeout, {
+    String operationName = 'operation',
+    T? fallback,
+  }) async {
+    try {
+      return await operation().timeout(timeout);
+    } on TimeoutException catch (e) {
+      final errorMessage = 'Operation "$operationName" timed out after ${timeout.inMilliseconds}ms';
+      _logger.warning(errorMessage);
+      
+      if (fallback != null) {
+        _logger.info('Using fallback value for "$operationName"');
+        return fallback;
+      }
+      
+      throw MCPTimeoutException.withContext(
+        errorMessage,
+        timeout,
+        originalError: e,
+        errorCode: 'OPERATION_TIMEOUT',
+        recoverable: true,
+      );
     }
-
-    _operations.remove(operationId);
   }
 
-  /// Execute with lock to ensure thread safety
-  static Future<T> executeWithLock<T>(
-      String lockName,
-      Future<T> Function() operation, {
-        String operationName = 'operation',
-        Duration? timeout,
-      }) async {
-    // Create lock if it doesn't exist
-    _locks.putIfAbsent(lockName, () => Lock());
+  /// Track a long-running operation by ID
+  static Future<T> trackOperation<T>(
+    String operationId,
+    Future<T> Function() operation, {
+    Duration? timeout,
+  }) async {
+    if (_operations.containsKey(operationId)) {
+      throw MCPOperationFailedException.withContext(
+        'Operation with ID "$operationId" is already in progress',
+        null,
+        null,
+        errorCode: 'OPERATION_IN_PROGRESS',
+        recoverable: false,
+      );
+    }
+
+    final completer = Completer<T>();
+    _operations[operationId] = completer;
 
     try {
-      return await _locks[lockName]!.synchronized(() async {
-        return await operation();
-      }, timeout: timeout);
+      final future = operation();
+      final result = timeout != null ? await future.timeout(timeout) : await future;
+      
+      completer.complete(result);
+      return result;
     } catch (e, stackTrace) {
-      if (e is TimeoutException) {
-        _logger.error('$operationName lock acquisition timed out', e, stackTrace);
-        throw MCPTimeoutException(
-          '$operationName lock acquisition timed out',
-          timeout!,
-        );
+      completer.completeError(e, stackTrace);
+      rethrow;
+    } finally {
+      _operations.remove(operationId);
+    }
+  }
+
+  /// Cancel a tracked operation by ID
+  static bool cancelOperation(String operationId) {
+    final completer = _operations.remove(operationId);
+    if (completer != null && !completer.isCompleted) {
+      completer.completeError(
+        MCPOperationCancelledException.withContext(
+          'Operation "$operationId" was cancelled',
+          errorCode: 'OPERATION_CANCELLED',
+        ),
+      );
+      return true;
+    }
+    return false;
+  }
+
+  /// Get list of currently running operation IDs
+  static List<String> getRunningOperations() {
+    return _operations.keys.toList();
+  }
+
+  /// Check if a specific operation is running
+  static bool isOperationRunning(String operationId) {
+    return _operations.containsKey(operationId);
+  }
+
+  /// Wait for multiple operations to complete
+  static Future<List<T>> waitForAll<T>(
+    List<Future<T>> futures, {
+    Duration? timeout,
+    bool failFast = true,
+  }) async {
+    try {
+      final future = failFast ? Future.wait(futures) : Future.wait(futures, eagerError: false);
+      
+      if (timeout != null) {
+        return await future.timeout(timeout);
       } else {
-        _logger.error('$operationName failed inside lock', e, stackTrace);
-        throw MCPOperationFailedException(
-          'Failed to complete $operationName inside lock',
-          e,
-          stackTrace,
-        );
+        return await future;
       }
+    } on TimeoutException catch (e) {
+      throw MCPTimeoutException.withContext(
+        'Waiting for ${futures.length} operations timed out',
+        timeout!,
+        originalError: e,
+        errorCode: 'MULTI_OPERATION_TIMEOUT',
+        recoverable: true,
+      );
     }
   }
 
-  /// Calculate delay for retry with optional exponential backoff
-  static Duration _calculateDelay({
-    required int attempt,
-    required Duration initialDelay,
-    required bool useExponentialBackoff,
-    Duration? maxDelay,
-  }) {
-    if (!useExponentialBackoff) {
-      return initialDelay;
-    }
-
-    // Exponential backoff with jitter
-    final exponentialPart = initialDelay.inMilliseconds * (1 << (attempt - 1));
-    final jitter = (DateTime.now().millisecondsSinceEpoch % 100) - 50; // -50 to +49 ms
-    final delayMs = exponentialPart + jitter;
-
-    // Enforce maxDelay if provided
-    if (maxDelay != null && delayMs > maxDelay.inMilliseconds) {
-      return maxDelay;
-    }
-
-    return Duration(milliseconds: delayMs);
-  }
-
-  /// Run background task periodically
-  static PeriodicTaskHandle runPeriodic(
-      Future<void> Function() task,
-      Duration interval, {
-        String taskName = 'periodic task',
-        bool runImmediately = false,
-        Duration? timeout,
-        bool skipIfStillRunning = true,
-      }) {
-    final taskId = 'periodic_${DateTime.now().millisecondsSinceEpoch}_${taskName.hashCode}';
-    final lock = Lock();
-    bool isRunning = false;
-    Timer? timer;
-
-    // Function to execute task safely
-    Future<void> executeTask() async {
-      // Skip if still running and configured to skip
-      if (isRunning && skipIfStillRunning) {
-        _logger.debug('Skipping $taskName as previous execution is still running');
-        return;
-      }
-
-      // Execute task with lock
+  /// Execute operations with controlled concurrency
+  static Future<List<T>> executeConcurrently<T>(
+    List<Future<T> Function()> operations, {
+    int maxConcurrency = 3,
+    Duration? operationTimeout,
+  }) async {
+    if (operations.isEmpty) return <T>[];
+    
+    final results = <T>[]..length = operations.length;
+    final semaphore = Semaphore(maxConcurrency);
+    
+    final futures = operations.asMap().entries.map((entry) async {
+      final index = entry.key;
+      final operation = entry.value;
+      
+      await semaphore.acquire();
       try {
-        await lock.synchronized(() async {
-          isRunning = true;
-
-          try {
-            if (timeout != null) {
-              await executeWithTimeout(
-                task,
-                timeout,
-                operationName: taskName,
-              );
-            } else {
-              await task();
-            }
-          } finally {
-            isRunning = false;
-          }
-        });
-      } catch (e, stackTrace) {
-        _logger.error('Error executing $taskName', e, stackTrace);
+        final future = operation();
+        final result = operationTimeout != null 
+            ? await future.timeout(operationTimeout) 
+            : await future;
+        results[index] = result;
+      } finally {
+        semaphore.release();
       }
-    }
-
-    // Run immediately if configured
-    if (runImmediately) {
-      executeTask();
-    }
-
-    // Set up periodic timer
-    timer = Timer.periodic(interval, (_) {
-      executeTask();
     });
 
-    // Return handle for cancellation
-    return PeriodicTaskHandle(
-      id: taskId,
-      cancel: () {
-        timer?.cancel();
-        timer = null;
-      },
-    );
+    await Future.wait(futures);
+    return results;
   }
 
-  /// Run a debounced task (useful for user input or frequent events)
-  static DebouncedTaskHandle debounce(
-      Future<void> Function() task,
-      Duration wait, {
-        String taskName = 'debounced task',
-      }) {
-    final taskId = 'debounce_${DateTime.now().millisecondsSinceEpoch}_${taskName.hashCode}';
+  /// Create a debounced function that delays execution
+  static Timer Function() debounce(
+    void Function() function,
+    Duration delay,
+  ) {
     Timer? timer;
-
-    // Return handle with execute function
-    return DebouncedTaskHandle(
-      id: taskId,
-      execute: () {
-        // Cancel previous timer if still active
-        timer?.cancel();
-
-        // Set new timer
-        timer = Timer(wait, () async {
-          try {
-            await task();
-          } catch (e, stackTrace) {
-            _logger.error('Error executing debounced $taskName', e, stackTrace);
-          }
-        });
-      },
-      cancel: () {
-        timer?.cancel();
-        timer = null;
-      },
-    );
+    
+    return () {
+      timer?.cancel();
+      timer = Timer(delay, function);
+      return timer!;
+    };
   }
 
-  /// Clean up all resources
-  static void dispose() {
-    // Cancel all operations
-    for (final operationId in _operations.keys.toList()) {
-      cancelOperation(operationId);
-    }
+  /// Create a throttled function that limits execution frequency
+  static void Function() throttle(
+    void Function() function,
+    Duration interval,
+  ) {
+    DateTime? lastExecution;
+    
+    return () {
+      final now = DateTime.now();
+      if (lastExecution == null || now.difference(lastExecution!) >= interval) {
+        lastExecution = now;
+        function();
+      }
+    };
+  }
 
+  /// Clean up resources (mainly for testing)
+  @visibleForTesting
+  static void cleanup() {
+    // Cancel all pending operations
+    for (final completer in _operations.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(
+          MCPOperationCancelledException('System cleanup - operation cancelled'),
+        );
+      }
+    }
+    
     _operations.clear();
     _locks.clear();
   }
+
+  /// Get statistics about async operations
+  static Map<String, dynamic> getStatistics() {
+    return {
+      'runningOperations': _operations.length,
+      'activeLocks': _locks.length,
+      'operationIds': _operations.keys.toList(),
+    };
+  }
 }
 
-/// Handle for periodic tasks
-class PeriodicTaskHandle {
-  final String id;
-  final void Function() cancel;
+/// Simple semaphore implementation for controlling concurrency
+class Semaphore {
+  final int _maxCount;
+  int _currentCount;
+  final Queue<Completer<void>> _waitQueue = Queue<Completer<void>>();
 
-  PeriodicTaskHandle({
-    required this.id,
-    required this.cancel,
-  });
+  Semaphore(this._maxCount) : _currentCount = _maxCount;
+
+  /// Maximum permits available
+  int get maxCount => _maxCount;
+
+  /// Acquire a permit
+  Future<void> acquire() async {
+    if (_currentCount > 0) {
+      _currentCount--;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _waitQueue.add(completer);
+    return completer.future;
+  }
+
+  /// Release a permit
+  void release() {
+    if (_waitQueue.isNotEmpty) {
+      final completer = _waitQueue.removeFirst();
+      completer.complete();
+    } else {
+      _currentCount++;
+    }
+  }
+
+  /// Current available permits
+  int get availablePermits => _currentCount;
+
+  /// Number of threads waiting for permits
+  int get queueLength => _waitQueue.length;
 }
-
-/// Handle for debounced tasks
-class DebouncedTaskHandle {
-  final String id;
-  final void Function() execute;
-  final void Function() cancel;
-
-  DebouncedTaskHandle({
-    required this.id,
-    required this.execute,
-    required this.cancel,
-  });
-}
-

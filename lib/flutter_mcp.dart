@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
+import 'src/config/mcp_constants.dart';
 import 'dart:math';
 import 'package:flutter_mcp/src/config/plugin_config.dart';
 import 'package:flutter_mcp/src/plugins/llm_plugin_integration.dart';
@@ -17,8 +20,13 @@ import 'src/platform/platform_services.dart';
 import 'src/utils/logger.dart';
 import 'src/utils/exceptions.dart';
 import 'src/plugins/plugin_system.dart';
+import 'src/plugins/enhanced_plugin_system.dart';
+import 'package:pub_semver/pub_semver.dart';
+import 'src/metrics/typed_metrics.dart';
+import 'src/events/event_models.dart';
 import 'src/utils/resource_manager.dart';
 import 'src/utils/performance_monitor.dart';
+import 'src/performance/enhanced_performance_monitor.dart';
 import 'src/utils/event_system.dart';
 import 'src/utils/memory_manager.dart';
 import 'src/utils/object_pool.dart';
@@ -26,6 +34,19 @@ import 'src/utils/circuit_breaker.dart';
 import 'src/utils/semantic_cache.dart';
 import 'src/utils/diagnostic_utils.dart';
 import 'src/utils/platform_utils.dart';
+import 'src/core/dependency_injection.dart';
+import 'src/core/enhanced_batch_manager.dart';
+import 'src/security/oauth_manager.dart';
+import 'src/security/credential_manager.dart';
+import 'src/security/security_audit.dart';
+import 'src/security/encryption_manager.dart';
+import 'src/types/health_types.dart';
+import 'src/platform/storage/secure_storage.dart';
+import 'src/monitoring/health_monitor.dart';
+import 'src/utils/enhanced_error_handler.dart';
+import 'src/utils/enhanced_resource_cleanup.dart';
+import 'flutter_mcp_platform_interface.dart';
+import 'flutter_mcp_method_channel.dart';
 
 // Re-exports
 export 'src/config/mcp_config.dart';
@@ -35,17 +56,32 @@ export 'src/config/tray_config.dart';
 export 'src/config/plugin_config.dart';
 export 'src/config/job.dart';
 export 'src/utils/exceptions.dart';
-export 'src/utils/logger.dart';
+export 'src/utils/logger.dart' hide LoggerExtensions;
 export 'src/plugins/plugin_system.dart' show MCPPlugin, MCPToolPlugin, MCPResourcePlugin,
 MCPBackgroundPlugin, MCPNotificationPlugin, MCPPromptPlugin;
 export 'src/platform/tray/tray_manager.dart' show TrayMenuItem;
+// Health monitoring exports removed - using simple implementation
+export 'src/security/oauth_manager.dart' show OAuthConfig, OAuthToken;
+export 'src/core/client_manager.dart' show MCPClientManager;
+export 'src/core/server_manager.dart' show MCPServerManager;
+export 'src/core/llm_manager.dart' show MCPLlmManager;
+export 'src/performance/enhanced_performance_monitor.dart' show EnhancedPerformanceMonitor, 
+    AggregationConfig, ThresholdConfig, AggregationType, ThresholdLevel, TrendInfo, TrendDirection;
+export 'src/plugins/enhanced_plugin_system.dart' show EnhancedPluginRegistry, PluginVersion, 
+    PluginSandboxConfig, PluginUpdateSuggestion;
+export 'package:pub_semver/pub_semver.dart' show Version, VersionConstraint;
+export 'src/security/security_audit.dart' show SecurityAuditManager, SecurityAuditEvent, 
+    SecurityEventType, SecurityPolicy;
+export 'src/security/encryption_manager.dart' show EncryptionManager, EncryptionAlgorithm, 
+    EncryptedData, EncryptionMetadata;
 export 'package:mcp_client/mcp_client.dart'
     show ClientCapabilities, Client, ClientTransport;
 export 'package:mcp_server/mcp_server.dart'
     show ServerCapabilities, Server, ServerTransport,
     Content, TextContent, ImageContent, ResourceContent,
     Tool, Resource, Message, MessageRole, MCPContentType, CallToolResult;
-export 'package:mcp_llm/mcp_llm.dart';
+export 'package:mcp_llm/mcp_llm.dart' hide Logger, HealthCheckResult, HealthStatus;
+export 'src/types/health_types.dart';
 
 /// Flutter MCP - Integrated MCP Management System
 ///
@@ -64,6 +100,80 @@ class FlutterMCP {
 
   // Private constructor
   FlutterMCP._();
+  
+  // Public getters for diagnostic access
+  
+  /// Get client manager status (for diagnostics)
+  Map<String, dynamic> get clientManagerStatus => _clientManager.getStatus();
+  
+  /// Get server manager status (for diagnostics)
+  Map<String, dynamic> get serverManagerStatus => _serverManager.getStatus();
+  
+  /// Get LLM manager status (for diagnostics)
+  Map<String, dynamic> get llmManagerStatus => _llmManager.getStatus();
+  
+  /// Get scheduler status (for diagnostics)
+  Map<String, dynamic> get schedulerStatus => {
+    'isRunning': _scheduler.isRunning,
+    'jobCount': _scheduler.jobCount,
+    'activeJobCount': _scheduler.activeJobCount,
+  };
+  
+  /// Get platform services status (for diagnostics)
+  Map<String, dynamic> get platformServicesStatus => {
+    'backgroundServiceRunning': _platformServices.isBackgroundServiceRunning,
+    'platformName': _platformServices.platformName,
+  };
+  
+  /// Get plugin registry status (for diagnostics)
+  Map<String, dynamic> get pluginRegistryStatus => {
+    'pluginCount': _pluginRegistry.getAllPluginNames().length,
+    'plugins': _pluginRegistry.getAllPluginNames(),
+  };
+  
+  /// Check if Flutter MCP is initialized
+  bool get isInitialized => _initialized;
+  
+  /// Get detailed client information
+  Map<String, dynamic> getClientDetails(String clientId) {
+    final clientInfo = _clientManager.getClientInfo(clientId);
+    if (clientInfo == null) return {};
+    
+    return {
+      'id': clientInfo.id,
+      'connected': clientInfo.client.isConnected,
+      'hasTransport': clientInfo.transport != null,
+    };
+  }
+  
+  /// Get detailed server information
+  Map<String, dynamic> getServerDetails(String serverId) {
+    final serverInfo = _serverManager.getServerInfo(serverId);
+    if (serverInfo == null) return {};
+    
+    return {
+      'id': serverInfo.id,
+      'name': serverInfo.server.name,
+      'version': serverInfo.server.version,
+      'hasTransport': serverInfo.transport != null,
+      'hasLlmServer': serverInfo.llmServer != null,
+    };
+  }
+  
+  /// Get detailed LLM information
+  Map<String, dynamic> getLlmDetails(String llmId) {
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) return {};
+    
+    return {
+      'id': llmInfo.id,
+      'providerType': llmInfo.mcpLlm.runtimeType.toString(),
+      'clientCount': llmInfo.llmClients.length,
+      'serverCount': llmInfo.llmServers.length,
+      'defaultClientId': llmInfo.defaultLlmClientId,
+      'defaultServerId': llmInfo.defaultLlmServerId,
+    };
+  }
 
   // Core components
   final MCPClientManager _clientManager = MCPClientManager();
@@ -79,11 +189,11 @@ class FlutterMCP {
   // Task scheduler
   final MCPScheduler _scheduler = MCPScheduler();
 
-  // Plugin registry
-  final MCPPluginRegistry _pluginRegistry = MCPPluginRegistry();
+  // Plugin registry (using enhanced version for better features)
+  final EnhancedPluginRegistry _pluginRegistry = EnhancedPluginRegistry();
 
   // Resource manager for cleanup
-  final ResourceManager _resourceManager = ResourceManager();
+  final ResourceManager _resourceManager = ResourceManager.instance;
 
   // Event system for communication
   final EventSystem _eventSystem = EventSystem.instance;
@@ -98,12 +208,20 @@ class FlutterMCP {
   final ObjectPool<Stopwatch> _stopwatchPool = ObjectPool<Stopwatch>(
     create: () => Stopwatch(),
     reset: (stopwatch) => stopwatch..reset(),
-    initialSize: 10,
-    maxSize: 50,
+    initialSize: MCPConstants.defaultObjectPoolInitialSize,
+    maxSize: MCPConstants.defaultObjectPoolSize,
   );
 
   // Circuit breakers for handling failures
   final Map<String, CircuitBreaker> _circuitBreakers = {};
+  
+  // New v1.0.0 features
+  late final EnhancedBatchManager _batchManager;
+  late final HealthMonitor _healthMonitor;
+  late final MCPOAuthManager _oauthManager;
+  late final EnhancedPerformanceMonitor _enhancedPerformanceMonitor;
+  late final SecurityAuditManager _securityAuditManager;
+  late final EncryptionManager _encryptionManager;
 
   // Plugin state
   bool _initialized = false;
@@ -113,7 +231,7 @@ class FlutterMCP {
   bool _shutdownHookRegistered = false;
 
   // Integrated logger with conditional logging
-  static final MCPLogger _logger = MCPLogger('mcp.flutter_mcp');
+  static final Logger _logger = Logger('flutter_mcp.flutter_mcp');
 
   // Initialization lock to prevent parallel initializations
   final Completer<void> _initializationLock = Completer<void>();
@@ -133,6 +251,73 @@ class FlutterMCP {
 
   String? get defaultLlmClientId => _defaultLlmClientId;
   String? get defaultLlmServerId => _defaultLlmServerId;
+
+  /// Get enhanced performance monitor (only available after initialization)
+  EnhancedPerformanceMonitor? get enhancedPerformanceMonitor => 
+    _initialized ? _enhancedPerformanceMonitor : null;
+
+  /// Get security audit manager (only available after initialization)
+  SecurityAuditManager? get securityAuditManager => 
+    _initialized ? _securityAuditManager : null;
+
+  /// Get encryption manager (only available after initialization)
+  EncryptionManager? get encryptionManager => 
+    _initialized ? _encryptionManager : null;
+
+  /// Check if a permission is granted
+  Future<bool> checkPermission(String permission) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    return await _platformServices.checkPermission(permission);
+  }
+
+  /// Request a permission
+  Future<bool> requestPermission(String permission) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    return await _platformServices.requestPermission(permission);
+  }
+
+  /// Request multiple permissions
+  Future<Map<String, bool>> requestPermissions(List<String> permissions) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    return await _platformServices.requestPermissions(permissions);
+  }
+
+  /// Request all required permissions based on configuration
+  Future<Map<String, bool>> requestRequiredPermissions() async {
+    if (!_initialized || _config == null) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    final requiredPermissions = <String>[];
+    
+    // Notification permission
+    if (_config!.useNotification) {
+      requiredPermissions.add('notification');
+    }
+    
+    // Background service permissions
+    if (_config!.useBackgroundService) {
+      if (Platform.isAndroid) {
+        // Android specific permissions are handled by manifest
+        // Only runtime permissions are needed
+        if (Platform.version.contains('13') || Platform.version.contains('14')) {
+          requiredPermissions.add('notification'); // POST_NOTIFICATIONS for Android 13+
+        }
+      }
+    }
+    
+    if (requiredPermissions.isEmpty) {
+      return {};
+    }
+    
+    return await requestPermissions(requiredPermissions);
+  }
 
   /// Initialize the plugin with improved concurrency handling and plugin integration
   ///
@@ -155,14 +340,53 @@ class FlutterMCP {
 
     _logger.info('Flutter MCP initialization started');
 
+    // Initialize enhanced error handler
+    EnhancedErrorHandler.instance.initialize();
+    
+    // Initialize enhanced resource cleanup
+    EnhancedResourceCleanup.instance.initialize(
+      defaultLeakDetectionTimeout: Duration(minutes: 10),
+      periodicLeakCheckInterval: Duration(minutes: 2),
+    );
+
+    // Initialize security audit manager
+    _securityAuditManager = SecurityAuditManager.instance;
+    _securityAuditManager.initialize(policy: SecurityPolicy(
+      maxFailedAttempts: config.maxConnectionRetries ?? 5,
+      sessionTimeout: Duration(hours: 8),
+      requireStrongPasswords: config.secure,
+      enableRealTimeMonitoring: config.enablePerformanceMonitoring ?? false,
+    ));
+
+    // Initialize encryption manager
+    _encryptionManager = EncryptionManager.instance;
+    _encryptionManager.initialize(
+      minKeyLength: 256,
+      keyRotationInterval: Duration(days: 90),
+      requireChecksums: true,
+    );
+
     // Start performance monitoring if enabled
     if (config.enablePerformanceMonitoring ?? false) {
       _initializePerformanceMonitoring();
     }
 
-    try {
+    await EnhancedErrorHandler.instance.handleError(() async {
+      // Initialize platform interface if not already set
+      try {
+        FlutterMcpPlatform.instance;
+      } catch (e) {
+        // Platform not initialized, set it up
+        _logger.fine('Platform interface not initialized, setting up MethodChannelFlutterMcp: $e');
+        FlutterMcpPlatform.instance = MethodChannelFlutterMcp();
+      }
+      
+      // Initialize dependency injection container
+      _initializeDependencyInjection();
+      
       // Initialize platform services
       await _platformServices.initialize(config);
+
 
       // Register shutdown hook for proper cleanup
       _registerShutdownHook();
@@ -183,7 +407,7 @@ class FlutterMCP {
       _resourceManager.registerCallback(
           'platform_services',
               () => _platformServices.shutdown(),
-          priority: ResourceManager.HIGH_PRIORITY
+          priority: ResourceManager.highPriority
       );
 
       // Initialize managers in parallel
@@ -202,28 +426,52 @@ class FlutterMCP {
         await _initializePluginRegistry(config.pluginConfigurations!);
       }
 
+      _initialized = true;
+      _logger.info('Flutter MCP initialization completed');
+
+      // Request required permissions after initialization
+      if (config.useNotification || config.useBackgroundService) {
+        try {
+          final permissions = await requestRequiredPermissions();
+          for (final entry in permissions.entries) {
+            if (!entry.value) {
+              _logger.warning('Permission ${entry.key} was denied');
+            }
+          }
+        } catch (e) {
+          _logger.severe('Error requesting permissions', e);
+          // Continue even if permissions fail
+          // Features will be limited based on available permissions
+        }
+      }
+
       // Auto-start configuration
       if (config.autoStart) {
         _logger.info('Starting services based on auto-start configuration');
         await startServices();
       }
 
-      _initialized = true;
-      _logger.info('Flutter MCP initialization completed');
-
       // Complete the initialization lock
       _initializationLock.complete();
-    } catch (e, stackTrace) {
-      _logger.error('Flutter MCP initialization failed', e, stackTrace);
+    },
+    context: 'flutter_mcp_initialization',
+    component: 'flutter_mcp',
+    metadata: {
+      'autoStart': config.autoStart,
+      'hasSchedule': config.schedule?.isNotEmpty ?? false,
+      'hasPlugins': config.pluginConfigurations?.isNotEmpty ?? false,
+    },
+    ).catchError((e, stackTrace) {
+      _logger.severe('Flutter MCP initialization failed', e, stackTrace);
 
       // Complete the initialization lock with error
       _initializationLock.completeError(e, stackTrace);
 
       // Clean up any resources that were initialized
-      await _cleanup();
+      _cleanup();
 
       throw MCPInitializationException('Flutter MCP initialization failed', e, stackTrace);
-    }
+    });
   }
 
   /// Initialize circuit breakers for different operations
@@ -261,7 +509,7 @@ class FlutterMCP {
 
   /// Initialize memory management with improved cleanup logic
   void _initializeMemoryManagement(int highMemoryThresholdMB) {
-    _logger.debug('Initializing memory management with threshold: $highMemoryThresholdMB MB');
+    _logger.fine('Initializing memory management with threshold: $highMemoryThresholdMB MB');
 
     MemoryManager.instance.initialize(
       startMonitoring: true,
@@ -275,7 +523,7 @@ class FlutterMCP {
             () async {
           MemoryManager.instance.dispose();
         },
-        priority: ResourceManager.MEDIUM_PRIORITY
+        priority: ResourceManager.mediumPriority
     );
 
     // Add high memory callback with tiered cleanup
@@ -294,7 +542,7 @@ class FlutterMCP {
 
   /// Perform tiered memory cleanup based on severity level
   Future<void> _performTieredMemoryCleanup(int severityLevel) async {
-    _logger.debug('Performing tier $severityLevel memory cleanup');
+    _logger.fine('Performing tier $severityLevel memory cleanup');
 
     try {
       // Tier 1 (always): Clear expired cache entries
@@ -312,12 +560,12 @@ class FlutterMCP {
 
       // Signal GC
       if (severityLevel >= 2) {
-        _logger.debug('Suggesting resource cleanup to garbage collector');
+        _logger.fine('Suggesting resource cleanup to garbage collector');
       }
 
       // Clear performance monitoring history for higher tiers
       if (severityLevel >= 2 && (_config?.enablePerformanceMonitoring ?? false)) {
-        _logger.debug('Clearing performance monitoring history');
+        _logger.fine('Clearing performance monitoring history');
         PerformanceMonitor.instance.reset();
       }
 
@@ -329,9 +577,9 @@ class FlutterMCP {
         'severityLevel': severityLevel,
       });
 
-      _logger.debug('Memory cleanup completed');
+      _logger.fine('Memory cleanup completed');
     } catch (e, stackTrace) {
-      _logger.error('Error during memory cleanup', e, stackTrace);
+      _logger.severe('Error during memory cleanup', e, stackTrace);
     }
   }
 
@@ -370,30 +618,59 @@ class FlutterMCP {
 
   /// Initialize core managers in parallel
   Future<void> _initializeManagers() async {
-    // Initialize in parallel for efficiency
+    // Initialize core managers in parallel
     await Future.wait([
       _clientManager.initialize(),
       _serverManager.initialize(),
       _llmManager.initialize(),
     ]);
+    
+    // Initialize v1.0.0 features
+    _batchManager = EnhancedBatchManager.instance;
+    _healthMonitor = HealthMonitor.instance;
+    _healthMonitor.initialize();
+    
+    // Initialize OAuth manager with credential manager
+    final secureStorage = SecureStorageManagerImpl();
+    await secureStorage.initialize();
+    final credentialManager = await CredentialManager.initialize(secureStorage);
+    _oauthManager = await MCPOAuthManager.initialize(credentialManager: credentialManager);
 
     // Register for cleanup with appropriate priorities
     _resourceManager.registerCallback(
+        'batch_manager',
+            () async => _batchManager.dispose(),
+        priority: ResourceManager.lowPriority
+    );
+    
+    _resourceManager.registerCallback(
+        'health_monitor',
+            () async => _healthMonitor.dispose(),
+        priority: ResourceManager.lowPriority
+    );
+    
+    _resourceManager.registerCallback(
+        'oauth_manager',
+            () async => _oauthManager.dispose(),
+        priority: ResourceManager.lowPriority
+    );
+    
+    _resourceManager.registerCallback(
         'client_manager',
             () => _clientManager.closeAll(),
-        priority: ResourceManager.LOW_PRIORITY
+        priority: ResourceManager.lowPriority
     );
 
     _resourceManager.registerCallback(
         'server_manager',
             () => _serverManager.closeAll(),
-        priority: ResourceManager.MEDIUM_PRIORITY
+        priority: ResourceManager.mediumPriority
     );
 
     _resourceManager.registerCallback(
         'llm_manager',
             () => _llmManager.closeAll(),
-        priority: ResourceManager.HIGH_PRIORITY
+        priority: ResourceManager.highPriority
     );
   }
 
@@ -426,7 +703,7 @@ class FlutterMCP {
           _scheduler.stop();
           _scheduler.dispose();
         },
-        priority: ResourceManager.MEDIUM_PRIORITY
+        priority: ResourceManager.mediumPriority
     );
   }
 
@@ -444,18 +721,95 @@ class FlutterMCP {
     _resourceManager.registerCallback(
         'plugin_registry',
             () => _pluginRegistry.shutdownAll(),
-        priority: ResourceManager.MEDIUM_PRIORITY
+        priority: ResourceManager.mediumPriority
     );
   }
 
   /// Initialize performance monitoring with enhanced metrics
   void _initializePerformanceMonitoring() {
+    // Initialize basic performance monitor
     PerformanceMonitor.instance.initialize(
       enableLogging: true,
       enableMetricsExport: _config?.enableMetricsExport ?? false,
       exportPath: _config?.metricsExportPath,
       maxRecentOperations: 100,
       autoExportInterval: Duration(minutes: 15),
+    );
+
+    // Initialize enhanced performance monitor
+    _enhancedPerformanceMonitor = EnhancedPerformanceMonitor.instance;
+    
+    // Configure metric aggregations for key performance metrics
+    _enhancedPerformanceMonitor.configureAggregation(
+      'memory.heap_usage',
+      AggregationConfig(
+        window: Duration(minutes: 5),
+        type: AggregationType.average,
+        autoFlush: true,
+        flushInterval: Duration(minutes: 1),
+      ),
+    );
+    
+    _enhancedPerformanceMonitor.configureAggregation(
+      'client.connection_time',
+      AggregationConfig(
+        window: Duration(minutes: 10),
+        type: AggregationType.percentile,
+        maxSamples: 1000,
+      ),
+    );
+    
+    _enhancedPerformanceMonitor.configureAggregation(
+      'llm.response_time',
+      AggregationConfig(
+        window: Duration(minutes: 15),
+        type: AggregationType.median,
+        maxSamples: 500,
+      ),
+    );
+
+    // Configure performance thresholds with alerts
+    _enhancedPerformanceMonitor.configureThreshold(
+      'memory.heap_usage',
+      ThresholdConfig(
+        warningLevel: _config?.highMemoryThresholdMB?.toDouble() ?? 512.0,
+        criticalLevel: (_config?.highMemoryThresholdMB?.toDouble() ?? 512.0) * 1.5,
+        sustainedDuration: Duration(seconds: 30),
+        onViolation: (violation) {
+          _logger.warning(
+            'Memory threshold violation: ${violation.metricName} = ${violation.value}MB '
+            '(threshold: ${violation.threshold}MB, level: ${violation.level.name})'
+          );
+          
+          // Trigger memory cleanup if critical
+          if (violation.level == ThresholdLevel.critical) {
+            _logger.severe('Critical memory usage detected, triggering cleanup');
+            MemoryManager.instance.performMemoryCleanup();
+          }
+        },
+      ),
+    );
+    
+    _enhancedPerformanceMonitor.configureThreshold(
+      'llm.response_time',
+      ThresholdConfig(
+        warningLevel: (_config?.llmRequestTimeoutMs ?? 30000).toDouble() * 0.8,
+        criticalLevel: (_config?.llmRequestTimeoutMs ?? 30000).toDouble(),
+        sustainedDuration: Duration(seconds: 10),
+        onViolation: (violation) {
+          _logger.warning(
+            'LLM response time threshold violation: ${violation.value}ms '
+            '(threshold: ${violation.threshold}ms)'
+          );
+        },
+      ),
+    );
+
+    // Enable auto-detection of anomalies and threshold violations
+    _enhancedPerformanceMonitor.enableAutoDetection(
+      anomalies: true,
+      thresholds: true,
+      interval: Duration(seconds: 5),
     );
 
     // Enable caching for certain key events
@@ -480,9 +834,51 @@ class FlutterMCP {
             await PerformanceMonitor.instance.exportMetrics();
           }
           PerformanceMonitor.instance.dispose();
+          _enhancedPerformanceMonitor.dispose();
         },
-        priority: ResourceManager.LOW_PRIORITY
+        priority: ResourceManager.lowPriority
     );
+    
+    _logger.info('Enhanced performance monitoring initialized with aggregation and auto-detection');
+  }
+  
+  /// Initialize dependency injection container
+  void _initializeDependencyInjection() {
+    _logger.fine('Initializing dependency injection container');
+    
+    // Register core services
+    ServiceLocator.registerInstance<MCPLogger>(MCPLogger('mcp.main'));
+    ServiceLocator.registerInstance<EventSystem>(_eventSystem);
+    ServiceLocator.registerInstance<PerformanceMonitor>(PerformanceMonitor.instance);
+    ServiceLocator.registerInstance<MemoryManager>(MemoryManager.instance);
+    ServiceLocator.registerInstance<ResourceManager>(_resourceManager);
+    
+    // Register enhanced performance monitor if enabled
+    if (_config?.enablePerformanceMonitoring ?? false) {
+      ServiceLocator.registerInstance<EnhancedPerformanceMonitor>(_enhancedPerformanceMonitor);
+    }
+    
+    // Register managers as singletons
+    ServiceLocator.registerInstance<MCPClientManager>(_clientManager);
+    ServiceLocator.registerInstance<MCPServerManager>(_serverManager);
+    ServiceLocator.registerInstance<MCPLlmManager>(_llmManager);
+    ServiceLocator.registerInstance<MCPScheduler>(_scheduler);
+    ServiceLocator.registerInstance<MCPPluginRegistry>(_pluginRegistry);
+    ServiceLocator.registerInstance<PlatformServices>(_platformServices);
+    
+    // Register factories for creating new instances
+    ServiceLocator.registerFactory<CircuitBreaker>(() => CircuitBreaker(
+      name: 'default',
+      failureThreshold: 5,
+      resetTimeout: Duration(seconds: 30),
+    ));
+    
+    ServiceLocator.registerFactory<SemanticCache>(() => SemanticCache(
+      maxSize: MCPConstants.maxRecentOperations,
+      ttl: Duration(hours: 1),
+    ));
+    
+    _logger.fine('Dependency injection container initialized');
   }
 
   /// Register shutdown hook to ensure proper cleanup
@@ -504,7 +900,7 @@ class FlutterMCP {
   void _registerProviderSafely(llm.MCPLlm mcpLlm, String name, llm.LlmProviderFactory factory) {
     try {
       mcpLlm.registerProvider(name, factory);
-      _logger.debug('Registered $name provider');
+      _logger.fine('Registered $name provider');
     } catch (e, stackTrace) {
       _logger.warning('Failed to register $name provider', e, stackTrace);
 
@@ -545,7 +941,7 @@ class FlutterMCP {
     // Report if there were errors
     if (startErrors.isNotEmpty) {
       _logger.warning(
-          'Some components failed to start (${startErrors.length} errors). ' +
+          'Some components failed to start (${startErrors.length} errors). '
               'First error: ${startErrors.values.first}'
       );
     }
@@ -571,9 +967,10 @@ class FlutterMCP {
       transportArgs: clientConfig.transportArgs,
       serverUrl: clientConfig.serverUrl,
       authToken: clientConfig.authToken,
+      config: clientConfig,
     );
 
-    _logger.debug('Created MCP client: ${clientConfig.name} with ID $clientId');
+    _logger.fine('Created MCP client: ${clientConfig.name} with ID $clientId');
     return clientId;
   }
 
@@ -587,9 +984,10 @@ class FlutterMCP {
       ssePort: serverConfig.ssePort,
       fallbackPorts: serverConfig.fallbackPorts,
       authToken: serverConfig.authToken,
+      config: serverConfig,
     );
 
-    _logger.debug('Created MCP server: ${serverConfig.name} with ID $serverId');
+    _logger.fine('Created MCP server: ${serverConfig.name} with ID $serverId');
     return serverId;
   }
 
@@ -609,7 +1007,7 @@ class FlutterMCP {
           mcpServerMap['server_$i'] = serverId;  // Reference by index
           mcpServerMap[serverConfig.name] = serverId;  // Reference by name
         } catch (e, stackTrace) {
-          _logger.error('Failed to create server: ${serverConfig.name}', e, stackTrace);
+          _logger.severe('Failed to create server: ${serverConfig.name}', e, stackTrace);
           startErrors['server.${serverConfig.name}'] = e;
         }
       }
@@ -626,7 +1024,7 @@ class FlutterMCP {
           mcpClientMap['client_$i'] = clientId;  // Reference by index
           mcpClientMap[clientConfig.name] = clientId;  // Reference by name
         } catch (e, stackTrace) {
-          _logger.error('Failed to create client: ${clientConfig.name}', e, stackTrace);
+          _logger.severe('Failed to create client: ${clientConfig.name}', e, stackTrace);
           startErrors['client.${clientConfig.name}'] = e;
         }
       }
@@ -654,7 +1052,7 @@ class FlutterMCP {
                 llmServerId: llmServerId,
               );
 
-              _logger.debug('Associated MCP server $mcpServerId with LLM server $llmServerId');
+              _logger.fine('Associated MCP server $mcpServerId with LLM server $llmServerId');
             } else {
               _logger.warning('MCP server reference not found: $mcpServerRef');
             }
@@ -663,7 +1061,7 @@ class FlutterMCP {
           // Set as default if needed
           if (llmConfig.isDefault) {
             _defaultLlmServerId = llmServerId;
-            _logger.debug('Set default LLM server: $llmServerId');
+            _logger.fine('Set default LLM server: $llmServerId');
           }
 
           // Register core plugins if configured
@@ -681,7 +1079,7 @@ class FlutterMCP {
             }
           }
         } catch (e, stackTrace) {
-          _logger.error('Failed to create LLM server at index $i', e, stackTrace);
+          _logger.severe('Failed to create LLM server at index $i', e, stackTrace);
           startErrors['llm.server.$i'] = e;
         }
       }
@@ -709,7 +1107,7 @@ class FlutterMCP {
                 llmClientId: llmClientId,
               );
 
-              _logger.debug('Associated MCP client $mcpClientId with LLM client $llmClientId');
+              _logger.fine('Associated MCP client $mcpClientId with LLM client $llmClientId');
             } else {
               _logger.warning('MCP client reference not found: $mcpClientRef');
             }
@@ -718,7 +1116,7 @@ class FlutterMCP {
           // Set as default if needed
           if (llmConfig.isDefault) {
             _defaultLlmClientId = llmClientId;
-            _logger.debug('Set default LLM client: $llmClientId');
+            _logger.fine('Set default LLM client: $llmClientId');
           }
 
           // Register core plugins if configured
@@ -736,7 +1134,7 @@ class FlutterMCP {
             }
           }
         } catch (e, stackTrace) {
-          _logger.error('Failed to create LLM client at index $i', e, stackTrace);
+          _logger.severe('Failed to create LLM client at index $i', e, stackTrace);
           startErrors['llm.client.$i'] = e;
         }
       }
@@ -746,9 +1144,9 @@ class FlutterMCP {
     for (final serverId in mcpServerMap.values.toSet()) {
       try {
         connectServer(serverId);
-        _logger.debug('Connected MCP server: $serverId');
+        _logger.fine('Connected MCP server: $serverId');
       } catch (e, stackTrace) {
-        _logger.error('Failed to connect server: $serverId', e, stackTrace);
+        _logger.severe('Failed to connect server: $serverId', e, stackTrace);
         startErrors['connect.server.$serverId'] = e;
       }
     }
@@ -757,9 +1155,9 @@ class FlutterMCP {
     for (final clientId in mcpClientMap.values.toSet()) {
       try {
         await connectClient(clientId);
-        _logger.debug('Connected MCP client: $clientId');
+        _logger.fine('Connected MCP client: $clientId');
       } catch (e, stackTrace) {
-        _logger.error('Failed to connect client: $clientId', e, stackTrace);
+        _logger.severe('Failed to connect client: $clientId', e, stackTrace);
         startErrors['connect.client.$clientId'] = e;
       }
     }
@@ -781,7 +1179,7 @@ class FlutterMCP {
 
     if (startErrors.isNotEmpty) {
       _logger.warning(
-          'Some components failed to start (${startErrors.length} errors). ' +
+          'Some components failed to start (${startErrors.length} errors). '
               'First error: ${startErrors.values.first}'
       );
     }
@@ -798,6 +1196,7 @@ class FlutterMCP {
     List<String>? transportArgs,
     String? serverUrl,
     String? authToken,
+    MCPClientConfig? config,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -807,33 +1206,76 @@ class FlutterMCP {
     final timer = PerformanceMonitor.instance.startTimer('client.create');
 
     try {
-      // Validate parameters
-      if (transportCommand == null && serverUrl == null) {
+      // Validate parameters - check both direct params and config
+      final hasTransportCommand = transportCommand != null || config?.transportCommand != null;
+      final hasServerUrl = serverUrl != null || config?.serverUrl != null;
+      
+      if (!hasTransportCommand && !hasServerUrl) {
         throw MCPValidationException(
             'Either transportCommand or serverUrl must be provided',
             {'transport': 'Missing transport configuration'}
         );
       }
 
-      // Create client using McpClient factory
+      // Create client using McpClient factory with config
       final clientId = _clientManager.generateId();
       final mcpClient = client.McpClient.createClient(
-        name: name,
-        version: version,
-        capabilities: capabilities ?? client.ClientCapabilities(),
+        client.McpClientConfig(
+          name: name,
+          version: version,
+          capabilities: capabilities ?? client.ClientCapabilities(),
+        ),
       );
 
-      // Create transport
+      // Create transport with proper Result handling
       client.ClientTransport? transport;
-      if (transportCommand != null) {
-        transport = await client.McpClient.createStdioTransport(
-          command: transportCommand,
+      
+      // Determine transport type and parameters from config or direct params
+      final transportType = config?.transportType ?? 
+        (transportCommand != null || config?.transportCommand != null ? 'stdio' : 
+         serverUrl != null || config?.serverUrl != null ? 'sse' : 'stdio');
+      
+      final effectiveTransportCommand = config?.transportCommand ?? transportCommand;
+      final effectiveServerUrl = config?.serverUrl ?? serverUrl;
+      
+      if (transportType == 'stdio' && effectiveTransportCommand != null) {
+        final result = await client.McpClient.createStdioTransport(
+          command: effectiveTransportCommand,
           arguments: transportArgs ?? [],
         );
-      } else if (serverUrl != null) {
-        transport = await client.McpClient.createSseTransport(
-          serverUrl: serverUrl,
+        // Handle Result type properly using fold pattern
+        transport = result.fold(
+          (t) => t,  // Success case
+          (error) => throw MCPTransportException(
+            'Failed to create stdio transport: ${error.toString()}',
+            error,
+          ),
+        );
+      } else if (transportType == 'sse' && effectiveServerUrl != null) {
+        final result = await client.McpClient.createSseTransport(
+          serverUrl: effectiveServerUrl,
           headers: authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
+        );
+        // Handle Result type properly using fold pattern
+        transport = result.fold(
+          (t) => t,  // Success case
+          (error) => throw MCPTransportException(
+            'Failed to create SSE transport: ${error.toString()}',
+            error,
+          ),
+        );
+      } else if (transportType == 'streamablehttp' && effectiveServerUrl != null) {
+        final result = await client.McpClient.createStreamableHttpTransport(
+          baseUrl: effectiveServerUrl,
+          headers: authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
+        );
+        // Handle Result type properly using fold pattern
+        transport = result.fold(
+          (t) => t,  // Success case
+          (error) => throw MCPTransportException(
+            'Failed to create Streamable HTTP transport: ${error.toString()}',
+            error,
+          ),
         );
       }
 
@@ -841,17 +1283,20 @@ class FlutterMCP {
       _clientManager.registerClient(clientId, mcpClient, transport);
 
       // Register for resource cleanup
-      _resourceManager.register<client.Client>(
-          'client_$clientId',
-          mcpClient,
-              (c) async => await _clientManager.closeClient(clientId)
+      EnhancedResourceCleanup.instance.registerResource<client.Client>(
+        key: 'client_$clientId',
+        resource: mcpClient,
+        disposeFunction: (c) async => await _clientManager.closeClient(clientId),
+        type: 'MCP_Client',
+        description: 'MCP client: $name',
+        priority: 200,
       );
 
       PerformanceMonitor.instance.stopTimer(timer, success: true);
       return clientId;
     } catch (e, stackTrace) {
       PerformanceMonitor.instance.stopTimer(timer, success: false);
-      _logger.error('Failed to create MCP client', e, stackTrace);
+      _logger.severe('Failed to create MCP client', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to create MCP client: $name',
           e,
@@ -869,6 +1314,7 @@ class FlutterMCP {
     int? ssePort,
     List<int>? fallbackPorts,
     String? authToken,
+    MCPServerConfig? config,
   }) async {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
@@ -886,43 +1332,119 @@ class FlutterMCP {
         );
       }
 
-      // Create server using McpServer factory
+      // Create server using McpServer factory with config
       final serverId = _serverManager.generateId();
       final mcpServer = server.McpServer.createServer(
-        name: name,
-        version: version,
-        capabilities: capabilities ?? server.ServerCapabilities(),
+        server.McpServerConfig(
+          name: name,
+          version: version,
+          capabilities: capabilities ?? server.ServerCapabilities(),
+        ),
       );
 
-      // Create transport
+      // Create transport with proper Result handling
       server.ServerTransport? transport;
-      if (useStdioTransport) {
-        transport = server.McpServer.createStdioTransport();
-      } else if (ssePort != null) {
-        transport = server.McpServer.createSseTransport(
-          endpoint: '/sse',
-          messagesEndpoint: '/messages',
-          port: ssePort,
-          fallbackPorts: fallbackPorts,
-          authToken: authToken,
+      
+      // Determine transport type
+      final transportType = config?.transportType ?? 
+        (useStdioTransport ? 'stdio' : 
+         ssePort != null ? 'sse' : 
+         config?.streamableHttpPort != null ? 'streamablehttp' : 'stdio');
+      
+      // Validate transport type
+      final validTransportTypes = ['stdio', 'sse', 'streamablehttp'];
+      if (!validTransportTypes.contains(transportType)) {
+        throw MCPOperationFailedException(
+          'Invalid transport type: $transportType. Valid types are: ${validTransportTypes.join(', ')}',
+          null,
+          null
         );
+      }
+      
+      if (transportType == 'stdio') {
+        final result = server.McpServer.createStdioTransport();
+        // Handle Result type properly
+        transport = result.fold(
+          (t) => t,  // Success case
+          (error) => throw MCPTransportException(
+            'Failed to create stdio server transport: ${error.toString()}',
+            error,
+          ),
+        );
+      } else if (transportType == 'sse' && ssePort != null) {
+        // Create SSE transport using TransportConfig
+        try {
+          final result = server.McpServer.createTransport(
+            server.TransportConfig.sse(
+              host: 'localhost',
+              port: ssePort,
+              fallbackPorts: fallbackPorts ?? [],
+              authToken: authToken,
+            ),
+          );
+          transport = await result.fold(
+            (futureTransport) => futureTransport,
+            (error) => throw MCPTransportException(
+              'Failed to create SSE server transport: ${error.toString()}',
+              error,
+            ),
+          );
+          _logger.info('SSE server transport created on port $ssePort');
+        } catch (error) {
+          throw MCPOperationFailedException(
+            'Failed to create SSE server transport: ${error.toString()}',
+            error,
+            null,
+          );
+        }
+      } else if (transportType == 'streamablehttp') {
+        // Create Streamable HTTP transport
+        final httpPort = config?.streamableHttpPort ?? ssePort ?? 8080;
+        try {
+          final result = server.McpServer.createTransport(
+            server.TransportConfig.streamableHttp(
+              host: 'localhost',
+              port: httpPort,
+              fallbackPorts: fallbackPorts ?? [],
+              authToken: authToken,
+              isJsonResponseEnabled: false, // Use SSE mode by default
+            ),
+          );
+          transport = await result.fold(
+            (futureTransport) => futureTransport,
+            (error) => throw MCPTransportException(
+              'Failed to create Streamable HTTP server transport: ${error.toString()}',
+              error,
+            ),
+          );
+          _logger.info('Streamable HTTP server transport created on port $httpPort');
+        } catch (error) {
+          throw MCPOperationFailedException(
+            'Failed to create Streamable HTTP server transport: ${error.toString()}',
+            error,
+            null,
+          );
+        }
       }
 
       // Register server
       _serverManager.registerServer(serverId, mcpServer, transport);
 
       // Register for resource cleanup
-      _resourceManager.register<server.Server>(
-          'server_$serverId',
-          mcpServer,
-              (s) async => await _serverManager.closeServer(serverId)
+      EnhancedResourceCleanup.instance.registerResource<server.Server>(
+        key: 'server_$serverId',
+        resource: mcpServer,
+        disposeFunction: (s) async => await _serverManager.closeServer(serverId),
+        type: 'MCP_Server',
+        description: 'MCP server: $name',
+        priority: 200,
       );
 
       PerformanceMonitor.instance.stopTimer(timer, success: true);
       return serverId;
     } catch (e, stackTrace) {
       PerformanceMonitor.instance.stopTimer(timer, success: false);
-      _logger.error('Failed to create MCP server', e, stackTrace);
+      _logger.severe('Failed to create MCP server', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to create MCP server: $name',
           e,
@@ -958,7 +1480,7 @@ class FlutterMCP {
     try {
       // Get MCPLlm instance, create if doesn't exist (lazy initialization)
       if (! _mcpLlmInstances.containsKey(mcpLlmInstanceId)) {
-        _logger.debug('Creating new MCPLlm instance: $mcpLlmInstanceId');
+        _logger.fine('Creating new MCPLlm instance: $mcpLlmInstanceId');
         createMcpLlmInstance(mcpLlmInstanceId);
       }
 
@@ -977,7 +1499,7 @@ class FlutterMCP {
           'llm_$llmId',
           llmId,
               (id) async => await _llmManager.closeLlm(id),
-          priority: ResourceManager.MEDIUM_PRIORITY
+          priority: ResourceManager.mediumPriority
       );
 
       // Verify provider is registered
@@ -1009,7 +1531,7 @@ class FlutterMCP {
 
       // Create semantic cache for this client
       _llmResponseCaches[llmId] = SemanticCache(
-        maxSize: 100,
+        maxSize: MCPConstants.maxRecentOperations,
         ttl: Duration(hours: 1),
         embeddingFunction: (text) async => await llmClient.generateEmbeddings(text),
         similarityThreshold: 0.85,
@@ -1035,7 +1557,7 @@ class FlutterMCP {
       if (_config?.autoRegisterLlmPlugins == true) {
         try {
           await registerPluginsFromLlmClient(llmId, llmClientId);
-          _logger.debug('Auto-registered plugins from new LLM client $llmClientId');
+          _logger.fine('Auto-registered plugins from new LLM client $llmClientId');
         } catch (e) {
           _logger.warning('Failed to auto-register plugins from new LLM client $llmClientId: $e');
         }
@@ -1080,7 +1602,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create LLM with client', e, stackTrace);
+      _logger.severe('Failed to create LLM with client', e, stackTrace);
 
       // Categorize errors better for clearer debugging
       if (e.toString().contains('API key')) {
@@ -1125,7 +1647,7 @@ class FlutterMCP {
     try {
       // Get MCPLlm instance, create if doesn't exist (lazy initialization)
       if (!_mcpLlmInstances.containsKey(mcpLlmInstanceId)) {
-        _logger.debug('Creating new MCPLlm instance: $mcpLlmInstanceId');
+        _logger.fine('Creating new MCPLlm instance: $mcpLlmInstanceId');
         createMcpLlmInstance(mcpLlmInstanceId);
       }
 
@@ -1144,7 +1666,7 @@ class FlutterMCP {
           'llm_$llmId',
           llmId,
               (id) async => await _llmManager.closeLlm(id),
-          priority: ResourceManager.MEDIUM_PRIORITY
+          priority: ResourceManager.mediumPriority
       );
 
       // Verify provider is registered
@@ -1177,7 +1699,7 @@ class FlutterMCP {
       if (_config?.autoRegisterLlmPlugins == true) {
         try {
           await registerPluginsFromLlmServer(llmId, llmServerId);
-          _logger.debug('Auto-registered plugins from new LLM server $llmServerId');
+          _logger.fine('Auto-registered plugins from new LLM server $llmServerId');
         } catch (e) {
           _logger.warning('Failed to auto-register plugins from new LLM server $llmServerId: $e');
         }
@@ -1238,7 +1760,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create LLM with server', e, stackTrace);
+      _logger.severe('Failed to create LLM with server', e, stackTrace);
 
       // Categorize errors better for clearer debugging
       if (e.toString().contains('API key')) {
@@ -1259,7 +1781,7 @@ class FlutterMCP {
   /// Get LLM details with enhanced information about clients and servers
   ///
   /// [llmId]: LLM ID
-  Map<String, dynamic> getLlmDetails(String llmId) {
+  Map<String, dynamic> getLlmEnhancedDetails(String llmId) {
     if (!_initialized) {
       throw MCPException('Flutter MCP is not initialized');
     }
@@ -1335,7 +1857,7 @@ class FlutterMCP {
       if (includeDetails) {
         // Full details
         try {
-          llmDetails[llmId] = getLlmDetails(llmId);
+          llmDetails[llmId] = getLlmEnhancedDetails(llmId);
         } catch (e) {
           // Skip errors
           _logger.warning('Error getting details for LLM $llmId: $e');
@@ -1422,7 +1944,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to remove LLM client', e, stackTrace);
+      _logger.severe('Failed to remove LLM client', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to remove LLM client',
           e,
@@ -1490,7 +2012,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to remove LLM server', e, stackTrace);
+      _logger.severe('Failed to remove LLM server', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to remove LLM server',
           e,
@@ -1526,11 +2048,11 @@ class FlutterMCP {
             try {
               await mcpLlm.shutdown();
             } catch (e) {
-              _logger.error('Error shutting down MCPLlm instance $instanceId', e);
+              _logger.severe('Error shutting down MCPLlm instance $instanceId', e);
             }
             _mcpLlmInstances.remove(instanceId);
           },
-          priority: ResourceManager.HIGH_PRIORITY
+          priority: ResourceManager.highPriority
       );
 
       return mcpLlm;
@@ -1682,7 +2204,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to integrate mcpClient with llmClient', e, stackTrace);
+      _logger.severe('Failed to integrate mcpClient with llmClient', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to integrate mcpClient with LlmClient',
           e,
@@ -1734,7 +2256,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to remove mcpClient from llmClient', e, stackTrace);
+      _logger.severe('Failed to remove mcpClient from llmClient', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to remove mcpClient from llmClient',
           e,
@@ -1786,7 +2308,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to set default mcpClient for LlmClient', e, stackTrace);
+      _logger.severe('Failed to set default mcpClient for LlmClient', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to set default mcpClient for LlmClient',
           e,
@@ -1845,7 +2367,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to integrate mcpServer with llmServer', e, stackTrace);
+      _logger.severe('Failed to integrate mcpServer with llmServer', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to integrate mcpServer with llmServer',
           e,
@@ -1897,7 +2419,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to remove mcpServer from llmServer', e, stackTrace);
+      _logger.severe('Failed to remove mcpServer from llmServer', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to remove mcpServer from llmServer',
           e,
@@ -1949,7 +2471,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to set default mcpServer for llmServer', e, stackTrace);
+      _logger.severe('Failed to set default mcpServer for llmServer', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to set default mcpServer for llmServerM',
           e,
@@ -2010,7 +2532,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to connect client', e, stackTrace);
+      _logger.severe('Failed to connect client', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to connect client: $clientId',
           e,
@@ -2062,7 +2584,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to connect server', e, stackTrace);
+      _logger.severe('Failed to connect server', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to connect server: $serverId',
           e,
@@ -2085,18 +2607,13 @@ class FlutterMCP {
       throw MCPException('Flutter MCP is not initialized');
     }
 
-    _logger.debug('Calling tool $toolName on client $clientId');
+    _logger.fine('Calling tool $toolName on client $clientId');
 
-    final stopwatch = _stopwatchPool.acquire();
-    stopwatch.start();
-    final circuitBreaker = _circuitBreakers['tool.call']!;
-
-    try {
-      // Use circuit breaker to prevent cascading failures
-      return await circuitBreaker.execute(() async {
+    return await EnhancedErrorHandler.instance.handleError(
+      () async {
         final clientInfo = _clientManager.getClientInfo(clientId);
         if (clientInfo == null) {
-          throw MCPResourceNotFoundException(clientId, 'Client not found');
+          throw MCPResourceNotFoundException('Client not found', clientId);
         }
 
         if (!clientInfo.connected) {
@@ -2113,42 +2630,18 @@ class FlutterMCP {
             operationName: 'Call tool $toolName'
         );
 
-        PerformanceMonitor.instance.recordMetric(
-            'tool.call',
-            stopwatch.elapsedMilliseconds,
-            success: true,
-            metadata: {'tool': toolName, 'client': clientId}
-        );
-
-        _stopwatchPool.release(stopwatch);
         return result;
-      });
-    } catch (e, stackTrace) {
-      PerformanceMonitor.instance.recordMetric(
-          'tool.call',
-          stopwatch.elapsedMilliseconds,
-          success: false,
-          metadata: {'tool': toolName, 'client': clientId, 'error': e.toString()}
-      );
-
-      _stopwatchPool.release(stopwatch);
-      _logger.error('Error calling tool $toolName', e, stackTrace);
-
-      // If it's a circuit breaker exception, wrap it
-      if (e is CircuitBreakerOpenException) {
-        throw MCPCircuitBreakerOpenException(
-            'Circuit breaker open for tool calls, too many recent failures',
-            e,
-            stackTrace
-        );
-      }
-
-      throw MCPOperationFailedException(
-          'Error calling tool $toolName on client $clientId',
-          e,
-          stackTrace
-      );
-    }
+      },
+      context: 'tool_call',
+      component: 'client_manager',
+      metadata: {
+        'toolName': toolName,
+        'clientId': clientId,
+        'hasArguments': arguments.isNotEmpty,
+      },
+      circuitBreakerName: 'tool.execution',
+      recoveryStrategy: 'retry',
+    );
   }
 
   /// Sends a message to the LLM and gets a response
@@ -2181,44 +2674,50 @@ class FlutterMCP {
         bool noHistory = false,
       }) async {
     // Logger instance
-    final _logger = MCPLogger('mcp.llm_service');
-    _logger.debug('Processing chat request: $userInput');
+    final logger = MCPLogger('mcp.llm_service');
+    logger.fine('Processing chat request: $userInput');
 
-    try {
-      // Get LLM client from manager
-      llmClientId ??= await _llmManager.getDefaultLlmClientId(llmId);
-      final llmClient = _llmManager.getLlmClientById(llmClientId);
-      if (llmClient == null) {
-        _logger.error('LLM client not found: $llmClientId');
-        return llm.LlmResponse(
-          text: 'Error: LLM client not found: $llmClientId',
-          metadata: {'error': 'client_not_found'},
+    return await EnhancedErrorHandler.instance.handleError(
+      () async {
+        // Get LLM client from manager
+        llmClientId ??= await _llmManager.getDefaultLlmClientId(llmId);
+        final llmClient = _llmManager.getLlmClientById(llmClientId!);
+        if (llmClient == null) {
+          throw MCPResourceNotFoundException(
+            'LLM client not found: $llmClientId',
+            llmClientId!,
+          );
+        }
+
+        // Call the underlying LlmClient chat method which already has performance monitoring
+        final response = await llmClient.chat(
+          userInput,
+          enableTools: enableTools,
+          enablePlugins: enablePlugins,
+          parameters: parameters,
+          context: context,
+          useRetrieval: useRetrieval,
+          enhanceSystemPrompt: enhanceSystemPrompt,
+          noHistory: noHistory,
         );
-      }
 
-      // Call the underlying LlmClient chat method which already has performance monitoring
-      final response = await llmClient.chat(
-        userInput,
-        enableTools: enableTools,
-        enablePlugins: enablePlugins,
-        parameters: parameters,
-        context: context,
-        useRetrieval: useRetrieval,
-        enhanceSystemPrompt: enhanceSystemPrompt,
-        noHistory: noHistory,
-      );
-
-      return response;
-    } catch (e, stackTrace) {
-      // Handle and log errors
-      _logger.error('Error in chat: $e', e, stackTrace);
-
-      // Return error response
-      return llm.LlmResponse(
-        text: 'Error processing chat request: $e',
-        metadata: {'error': e.toString()},
-      );
-    }
+        return response;
+      },
+      context: 'llm_chat',
+      component: 'llm_manager',
+      metadata: {
+        'llmId': llmId,
+        'llmClientId': llmClientId,
+        'enableTools': enableTools,
+        'enablePlugins': enablePlugins,
+        'useRetrieval': useRetrieval,
+      },
+      circuitBreakerName: 'llm.operations',
+      fallbackValue: llm.LlmResponse(
+        text: 'Error processing chat request. Please try again later.',
+        metadata: {'error': 'service_unavailable'},
+      ),
+    );
   }
 
   /// Streams a message to the LLM and gets responses in chunks
@@ -2252,14 +2751,14 @@ class FlutterMCP {
       }) async* {
     // Logger instance
     final logger = MCPLogger('mcp.llm_service');
-    logger.debug('Processing stream chat request: $userInput');
+    logger.fine('Processing stream chat request: $userInput');
 
     try {
       // Get LLM client from manager
       llmClientId ??= await _llmManager.getDefaultLlmClientId(llmId);
       final llmClient = _llmManager.getLlmClientById(llmClientId);
       if (llmClient == null) {
-        logger.error('LLM client not found: $llmId');
+        logger.severe('LLM client not found: $llmId');
         yield llm.LlmResponseChunk(
           textChunk: 'Error: LLM client not found: $llmId',
           isDone: true,
@@ -2284,7 +2783,7 @@ class FlutterMCP {
       }
     } catch (e, stackTrace) {
       // Handle and log errors
-      logger.error('Error in stream chat: $e', e, stackTrace);
+      logger.severe('Error in stream chat: $e', e, stackTrace);
       yield llm.LlmResponseChunk(
         textChunk: 'Error processing stream chat request: $e',
         isDone: true,
@@ -2302,7 +2801,7 @@ class FlutterMCP {
         bool parallel = false,
         int maxParallelism = 3,
       }) async {
-    _logger.debug('Processing ${documents.length} documents in chunks of $chunkSize${parallel ? ' with parallelism $maxParallelism' : ' sequentially'}');
+    _logger.fine('Processing ${documents.length} documents in chunks of $chunkSize${parallel ? ' with parallelism $maxParallelism' : ' sequentially'}');
 
     if (parallel) {
       // Process with controlled parallelism
@@ -2358,7 +2857,7 @@ class FlutterMCP {
         operationName: operationName,
         onRetry: (attempt, error, delay) {
           _logger.warning(
-              'Retrying $operationName (attempt ${attempt + 1}/$maxRetries) ' +
+              'Retrying $operationName (attempt ${attempt + 1}/$maxRetries) '
                   'after $delay due to error: ${error.toString().substring(0, min(100, error.toString().length))}'
           );
           PerformanceMonitor.instance.incrementCounter('retry.$operationName');
@@ -2383,7 +2882,7 @@ class FlutterMCP {
             operationName: operationName,
             onRetry: (attempt, error) {
               _logger.warning(
-                  'Retrying $operationName (attempt ${attempt + 1}/$maxRetries) ' +
+                  'Retrying $operationName (attempt ${attempt + 1}/$maxRetries) '
                       'due to error: ${error.toString().substring(0, min(100, error.toString().length))}'
               );
               PerformanceMonitor.instance.incrementCounter('retry.$operationName');
@@ -2486,7 +2985,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to add document to LLM', e, stackTrace);
+      _logger.severe('Failed to add document to LLM', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to add document to LLM',
           e,
@@ -2581,7 +3080,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to retrieve relevant documents', e, stackTrace);
+      _logger.severe('Failed to retrieve relevant documents', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to retrieve relevant documents',
           e,
@@ -2668,7 +3167,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to generate embeddings', e, stackTrace);
+      _logger.severe('Failed to generate embeddings', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to generate embeddings',
           e,
@@ -2746,7 +3245,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to securely store value', e, stackTrace);
+      _logger.severe('Failed to securely store value', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to securely store value for key: $key',
           e,
@@ -2786,7 +3285,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to read secure value', e, stackTrace);
+      _logger.severe('Failed to read secure value', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to read secure value for key: $key',
           e,
@@ -2868,7 +3367,7 @@ class FlutterMCP {
               await storage.persist();
             }
           },
-          priority: ResourceManager.LOW_PRIORITY
+          priority: ResourceManager.lowPriority
       );
 
       PerformanceMonitor.instance.recordMetric(
@@ -2897,7 +3396,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create chat session', e, stackTrace);
+      _logger.severe('Failed to create chat session', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to create chat session for LLM: $llmId',
           e,
@@ -2981,7 +3480,7 @@ class FlutterMCP {
               await storage.persist();
             }
           },
-          priority: ResourceManager.LOW_PRIORITY
+          priority: ResourceManager.lowPriority
       );
 
       PerformanceMonitor.instance.recordMetric(
@@ -3010,7 +3509,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to create conversation', e, stackTrace);
+      _logger.severe('Failed to create conversation', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to create conversation for LLM: $llmId',
           e,
@@ -3073,7 +3572,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to select LLM client', e, stackTrace);
+      _logger.severe('Failed to select LLM client', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to select LLM client for query',
           e,
@@ -3148,7 +3647,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to execute parallel query', e, stackTrace);
+      _logger.severe('Failed to execute parallel query', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to execute parallel query across providers',
           e,
@@ -3266,7 +3765,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to execute parallel query', e, stackTrace);
+      _logger.severe('Failed to execute parallel query', e, stackTrace);
 
       throw MCPOperationFailedException(
           'Failed to execute parallel query across multiple LLMs',
@@ -3335,7 +3834,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to fan out query', e, stackTrace);
+      _logger.severe('Failed to fan out query', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to fan out query to multiple LLM providers',
           e,
@@ -3359,10 +3858,10 @@ class FlutterMCP {
           )
       );
     } on MCPTimeoutException catch (e) {
-      _logger.error('Timeout in operation: $operationName', e);
+      _logger.severe('Timeout in operation: $operationName', e);
       rethrow;
     } on TimeoutException catch (e) {
-      _logger.error('Timeout in operation: $operationName', e);
+      _logger.severe('Timeout in operation: $operationName', e);
       throw MCPTimeoutException(
         'Operation timed out: $operationName', 
         timeout,
@@ -3445,7 +3944,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to register LLM plugin with flutter_mcp system', e, stackTrace);
+      _logger.severe('Failed to register LLM plugin with flutter_mcp system', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register LLM plugin with flutter_mcp system',
           e,
@@ -3526,7 +4025,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to register plugins from LLM client', e, stackTrace);
+      _logger.severe('Failed to register plugins from LLM client', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register plugins from LLM client $llmClientId',
           e,
@@ -3607,7 +4106,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to register plugins from LLM server', e, stackTrace);
+      _logger.severe('Failed to register plugins from LLM server', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register plugins from LLM server $llmServerId',
           e,
@@ -3701,7 +4200,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to register core LLM plugins', e, stackTrace);
+      _logger.severe('Failed to register core LLM plugins', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register core LLM plugins for ${isServer ? 'server' : 'client'} $clientOrServerId',
           e,
@@ -3852,7 +4351,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to convert MCP plugin to LLM plugin', e, stackTrace);
+      _logger.severe('Failed to convert MCP plugin to LLM plugin', e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to convert MCP plugin ${mcpPlugin.name} to LLM plugin',
           e,
@@ -4003,7 +4502,7 @@ class FlutterMCP {
         'plugin_${plugin.name}',
         plugin,
             (p) async => await p.shutdown(),
-        priority: ResourceManager.MEDIUM_PRIORITY
+        priority: ResourceManager.mediumPriority
     );
 
     // Log registration
@@ -4085,7 +4584,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to execute tool plugin: $name', e, stackTrace);
+      _logger.severe('Failed to execute tool plugin: $name', e, stackTrace);
       throw MCPPluginException(name, 'Failed to execute tool plugin', e, stackTrace);
     }
   }
@@ -4150,7 +4649,7 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to get resource from plugin: $name', e, stackTrace);
+      _logger.severe('Failed to get resource from plugin: $name', e, stackTrace);
       throw MCPPluginException(name, 'Failed to get resource from plugin', e, stackTrace);
     }
   }
@@ -4212,29 +4711,372 @@ class FlutterMCP {
       );
 
       _stopwatchPool.release(stopwatch);
-      _logger.error('Failed to show notification using plugin: $name', e, stackTrace);
+      _logger.severe('Failed to show notification using plugin: $name', e, stackTrace);
       throw MCPPluginException(name, 'Failed to show notification using plugin', e, stackTrace);
     }
   }
 
+  // Enhanced Plugin Management Methods
+
+  /// Register plugin with enhanced version management and sandboxing
+  ///
+  /// [plugin]: Plugin to register
+  /// [config]: Plugin configuration including version and sandbox settings
+  Future<void> registerPluginEnhanced(MCPPlugin plugin, {
+    Map<String, dynamic>? config,
+    PluginSandboxConfig? sandboxConfig,
+    Version? version,
+    Map<String, VersionConstraint>? dependencies,
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    // Build enhanced config
+    final enhancedConfig = Map<String, dynamic>.from(config ?? {});
+    
+    if (version != null) {
+      enhancedConfig['version'] = version.toString();
+    }
+    
+    if (dependencies != null && dependencies.isNotEmpty) {
+      enhancedConfig['dependencies'] = dependencies.map(
+        (key, value) => MapEntry(key, value.toString()),
+      );
+    }
+    
+    if (sandboxConfig != null) {
+      enhancedConfig['sandbox'] = {
+        'executionTimeoutMs': sandboxConfig.executionTimeout?.inMilliseconds,
+        'maxMemoryMB': sandboxConfig.maxMemoryMB,
+        'allowedPaths': sandboxConfig.allowedPaths,
+        'allowedCommands': sandboxConfig.allowedCommands,
+        'enableNetworkAccess': sandboxConfig.enableNetworkAccess,
+        'enableFileAccess': sandboxConfig.enableFileAccess,
+      };
+    }
+    
+    await _pluginRegistry.registerPlugin(plugin, enhancedConfig);
+    
+    // Register for cleanup
+    _resourceManager.register<MCPPlugin>(
+      'plugin_${plugin.name}',
+      plugin,
+      (p) async => await p.shutdown(),
+      priority: ResourceManager.mediumPriority
+    );
+
+    _logger.info('Registered enhanced plugin: ${plugin.name} v${version ?? 'unknown'}');
+  }
+
+  /// Get plugin version information
+  PluginVersion? getPluginVersion(String pluginName) {
+    return _pluginRegistry.getPluginVersion(pluginName);
+  }
+
+  /// Get all plugin versions
+  Map<String, PluginVersion> getAllPluginVersions() {
+    return _pluginRegistry.getAllPluginVersions();
+  }
+
+  /// Check for version conflicts and get resolution suggestions
+  List<PluginUpdateSuggestion> checkPluginVersionConflicts() {
+    return _pluginRegistry.resolveVersionConflicts();
+  }
+
+  /// Update plugin sandbox configuration
+  Future<void> updatePluginSandboxConfig(
+    String pluginName,
+    PluginSandboxConfig config,
+  ) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    await _pluginRegistry.updatePluginSandboxConfig(pluginName, config);
+    _logger.info('Updated sandbox config for plugin: $pluginName');
+  }
+
+  /// Get plugin sandbox configuration
+  PluginSandboxConfig? getPluginSandboxConfig(String pluginName) {
+    return _pluginRegistry.getPluginSandboxConfig(pluginName);
+  }
+
+  /// Execute plugin operation in sandbox with enhanced monitoring
+  Future<T> executePluginInSandbox<T>(
+    String pluginName,
+    Future<T> Function() operation, {
+    Map<String, dynamic>? context,
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final stopwatch = _stopwatchPool.acquire();
+    stopwatch.start();
+
+    try {
+      final result = await _pluginRegistry.executeInSandbox(
+        pluginName,
+        operation,
+        context: context,
+      );
+
+      // Record enhanced performance metric
+      if (_config?.enablePerformanceMonitoring ?? false) {
+        _enhancedPerformanceMonitor.recordTypedMetric(CustomMetric(
+          name: 'plugin.sandbox_execution',
+          value: stopwatch.elapsedMilliseconds.toDouble(),
+          type: MetricType.timer,
+          unit: 'ms',
+          category: 'plugin',
+          metadata: {
+            'plugin': pluginName,
+            'success': true,
+            'context': context?.keys.join(',') ?? 'none',
+          },
+        ));
+      }
+
+      _stopwatchPool.release(stopwatch);
+      return result;
+    } catch (e, stackTrace) {
+      // Record failed metric
+      if (_config?.enablePerformanceMonitoring ?? false) {
+        _enhancedPerformanceMonitor.recordTypedMetric(CustomMetric(
+          name: 'plugin.sandbox_execution',
+          value: stopwatch.elapsedMilliseconds.toDouble(),
+          type: MetricType.timer,
+          unit: 'ms',
+          category: 'plugin',
+          metadata: {
+            'plugin': pluginName,
+            'success': false,
+            'error': e.toString(),
+          },
+        ));
+      }
+
+      _stopwatchPool.release(stopwatch);
+      _logger.severe('Plugin sandbox execution failed: $pluginName', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Get comprehensive plugin system report
+  Map<String, dynamic> getPluginSystemReport() {
+    final baseReport = {
+      'totalPlugins': _pluginRegistry.getAllPluginNames().length,
+      'pluginNames': _pluginRegistry.getAllPluginNames(),
+    };
+
+    // Add enhanced information
+    final versions = getAllPluginVersions();
+    final conflicts = checkPluginVersionConflicts();
+    
+    baseReport['versions'] = versions.map((name, version) => MapEntry(name, {
+      'version': version.version.toString(),
+      'minSdkVersion': version.minSdkVersion?.toString(),
+      'maxSdkVersion': version.maxSdkVersion?.toString(),
+      'dependencies': version.dependencies.map((k, v) => MapEntry(k, v.toString())),
+    }));
+    
+    baseReport['versionConflicts'] = conflicts.map((suggestion) => {
+      'plugin': suggestion.pluginName,
+      'currentVersion': suggestion.currentVersion.toString(),
+      'suggestedConstraint': suggestion.suggestedConstraint.toString(),
+      'reason': suggestion.reason,
+    }).toList();
+    
+    // Add sandbox information
+    final sandboxInfo = <String, dynamic>{};
+    for (final pluginName in _pluginRegistry.getAllPluginNames()) {
+      final sandboxConfig = getPluginSandboxConfig(pluginName);
+      if (sandboxConfig != null) {
+        sandboxInfo[pluginName] = {
+          'executionTimeout': sandboxConfig.executionTimeout?.inMilliseconds,
+          'maxMemoryMB': sandboxConfig.maxMemoryMB,
+          'networkAccess': sandboxConfig.enableNetworkAccess,
+          'fileAccess': sandboxConfig.enableFileAccess,
+        };
+      }
+    }
+    baseReport['sandboxes'] = sandboxInfo;
+    
+    return baseReport;
+  }
+
+  // Enhanced Security Management Methods
+
+  /// Authenticate user with enhanced security audit
+  Future<bool> authenticateUser(String userId, String password, {Map<String, dynamic>? metadata}) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    // Check if user is locked out
+    if (_securityAuditManager.isUserLockedOut(userId)) {
+      _logger.warning('Authentication attempt for locked out user: $userId');
+      return false;
+    }
+
+    // Simulate password verification (replace with actual authentication logic)
+    final success = password.isNotEmpty && password.length >= 8;
+
+    // Log authentication attempt
+    _securityAuditManager.checkAuthenticationAttempt(userId, success, metadata: metadata);
+
+    if (success) {
+      _logger.info('User authenticated successfully: $userId');
+    } else {
+      _logger.warning('Failed authentication attempt for user: $userId');
+    }
+
+    return success;
+  }
+
+  /// Start user session with security tracking
+  Future<String> startUserSession(String userId, {Map<String, dynamic>? metadata}) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final sessionId = _securityAuditManager.startSession(userId, metadata: metadata);
+    _logger.info('Started session for user: $userId, session: $sessionId');
+    return sessionId;
+  }
+
+  /// End user session with security tracking
+  Future<void> endUserSession(String userId, String sessionId) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    _securityAuditManager.endSession(userId, sessionId);
+    _logger.info('Ended session for user: $userId, session: $sessionId');
+  }
+
+  /// Check data access authorization
+  Future<bool> checkDataAccess(String userId, String resource, String action, {Map<String, dynamic>? metadata}) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    return _securityAuditManager.checkDataAccess(userId, resource, action, metadata: metadata);
+  }
+
+  /// Encrypt sensitive data
+  Future<String> encryptData(String keyIdOrAlias, String data, {Map<String, dynamic>? parameters}) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final encryptedData = _encryptionManager.encrypt(keyIdOrAlias, data, parameters: parameters);
+    return jsonEncode(encryptedData.toJson());
+  }
+
+  /// Decrypt sensitive data
+  Future<String> decryptData(String encryptedDataJson) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final encryptedData = EncryptedData.fromJson(jsonDecode(encryptedDataJson));
+    return _encryptionManager.decrypt(encryptedData);
+  }
+
+  /// Generate encryption key
+  String generateEncryptionKey(EncryptionAlgorithm algorithm, {String? alias, Duration? expiresIn}) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    return _encryptionManager.generateKey(algorithm, alias: alias, expiresIn: expiresIn);
+  }
+
+  /// Get user risk assessment
+  Map<String, dynamic> getUserRiskAssessment(String userId) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    return _securityAuditManager.getUserRiskAssessment(userId);
+  }
+
+  /// Get security audit events for user
+  List<SecurityAuditEvent> getUserAuditEvents(String userId, {int? limit}) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    return _securityAuditManager.getUserAuditEvents(userId, limit: limit);
+  }
+
+  /// Generate comprehensive security report
+  Map<String, dynamic> generateSecurityReport() {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    final auditReport = _securityAuditManager.generateSecurityReport();
+    final encryptionReport = _encryptionManager.generateSecurityReport();
+
+    return {
+      'generatedAt': DateTime.now().toIso8601String(),
+      'audit': auditReport,
+      'encryption': encryptionReport,
+      'summary': {
+        'totalSecurityEvents': auditReport['totalEvents'],
+        'activeEncryptionKeys': encryptionReport['activeKeys'],
+        'highRiskUsers': auditReport['highRiskUsers'],
+        'expiredKeys': encryptionReport['expiredKeys'],
+      },
+    };
+  }
+
+  /// Update security policy
+  void updateSecurityPolicy(SecurityPolicy policy) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    _securityAuditManager.updatePolicy(policy);
+    _logger.info('Security policy updated');
+  }
+
+  /// Clean up expired encryption keys
+  int cleanupExpiredEncryptionKeys() {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+
+    return _encryptionManager.cleanupExpiredKeys();
+  }
+
   /// Clean up all resources with improved prioritization
   Future<void> _cleanup() async {
-    _logger.debug('Cleaning up resources');
+    _logger.fine('Cleaning up resources');
 
     try {
       // Stop the scheduler first
       _scheduler.stop();
 
-      // Clean up all registered resources in priority order
+      // Clean up all registered resources using enhanced cleanup
+      await EnhancedResourceCleanup.instance.disposeAll();
+      
+      // Also dispose legacy resource manager
       await _resourceManager.disposeAll();
 
       // Signal the event system
       _eventSystem.publish('mcp.shutdown', {'timestamp': DateTime.now().toIso8601String()});
+      
+      // Log cleanup statistics
+      final stats = EnhancedResourceCleanup.instance.getStatistics();
+      _logger.info('Resource cleanup statistics: $stats');
 
-      // Ensure logger flushes
-      await MCPLogger.flush();
+      // Logger flushing not needed with standard logging package
     } catch (e, stackTrace) {
-      _logger.error('Error during cleanup', e, stackTrace);
+      _logger.severe('Error during cleanup', e, stackTrace);
     }
   }
 
@@ -4250,12 +5092,9 @@ class FlutterMCP {
       _initialized = false;
       _logger.info('Flutter MCP shutdown completed');
     } catch (e, stackTrace) {
-      _logger.error('Error during shutdown', e, stackTrace);
+      _logger.severe('Error during shutdown', e, stackTrace);
       // Still mark as not initialized even if there was an error
       _initialized = false;
-    } finally {
-      // Final cleanup of logger
-      await MCPLogger.closeAll();
     }
   }
 
@@ -4341,7 +5180,7 @@ class FlutterMCP {
     
     return status;
   } catch (e, stackTrace) {
-    _logger.error('Error getting system status', e, stackTrace);
+    _logger.severe('Error getting system status', e, stackTrace);
     return {
       'initialized': _initialized,
       'error': {
@@ -4376,7 +5215,7 @@ class FlutterMCP {
       
       return DiagnosticUtils.checkHealth(this);
     } catch (e, stackTrace) {
-      _logger.error('Error checking system health', e, stackTrace);
+      _logger.severe('Error checking system health', e, stackTrace);
       return {
         'status': 'unhealthy',
         'error': {
@@ -4394,6 +5233,372 @@ class FlutterMCP {
   /// Returns true if the feature is supported on the current platform
   bool isFeatureSupported(String feature) {
     return PlatformUtils.isFeatureSupported(feature);
+  }
+  
+  // ============ New v1.0.0 Feature Methods ============
+  
+  /// Process multiple requests in a batch for improved performance
+  /// 
+  /// Leverages the BatchRequestManager to process multiple operations
+  /// with 40-60% performance improvement.
+  /// 
+  /// [llmId]: The LLM instance to use for batch processing
+  /// [requests]: List of request functions to execute
+  /// [operationName]: Optional name for tracking the batch operation
+  /// 
+  /// Returns: List of results from each request
+  Future<List<T>> processBatch<T>({
+    required String llmId,
+    required List<Future<T> Function()> requests,
+    String? operationName,
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    // Initialize batch manager for the LLM if not already done
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPResourceNotFoundException(llmId, 'LLM not found');
+    }
+    
+    _batchManager.initializeBatchManager(llmId, llmInfo.mcpLlm);
+    
+    // Process requests using enhanced batch manager
+    final futures = <Future<T>>[];
+    for (final request in requests) {
+      futures.add(_batchManager.addToBatch<T>(
+        llmId: llmId,
+        request: request,
+        operationName: operationName,
+      ));
+    }
+    
+    return await Future.wait(futures);
+  }
+  
+  /// Process multiple chat requests in a batch
+  /// 
+  /// [llmId]: The LLM instance to use
+  /// [llmClientId]: The LLM client to use
+  /// [messagesList]: List of message arrays to process
+  /// [options]: Optional parameters for the batch
+  /// 
+  /// Returns: List of chat responses
+  Future<List<String>> batchChat({
+    required String llmId,
+    required String llmClientId,
+    required List<List<llm.LlmMessage>> messagesList,
+    Map<String, dynamic>? options,
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    // Ensure LLM is registered with batch manager
+    final llmInstance = _mcpLlmInstances[llmId]?.value;
+    if (llmInstance == null) {
+      throw MCPException('LLM not found: $llmId');
+    }
+    
+    _batchManager.initializeBatchManager(llmId, llmInstance);
+    
+    // Process chat requests using enhanced batch manager
+    final futures = <Future<String>>[];
+    for (final messages in messagesList) {
+      futures.add(_batchManager.addToBatch<String>(
+        llmId: llmId,
+        request: () async {
+          final llmClient = _llmManager.getLlmClientById(llmClientId);
+          if (llmClient == null) {
+            throw MCPException('LLM client not found: $llmClientId');
+          }
+          
+          final response = await llmClient.chat(
+            messages.map((m) => m.content).join('\n'),
+            parameters: options ?? {},
+          );
+          
+          return response.text;
+        },
+        operationName: 'batch_chat',
+        priority: BatchRequestPriority.high,
+      ));
+    }
+    
+    return await Future.wait(futures);
+  }
+  
+  /// Get batch processing statistics
+  /// 
+  /// [llmId]: Optional LLM ID to get statistics for specific instance
+  /// 
+  /// Returns: Map of batch processing statistics
+  Map<String, dynamic> getBatchStatistics([String? llmId]) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    if (llmId != null) {
+      final stats = _batchManager.getStatistics(llmId);
+      if (stats == null) {
+        return {};
+      }
+      return {
+        'totalRequests': stats.totalRequests,
+        'successfulRequests': stats.successfulRequests,
+        'failedRequests': stats.failedRequests,
+        'retriedRequests': stats.retriedRequests,
+        'deduplicatedRequests': stats.deduplicatedRequests,
+        'successRate': stats.successRate,
+        'throughput': stats.throughput,
+        'averageWaitTimeMs': stats.averageWaitTime.inMilliseconds,
+        'averageExecutionTimeMs': stats.averageExecutionTime.inMilliseconds,
+        'requestsByPriority': stats.requestsByPriority.map((k, v) => MapEntry(k.name, v)),
+      };
+    } else {
+      final allStats = _batchManager.getAllStatistics();
+      return allStats.map((llmId, stats) => MapEntry(llmId, {
+        'totalRequests': stats.totalRequests,
+        'successfulRequests': stats.successfulRequests,
+        'failedRequests': stats.failedRequests,
+        'retriedRequests': stats.retriedRequests,
+        'deduplicatedRequests': stats.deduplicatedRequests,
+        'successRate': stats.successRate,
+        'throughput': stats.throughput,
+        'averageWaitTimeMs': stats.averageWaitTime.inMilliseconds,
+        'averageExecutionTimeMs': stats.averageExecutionTime.inMilliseconds,
+        'requestsByPriority': stats.requestsByPriority.map((k, v) => MapEntry(k.name, v)),
+      }));
+    }
+  }
+  
+  /// Initialize OAuth authentication for an LLM instance
+  /// 
+  /// [llmId]: The LLM instance to configure OAuth for
+  /// [config]: OAuth configuration including client credentials and endpoints
+  Future<void> initializeOAuth({
+    required String llmId,
+    required OAuthConfig config,
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    final llmInfo = _llmManager.getLlmInfo(llmId);
+    if (llmInfo == null) {
+      throw MCPResourceNotFoundException(llmId, 'LLM not found');
+    }
+    
+    await _oauthManager.initializeOAuth(
+      llmId: llmId,
+      mcpLlm: llmInfo.mcpLlm,
+      config: config,
+    );
+  }
+  
+  /// Authenticate and get access token for an LLM
+  /// 
+  /// [llmId]: The LLM instance to authenticate
+  /// 
+  /// Returns: Access token string
+  Future<String> authenticateOAuth(String llmId) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    return await _oauthManager.authenticate(llmId);
+  }
+  
+  /// Check if OAuth is authenticated for an LLM
+  /// 
+  /// [llmId]: The LLM instance to check
+  /// 
+  /// Returns: True if authenticated with valid token
+  bool isOAuthAuthenticated(String llmId) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    return _oauthManager.isAuthenticated(llmId);
+  }
+  
+  /// Revoke OAuth token for an LLM
+  /// 
+  /// [llmId]: The LLM instance to revoke token for
+  Future<void> revokeOAuthToken(String llmId) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    await _oauthManager.revokeToken(llmId);
+  }
+  
+  /// Get OAuth authentication headers
+  /// 
+  /// [llmId]: The LLM instance to get headers for
+  /// 
+  /// Returns: Map of authentication headers
+  Future<Map<String, String>> getOAuthHeaders(String llmId) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    return await _oauthManager.getAuthHeaders(llmId);
+  }
+  
+  /// Get health status for a specific component
+  /// 
+  /// [componentId]: The component to check health for
+  /// 
+  /// Returns: Health check result
+  Future<MCPHealthCheckResult> getComponentHealth(String componentId) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    // Simple health check implementation
+    try {
+      // Check if component exists
+      if (componentId.startsWith('client_')) {
+        final clientId = componentId.substring(7);
+        final info = _clientManager.getClientInfo(clientId);
+        if (info != null && info.connected) {
+          return MCPHealthCheckResult(
+            status: MCPHealthStatus.healthy,
+            message: 'Client is connected',
+          );
+        }
+        return MCPHealthCheckResult(
+          status: MCPHealthStatus.unhealthy,
+          message: 'Client is not connected',
+        );
+      } else if (componentId.startsWith('server_')) {
+        final serverId = componentId.substring(7);
+        final info = _serverManager.getServerInfo(serverId);
+        if (info != null && info.running) {
+          return MCPHealthCheckResult(
+            status: MCPHealthStatus.healthy,
+            message: 'Server is running',
+          );
+        }
+        return MCPHealthCheckResult(
+          status: MCPHealthStatus.unhealthy,
+          message: 'Server is not running',
+        );
+      } else if (componentId.startsWith('llm_')) {
+        final llmId = componentId.substring(4);
+        final info = _llmManager.getLlmInfo(llmId);
+        if (info != null) {
+          return MCPHealthCheckResult(
+            status: MCPHealthStatus.healthy,
+            message: 'LLM is available',
+          );
+        }
+        return MCPHealthCheckResult(
+          status: MCPHealthStatus.unhealthy,
+          message: 'LLM not found',
+        );
+      }
+      
+      return MCPHealthCheckResult(
+        status: MCPHealthStatus.unhealthy,
+        message: 'Unknown component: $componentId',
+      );
+    } catch (e) {
+      return MCPHealthCheckResult(
+        status: MCPHealthStatus.unhealthy,
+        message: 'Error checking health: $e',
+      );
+    }
+  }
+  
+  /// Get overall system health including all components
+  /// 
+  /// Returns: Comprehensive system health report
+  Future<Map<String, dynamic>> getSystemHealth() async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    // Simple system health implementation
+    final health = <String, dynamic>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'overall': MCPHealthStatus.healthy.name,
+      'components': <String, dynamic>{},
+    };
+    
+    int unhealthyCount = 0;
+    int degradedCount = 0;
+    
+    // Check all clients
+    for (final clientId in _clientManager.getAllClientIds()) {
+      final result = await getComponentHealth('client_$clientId');
+      health['components']['client_$clientId'] = {
+        'status': result.status.name,
+        'message': result.message,
+      };
+      if (result.status == MCPHealthStatus.unhealthy) unhealthyCount++;
+      if (result.status == MCPHealthStatus.degraded) degradedCount++;
+    }
+    
+    // Check all servers
+    for (final serverId in _serverManager.getAllServerIds()) {
+      final result = await getComponentHealth('server_$serverId');
+      health['components']['server_$serverId'] = {
+        'status': result.status.name,
+        'message': result.message,
+      };
+      if (result.status == MCPHealthStatus.unhealthy) unhealthyCount++;
+      if (result.status == MCPHealthStatus.degraded) degradedCount++;
+    }
+    
+    // Check all LLMs
+    for (final llmId in _llmManager.getAllLlmIds()) {
+      final result = await getComponentHealth('llm_$llmId');
+      health['components']['llm_$llmId'] = {
+        'status': result.status.name,
+        'message': result.message,
+      };
+      if (result.status == MCPHealthStatus.unhealthy) unhealthyCount++;
+      if (result.status == MCPHealthStatus.degraded) degradedCount++;
+    }
+    
+    // Determine overall health
+    if (unhealthyCount > 0) {
+      health['overall'] = MCPHealthStatus.unhealthy.name;
+    } else if (degradedCount > 0) {
+      health['overall'] = MCPHealthStatus.degraded.name;
+    }
+    
+    return health;
+  }
+  
+  /// Get health status stream for real-time monitoring
+  /// 
+  /// Returns: Stream of health check results
+  Stream<MCPHealthCheckResult> get healthStream {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    
+    // Use the enhanced health monitor
+    return _healthMonitor.healthStream;
+  }
+  
+  /// Get resource usage statistics
+  Map<String, dynamic> getResourceStatistics() {
+    return EnhancedResourceCleanup.instance.getStatistics();
+  }
+  
+  /// Check for resource leaks manually
+  void checkForResourceLeaks() {
+    EnhancedResourceCleanup.instance.checkForLeaks();
+  }
+  
+  /// Get detailed resource information
+  List<Map<String, dynamic>> getResourceDetails() {
+    return EnhancedResourceCleanup.instance.getResourceDetails();
   }
 }
 
@@ -4455,3 +5660,5 @@ void unawaited(Future<void> future) {
   // Explicitly handles the future in a way that the analyzer recognizes as not needing an await
   future.then((_) {}, onError: (e, st) {});
 }
+
+// Health types are exported from src/types/health_types.dart

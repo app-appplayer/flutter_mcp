@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart';
 import '../../utils/logger.dart';
 import '../../utils/exceptions.dart';
 import '../../utils/error_recovery.dart';
-import '../../utils/platform_utils.dart';
 
 /// Secure storage manager interface
 abstract class SecureStorageManager {
@@ -32,233 +30,171 @@ abstract class SecureStorageManager {
 
   /// Clear all storage
   Future<void> clear();
+  
+  /// Get all keys
+  Future<Set<String>> getAllKeys();
 }
 
 /// Secure storage implementation for native platforms
 class SecureStorageManagerImpl implements SecureStorageManager {
-  final FlutterSecureStorage _storage;
-  final MCPLogger _logger = MCPLogger('mcp.secure_storage');
+  static const MethodChannel _channel = MethodChannel('flutter_mcp');
+  final Logger _logger = Logger('flutter_mcp.secure_storage');
 
   /// Whether storage is initialized
   bool _initialized = false;
 
-  /// Create secure storage with platform-specific options
-  SecureStorageManagerImpl({
-    AndroidOptions? androidOptions,
-    IOSOptions? iosOptions,
-    MacOsOptions? macOsOptions,
-    WindowsOptions? windowsOptions,
-    LinuxOptions? linuxOptions,
-  }) : _storage = FlutterSecureStorage(
-    aOptions: androidOptions ?? const AndroidOptions(
-      encryptedSharedPreferences: true,
-      resetOnError: true,
-    ),
-    iOptions: iosOptions ?? const IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
-    mOptions: macOsOptions ?? const MacOsOptions(),
-    wOptions: windowsOptions ?? const WindowsOptions(),
-    lOptions: linuxOptions ?? const LinuxOptions(),
-  );
+  SecureStorageManagerImpl();
 
   @override
   Future<void> initialize() async {
-    if (_initialized) {
-      _logger.debug('Secure storage already initialized');
-      return;
-    }
-
-    _logger.debug('Initializing secure storage');
+    if (_initialized) return;
 
     try {
-      // Perform a simple read/write test to verify storage is working
-      await ErrorRecovery.tryWithRetry(
-            () async {
-          final testKey = '_mcp_storage_test_${DateTime.now().millisecondsSinceEpoch}';
-          await _storage.write(key: testKey, value: 'test');
-          final value = await _storage.read(key: testKey);
-          await _storage.delete(key: testKey);
-
-          if (value != 'test') {
-            throw MCPException('Storage test failed: incorrect value read');
-          }
-        },
-        operationName: 'storage initialization test',
-        maxRetries: 2,
-      );
-
+      _logger.info('Initializing secure storage');
       _initialized = true;
-      _logger.debug('Secure storage initialized successfully');
+      _logger.info('Secure storage initialized');
     } catch (e, stackTrace) {
-      _logger.error('Failed to initialize secure storage', e, stackTrace);
-      throw MCPInitializationException('Failed to initialize secure storage', e, stackTrace);
+      _logger.severe('Failed to initialize secure storage', e, stackTrace);
+      throw MCPException('Failed to initialize secure storage: $e');
+    }
+  }
+
+  Future<void> _ensureInitialized() async {
+    if (!_initialized) {
+      await initialize();
     }
   }
 
   @override
   Future<void> saveString(String key, String value) async {
-    _checkInitialized();
-
-    _logger.debug('Saving string to secure storage: $key');
-
-    try {
-      await ErrorRecovery.tryWithRetry(
-            () => _storage.write(key: key, value: value),
-        operationName: 'save string to secure storage',
-        maxRetries: 2,
-      );
-    } catch (e, stackTrace) {
-      _logger.error('Failed to save string to secure storage', e, stackTrace);
-      throw MCPException('Failed to save string to secure storage', e, stackTrace);
-    }
+    await _ensureInitialized();
+    await ErrorRecovery.tryWithRetry<void>(
+      () async {
+        _logger.finest('Saving string to secure storage: $key');
+        await _channel.invokeMethod('secureStore', {
+          'key': key,
+          'value': value,
+        });
+      },
+      maxRetries: 3,
+      initialDelay: Duration(milliseconds: 100),
+      operationName: 'save_string',
+      onRetry: (attempt, error) {
+        _logger.warning('Failed to save string (attempt $attempt), retrying: $error');
+      },
+    );
   }
 
   @override
   Future<String?> readString(String key) async {
-    _checkInitialized();
-
-    _logger.debug('Reading string from secure storage: $key');
-
-    try {
-      return await ErrorRecovery.tryWithRetry(
-            () => _storage.read(key: key),
-        operationName: 'read string from secure storage',
-        maxRetries: 2,
-      );
-    } catch (e, stackTrace) {
-      _logger.error('Failed to read string from secure storage', e, stackTrace);
-      throw MCPException('Failed to read string from secure storage', e, stackTrace);
-    }
+    await _ensureInitialized();
+    return await ErrorRecovery.tryWithRetry<String?>(
+      () async {
+        _logger.finest('Reading string from secure storage: $key');
+        try {
+          final result = await _channel.invokeMethod<String>('secureRead', {
+            'key': key,
+          });
+          return result;
+        } on PlatformException catch (e) {
+          if (e.code == 'KEY_NOT_FOUND') {
+            return null;
+          }
+          rethrow;
+        }
+      },
+      maxRetries: 3,
+      initialDelay: Duration(milliseconds: 100),
+      operationName: 'read_string',
+      onRetry: (attempt, error) {
+        _logger.warning('Failed to read string (attempt $attempt), retrying: $error');
+      },
+    );
   }
 
   @override
   Future<bool> delete(String key) async {
-    _checkInitialized();
-
-    _logger.debug('Deleting key from secure storage: $key');
-
+    await _ensureInitialized();
     try {
-      await ErrorRecovery.tryWithRetry(
-            () => _storage.delete(key: key),
-        operationName: 'delete from secure storage',
-        maxRetries: 2,
-      );
+      _logger.finest('Deleting key from secure storage: $key');
+      await _channel.invokeMethod('secureDelete', {
+        'key': key,
+      });
       return true;
     } catch (e, stackTrace) {
-      _logger.error('Failed to delete key from secure storage', e, stackTrace);
-      throw MCPException('Failed to delete key from secure storage', e, stackTrace);
+      _logger.severe('Failed to delete key: $key', e, stackTrace);
+      return false;
     }
   }
 
   @override
   Future<bool> containsKey(String key) async {
-    _checkInitialized();
-
+    await _ensureInitialized();
     try {
-      final value = await ErrorRecovery.tryWithRetry(
-            () => _storage.read(key: key),
-        operationName: 'check key in secure storage',
-        maxRetries: 2,
-      );
-      return value != null;
+      _logger.finest('Checking if key exists: $key');
+      final result = await _channel.invokeMethod<bool>('secureContainsKey', {
+        'key': key,
+      });
+      return result ?? false;
     } catch (e, stackTrace) {
-      _logger.error('Failed to check if key exists in secure storage', e, stackTrace);
-      throw MCPException('Failed to check if key exists in secure storage', e, stackTrace);
+      _logger.severe('Failed to check key existence: $key', e, stackTrace);
+      return false;
     }
   }
 
   @override
   Future<void> saveMap(String key, Map<String, dynamic> value) async {
-    _checkInitialized();
-
-    _logger.debug('Saving map to secure storage: $key');
-
+    await _ensureInitialized();
     try {
       final jsonString = jsonEncode(value);
       await saveString(key, jsonString);
     } catch (e, stackTrace) {
-      _logger.error('Failed to save map to secure storage', e, stackTrace);
-      throw MCPException('Failed to save map to secure storage', e, stackTrace);
+      _logger.severe('Failed to save map: $key', e, stackTrace);
+      throw MCPException('Failed to save map: $e');
     }
   }
 
   @override
   Future<Map<String, dynamic>?> readMap(String key) async {
-    _checkInitialized();
-
-    _logger.debug('Reading map from secure storage: $key');
-
+    await _ensureInitialized();
     try {
       final jsonString = await readString(key);
-      if (jsonString == null) {
-        return null;
-      }
-
+      if (jsonString == null) return null;
       return jsonDecode(jsonString) as Map<String, dynamic>;
     } catch (e, stackTrace) {
-      _logger.error('Failed to read map from secure storage', e, stackTrace);
-      throw MCPException('Failed to read map from secure storage', e, stackTrace);
+      _logger.severe('Failed to read map: $key', e, stackTrace);
+      return null;
     }
   }
 
   @override
   Future<void> clear() async {
-    _checkInitialized();
-
-    _logger.debug('Clearing secure storage');
-
+    await _ensureInitialized();
     try {
-      await ErrorRecovery.tryWithRetry(
-            () => _storage.deleteAll(),
-        operationName: 'clear secure storage',
-        maxRetries: 2,
-      );
+      _logger.info('Clearing all secure storage');
+      await _channel.invokeMethod('secureDeleteAll');
     } catch (e, stackTrace) {
-      _logger.error('Failed to clear secure storage', e, stackTrace);
-      throw MCPException('Failed to clear secure storage', e, stackTrace);
+      _logger.severe('Failed to clear secure storage', e, stackTrace);
+      throw MCPException('Failed to clear secure storage: $e');
     }
   }
 
-  /// Check if storage is initialized
-  void _checkInitialized() {
-    if (!_initialized) {
-      throw MCPException('Secure storage is not initialized');
+  @override
+  Future<Set<String>> getAllKeys() async {
+    await _ensureInitialized();
+    try {
+      _logger.finest('Getting all keys from secure storage');
+      final result = await _channel.invokeMethod<List<dynamic>>('secureGetAllKeys');
+      if (result == null) return {};
+      return result.cast<String>().toSet();
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to get all keys', e, stackTrace);
+      return {};
     }
   }
 }
 
-/// Factory for creating appropriate secure storage manager
-class SecureStorageFactory {
-  /// Create platform-appropriate secure storage manager
-  static SecureStorageManager create() {
-    if (kIsWeb) {
-      // For web platform, implementation would be provided by web_storage.dart
-      throw UnimplementedError('Web secure storage not implemented in this context');
-    } else if (PlatformUtils.isDesktop) {
-      // Desktop options can be customized here
-      return SecureStorageManagerImpl(
-        macOsOptions: const MacOsOptions(
-          accessibility: KeychainAccessibility.first_unlock,
-        ),
-        windowsOptions: const WindowsOptions(),
-        // Linux does not need special options in the current version of flutter_secure_storage
-        // linuxOptions parameter is not required
-      );
-    } else if (PlatformUtils.isMobile) {
-      // Mobile options can be customized here
-      return SecureStorageManagerImpl(
-        androidOptions: const AndroidOptions(
-          encryptedSharedPreferences: true,
-          resetOnError: true,
-        ),
-        iosOptions: const IOSOptions(
-          accessibility: KeychainAccessibility.first_unlock,
-        ),
-      );
-    } else {
-      // Default implementation for any other platform
-      return SecureStorageManagerImpl();
-    }
-  }
+/// Factory function for creating platform-specific secure storage
+SecureStorageManager createSecureStorageManager() {
+  return SecureStorageManagerImpl();
 }

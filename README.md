@@ -705,6 +705,79 @@ Version 1.0.0 implements platform-specific features using native code instead of
 
 This native approach provides better performance, reduced dependencies, and platform-optimized user experiences.
 
+## Documentation
+
+Comprehensive documentation is available in the [doc](https://github.com/app-appplayer/flutter_mcp/tree/main/doc) directory:
+
+### 📚 Getting Started
+- [Installation Guide](doc/guides/installation.md) - Step-by-step installation instructions
+- [Getting Started](doc/guides/getting-started.md) - Quick start guide
+- [Architecture Overview](doc/guides/architecture.md) - System architecture and design patterns
+- [Best Practices](doc/guides/best-practices.md) - Recommended patterns and practices
+
+### 🔧 API Reference
+- [Core API](doc/api/core.md) - Main FlutterMCP class and initialization
+- [Client Manager](doc/api/client-manager.md) - MCP client management
+- [Server Manager](doc/api/server-manager.md) - MCP server management
+- [LLM Manager](doc/api/llm-manager.md) - LLM integration and management
+- [Plugin System](doc/api/plugin-system.md) - Plugin development and integration
+- [Platform Services](doc/api/platform-services.md) - Platform-specific features
+- [Background Service](doc/api/background-service.md) - Background task management
+- [Security API](doc/api/security-api.md) - Security and encryption features
+- [Utilities](doc/api/utilities.md) - Helper functions and utilities
+
+### 💡 Examples
+- [Simple Connection](doc/examples/simple-connection.md) - Basic MCP connection example
+- [Multiple Servers](doc/examples/multiple-servers.md) - Managing multiple MCP servers
+- [Plugin Development](doc/examples/plugin-development.md) - Creating custom plugins
+- [Background Jobs](doc/examples/background-jobs.md) - Scheduling background tasks
+- [Real-time Updates](doc/examples/realtime-updates.md) - Implementing real-time features
+- [State Management](doc/examples/state-management.md) - Managing application state
+- [Security Examples](doc/examples/security-examples.md) - Implementing security features
+
+### 🚀 Platform Integration
+- [Android Integration](doc/examples/android-integration.md) - Android-specific features
+- [iOS Integration](doc/examples/ios-integration.md) - iOS-specific features
+- [Desktop Applications](doc/examples/desktop-applications.md) - Windows, macOS, Linux features
+- [Web Applications](doc/examples/web-applications.md) - Web platform features
+
+### 🤖 LLM Integrations
+- [Anthropic Claude](doc/integrations/anthropic-claude.md) - Claude integration guide
+- [OpenAI GPT](doc/integrations/openai-gpt.md) - GPT integration guide
+- [Google Gemini](doc/integrations/google-gemini.md) - Gemini integration guide
+- [Local LLM](doc/integrations/local-llm.md) - Local LLM deployment guide
+
+### 🛠️ Advanced Topics
+- [Error Handling](doc/advanced/error-handling.md) - Comprehensive error handling
+- [Memory Management](doc/advanced/memory-management.md) - Memory optimization techniques
+- [Performance Tuning](doc/advanced/performance-tuning.md) - Performance optimization
+- [Security](doc/advanced/security.md) - Security best practices
+- [Testing](doc/advanced/testing.md) - Testing strategies and examples
+
+### 🔍 Troubleshooting
+- [Common Issues](doc/troubleshooting/common-issues.md) - Solutions to common problems
+- [Debug Mode](doc/troubleshooting/debug-mode.md) - Debugging techniques
+- [Error Codes](doc/troubleshooting/error-codes.md) - Error code reference
+- [Performance Issues](doc/troubleshooting/performance.md) - Performance troubleshooting
+- [Migration Guide](doc/troubleshooting/migration.md) - Version migration guide
+
+### 🧩 Plugin Development
+- [Plugin Lifecycle](doc/plugins/lifecycle.md) - Understanding plugin lifecycle
+- [Plugin Communication](doc/plugins/communication.md) - Inter-plugin communication
+- [Plugin Development Guide](doc/plugins/development.md) - Creating custom plugins
+- [Plugin Examples](doc/plugins/examples.md) - Sample plugin implementations
+
+### 📱 Platform Guides
+- [Android](doc/platform/android.md) - Android platform guide
+- [iOS](doc/platform/ios.md) - iOS platform guide
+- [Windows](doc/platform/windows.md) - Windows platform guide
+- [macOS](doc/platform/macos.md) - macOS platform guide
+- [Linux](doc/platform/linux.md) - Linux platform guide
+- [Web](doc/platform/web.md) - Web platform guide
+
+### 🤝 Contributing
+- [Contributing Guide](doc/CONTRIBUTING.md) - How to contribute to the project
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

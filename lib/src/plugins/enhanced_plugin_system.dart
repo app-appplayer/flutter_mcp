@@ -456,7 +456,7 @@ class PluginUpdateSuggestion {
 
 /// Plugin isolation helper for running plugins in separate isolates
 class PluginIsolationHelper {
-  static final Logger _logger = Logger('flutter_mcp.plugin_isolation');
+  // Removed unused _logger field
   
   /// Run plugin operation in isolated environment
   static Future<T> runIsolated<T>({

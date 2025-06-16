@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:meta/meta.dart';
 import '../../config/tray_config.dart';
 import '../../utils/logger.dart';
-import '../../utils/exceptions.dart';
 import '../../utils/enhanced_error_handler.dart';
 import '../../monitoring/health_monitor.dart';
 import '../../utils/enhanced_resource_cleanup.dart';

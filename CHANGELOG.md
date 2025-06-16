@@ -2,7 +2,7 @@
 
 ### First Stable Release
 
-Complete rewrite to support MCP v1.0.0 specification with modern API design.
+Complete rewrite to support MCP 2025-03-26 specification with modern API design.
 
 ### Breaking Changes
 

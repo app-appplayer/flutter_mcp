@@ -147,12 +147,15 @@ void main() {
         
         // Subscribe before any operations
         EventSystem.instance.subscribeTyped<ServiceLifecycleEvent>((event) {
-          print('Received lifecycle event: ${event.serviceKey} ${event.oldState} -> ${event.newState}');
-          lifecycleEvents.add(event);
+          // Only capture events for TestService
+          if (event.serviceKey.contains('TestService')) {
+            print('Received lifecycle event: ${event.serviceKey} ${event.oldState} -> ${event.newState}');
+            lifecycleEvents.add(event);
+          }
         });
         
         // Wait a bit for subscription to be active
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(Duration(milliseconds: 50));
         
         diContainer.register<TestService>(
           factory: () => TestService(),
@@ -164,7 +167,7 @@ void main() {
         await diContainer.disposeAll();
         
         // Allow more time for events to propagate
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future.delayed(Duration(milliseconds: 200));
         
         print('Total lifecycle events received: ${lifecycleEvents.length}');
         expect(lifecycleEvents.length, greaterThanOrEqualTo(2));

@@ -7,10 +7,6 @@ import 'package:universal_html/js_util.dart';
 
 import '../../utils/logger.dart';
 import '../../utils/exceptions.dart';
-import '../../config/notification_config.dart';
-import '../notification/notification_manager.dart';
-import '../background/background_service.dart';
-import '../storage/secure_storage.dart';
 
 /// Enhanced web platform manager that provides improved web-specific features
 class EnhancedWebPlatform {

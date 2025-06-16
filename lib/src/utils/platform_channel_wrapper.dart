@@ -247,7 +247,7 @@ class TypedMethodResult<T> {
   /// Convert to operation result format
   OperationResult<T> toOperationResult() {
     if (isSuccess) {
-      return OperationResult.success(data!, executionTime);
+      return OperationResult.success(data as T, executionTime);
     } else {
       return OperationResult.failure(error!, executionTime);
     }

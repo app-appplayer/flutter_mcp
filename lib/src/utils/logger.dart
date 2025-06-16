@@ -1,5 +1,5 @@
 // Re-export logging package to follow MCP standard pattern
-export 'package:logging/logging.dart' hide LoggerExtensions;
+export 'package:logging/logging.dart';
 
 import 'dart:io';
 import 'package:logging/logging.dart';

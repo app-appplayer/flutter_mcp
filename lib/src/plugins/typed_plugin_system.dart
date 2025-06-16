@@ -228,6 +228,16 @@ class PluginLifecycleEvent extends McpEvent {
       'data': data,
     };
   }
+  
+  static PluginLifecycleEvent fromMap(Map<String, dynamic> map) {
+    return PluginLifecycleEvent(
+      pluginName: map['pluginName'] as String,
+      oldStatus: PluginStatus.values.firstWhere((s) => s.name == map['oldStatus']),
+      newStatus: PluginStatus.values.firstWhere((s) => s.name == map['newStatus']),
+      timestamp: DateTime.parse(map['timestamp'] as String),
+      data: Map<String, dynamic>.from(map['data'] as Map? ?? {}),
+    );
+  }
 }
 
 /// Plugin error event extending McpEvent
@@ -262,6 +272,16 @@ class PluginErrorEvent extends McpEvent {
       'details': details,
       'data': data,
     };
+  }
+  
+  static PluginErrorEvent fromMap(Map<String, dynamic> map) {
+    return PluginErrorEvent(
+      pluginName: map['pluginName'] as String,
+      error: map['error'] as String,
+      details: map['details'] as String?,
+      timestamp: DateTime.parse(map['timestamp'] as String),
+      data: Map<String, dynamic>.from(map['data'] as Map? ?? {}),
+    );
   }
 }
 

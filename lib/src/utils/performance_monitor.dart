@@ -109,7 +109,7 @@ class PerformanceMonitor {
 
   /// Start a timer for a specific operation
   String startTimer(String operation, {Map<String, dynamic>? metadata}) {
-    final operationId = '${operation}|${DateTime.now().millisecondsSinceEpoch}';
+    final operationId = '$operation|${DateTime.now().millisecondsSinceEpoch}';
 
     // Create and start new stopwatch
     final stopwatch = Stopwatch()..start();

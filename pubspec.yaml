@@ -19,7 +19,7 @@ dependencies:
 
   # MCP Core libraries
   mcp_client: ^1.0.0
-  mcp_server: ^1.0.0
+  mcp_server: ^1.0.1
   mcp_llm: ^1.0.0
 
   # Utility libraries

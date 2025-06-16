@@ -1,7 +1,5 @@
 /// Type-safe plugin interfaces to replace Map<String, dynamic> usage
 
-import 'dart:async';
-import '../events/event_models.dart';
 import '../config/typed_config.dart';
 import '../metrics/typed_metrics.dart';
 

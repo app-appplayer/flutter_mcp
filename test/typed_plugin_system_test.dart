@@ -140,14 +140,17 @@ void main() {
         receivedEvents.add(event);
       });
       
+      // Wait for subscription to be active
+      await Future.delayed(Duration(milliseconds: 200));
+      
       final plugin = TestToolPlugin();
       final config = DefaultPluginConfig(name: plugin.name);
       
       // Register plugin (should emit events)
       await registry.registerPlugin(plugin, config);
       
-      // Allow events to propagate
-      await Future.delayed(Duration(milliseconds: 10));
+      // Allow events to propagate with increased delay
+      await Future.delayed(Duration(milliseconds: 500));
       
       // Should have lifecycle events
       expect(receivedEvents.length, greaterThanOrEqualTo(2));

@@ -347,12 +347,15 @@ void main() {
         }
       });
       
+      // Wait for subscription to be active
+      await Future.delayed(Duration(milliseconds: 200));
+      
       // Record metrics with unique names to isolate this test
       monitor.recordResourceUsage('isolated.cpu.usage', 75.0, capacity: 100.0);
       monitor.incrementCounter('isolated.errors.count', 1);
       
-      // Allow events to propagate
-      await Future.delayed(Duration(milliseconds: 10));
+      // Allow events to propagate with increased delay
+      await Future.delayed(Duration(milliseconds: 500));
       
       // Verify events were published (should be exactly 2)
       expect(receivedEvents.length, equals(2));

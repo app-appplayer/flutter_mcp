@@ -3,6 +3,7 @@ import '../utils/logger.dart';
 import '../utils/error_recovery.dart';
 import '../events/event_models.dart';
 import '../events/enhanced_typed_event_system.dart';
+import '../plugins/typed_plugin_system.dart';
 
 /// Type-safe event system for components to communicate across the application
 class EventSystem {
@@ -78,7 +79,11 @@ class EventSystem {
     } else if (T.toString().contains('ClientEvent')) {
       topic = 'client.status';
     } else if (T.toString().contains('PerformanceEvent')) {
-      topic = 'performance.update';
+      topic = 'performance.metric';
+    } else if (T.toString().contains('PluginLifecycleEvent')) {
+      topic = 'plugin.lifecycle';
+    } else if (T.toString().contains('PluginErrorEvent')) {
+      topic = 'plugin.error';
     } else {
       // Use type name as fallback
       topic = T.toString().toLowerCase();
@@ -97,6 +102,10 @@ class EventSystem {
           event = ClientEvent.fromMap(data) as T;
         } else if (T.toString().contains('PerformanceEvent')) {
           event = PerformanceEvent.fromMap(data) as T;
+        } else if (T.toString().contains('PluginLifecycleEvent')) {
+          event = PluginLifecycleEvent.fromMap(data) as T;
+        } else if (T.toString().contains('PluginErrorEvent')) {
+          event = PluginErrorEvent.fromMap(data) as T;
         } else {
           // For other event types, try to use a generic approach
           _logger.warning('Unknown event type: $T');

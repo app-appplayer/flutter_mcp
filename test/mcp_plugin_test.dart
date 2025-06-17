@@ -129,7 +129,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late FlutterMCP flutterMcp;
 
-  // 모든 테스트 전에 한 번만 초기화
+  // Initialize once before all tests
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     
@@ -175,7 +175,7 @@ void main() {
     await flutterMcp.init(config);
   });
 
-  // 모든 테스트 후에 한 번만 정리
+  // Clean up once after all tests
   tearDownAll(() async {
     // Clean up after tests
     await flutterMcp.shutdown();
@@ -188,7 +188,7 @@ void main() {
     );
   });
 
-  // 각 테스트 간에 플러그인 정리
+  // Clean up plugins between tests
   tearDown(() async {
     try {
       // FlutterMCP가 초기화되었는지 확인
@@ -335,7 +335,7 @@ void main() {
       final toolPlugin = TestToolPlugin();
       await flutterMcp.registerPlugin(toolPlugin);
 
-      // Force plugin to be uninitialized (핵)
+      // Force plugin to be uninitialized (hack)
       toolPlugin._isInitialized = false;
 
       // Execute and expect error

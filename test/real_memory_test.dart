@@ -9,7 +9,7 @@ import 'dart:io';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   
-  group('실제 메모리 관리 테스트', () {
+  group('Real Memory Management Tests', () {
     late FlutterMCP mcp;
     
     setUp(() async {
@@ -44,7 +44,7 @@ void main() {
         await mcp.init(MCPConfig(
           appName: 'Memory Test',
           appVersion: '1.0.0',
-          highMemoryThresholdMB: 200, // 200MB 임계점 설정
+          highMemoryThresholdMB: 200, // Set 200MB threshold
         ));
       }
     });
@@ -66,19 +66,19 @@ void main() {
       );
     });
 
-    test('실제 메모리 사용량 측정', () async {
-      print('=== 실제 메모리 사용량 측정 테스트 ===');
+    test('Measure actual memory usage', () async {
+      print('=== Actual Memory Usage Measurement Test ===');
       
-      // 초기 메모리 상태 확인
+      // Check initial memory state
       final initialMemory = ProcessInfo.currentRss;
-      print('초기 메모리 사용량: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Initial memory usage: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
       
-      // 여러 서버와 클라이언트 생성 (메모리 사용량 증가)
+      // Create multiple servers and clients (increase memory usage)
       final serverIds = <String>[];
       final clientIds = <String>[];
       
       for (int i = 0; i < 5; i++) {
-        // 서버 생성
+        // Create server
         final serverId = await mcp.createServer(
           name: 'Test Server $i',
           version: '1.0.0',
@@ -90,7 +90,7 @@ void main() {
         );
         serverIds.add(serverId);
         
-        // 클라이언트 생성
+        // Create client
         final clientId = await mcp.createClient(
           name: 'Test Client $i',
           version: '1.0.0',
@@ -104,21 +104,21 @@ void main() {
         clientIds.add(clientId);
       }
       
-      // 메모리 사용량 증가 확인
+      // Check memory usage increase
       final afterCreationMemory = ProcessInfo.currentRss;
       final memoryIncrease = afterCreationMemory - initialMemory;
-      print('서버/클라이언트 생성 후 메모리: ${(afterCreationMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      print('메모리 증가량: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory after server/client creation: ${(afterCreationMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
       
-      expect(memoryIncrease, greaterThan(0)); // 메모리가 증가해야 함
+      expect(memoryIncrease, greaterThan(0)); // Memory should increase
       
-      // 리소스 정리
+      // Clean up resources
       await mcp.shutdown();
       
-      // GC 강제 실행 시도 및 지연 (메모리 정리를 위한 시간 제공)
+      // Attempt forced GC and delay (provide time for memory cleanup)
       await Future.delayed(Duration(milliseconds: 100));
       
-      // 여러번 GC 시도 및 메모리 측정
+      // Try GC multiple times and measure memory
       int attempts = 0;
       int afterCleanupMemory = ProcessInfo.currentRss;
       
@@ -126,76 +126,76 @@ void main() {
         attempts++;
         await Future.delayed(Duration(milliseconds: 200));
         afterCleanupMemory = ProcessInfo.currentRss;
-        print('GC 시도 $attempts 후 메모리: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+        print('Memory after GC attempt $attempts: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
       }
       
       final memoryReclaimed = afterCreationMemory - afterCleanupMemory;
-      print('정리 후 메모리: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      print('회수된 메모리: ${(memoryReclaimed / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory after cleanup: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Reclaimed memory: ${(memoryReclaimed / 1024 / 1024).toStringAsFixed(2)} MB');
       
-      // 메모리 정리 검증 - 테스트 환경에서는 즉시 메모리 해제가 보장되지 않음
-      // GC 타이밍에 따라 메모리가 완전히 회수되지 않을 수 있으므로 유연한 기준 적용
+      // Verify memory cleanup - immediate memory release is not guaranteed in test environment
+      // Apply flexible criteria as memory may not be fully reclaimed depending on GC timing
       final memoryIncreaseAfterCleanup = afterCleanupMemory - initialMemory;
       
-      // 메모리 증가가 초기 증가량의 2배를 넘지 않으면 정상으로 간주
-      // 이는 메모리 누수가 심각하지 않다는 것을 의미
-      final allowedIncreaseRatio = 2.0; // 200% 증가까지 허용 (매우 관대한 기준)
+      // Consider normal if memory increase does not exceed 2x the initial increase
+      // This means memory leaks are not severe
+      final allowedIncreaseRatio = 2.0; // Allow up to 200% increase (very lenient criteria)
       expect(memoryIncreaseAfterCleanup, lessThan(memoryIncrease * allowedIncreaseRatio), 
         reason: 'Memory after cleanup ($memoryIncreaseAfterCleanup bytes increase) should not exceed ${memoryIncrease * allowedIncreaseRatio} bytes increase');
     });
 
-    test('메모리 임계점 감지 테스트', () async {
-      print('=== 메모리 임계점 감지 테스트 ===');
+    test('Memory threshold detection test', () async {
+      print('=== Memory Threshold Detection Test ===');
       
       bool highMemoryCallbackCalled = false;
       String? memoryEventData;
       
-      // 고메모리 콜백 등록
+      // Register high memory callback
       MemoryManager.instance.addHighMemoryCallback(() async {
         highMemoryCallbackCalled = true;
-        print('고메모리 콜백이 호출되었습니다!');
+        print('High memory callback was called!');
       });
       
-      // 메모리 이벤트 리스너 등록
+      // Register memory event listener
       EventSystem.instance.subscribe('memory.high', (data) {
         memoryEventData = data.toString();
-        print('메모리 이벤트 수신: $memoryEventData');
+        print('Memory event received: $memoryEventData');
       });
       
-      // 메모리 모니터링 시작 (더 빠른 간격으로)
+      // Start memory monitoring (with faster interval)
       MemoryManager.instance.initialize(
         startMonitoring: true,
         monitoringInterval: Duration(milliseconds: 100),
-        highMemoryThresholdMB: 50, // 매우 낮은 임계점 설정 (테스트용)
+        highMemoryThresholdMB: 50, // Set very low threshold (for testing)
       );
       
-      // 메모리 모니터링이 실행될 때까지 대기
+      // Wait for memory monitoring to execute
       await Future.delayed(Duration(milliseconds: 500));
       
-      // 메모리 모니터링 중지
+      // Stop memory monitoring
       MemoryManager.instance.stopMemoryMonitoring();
       
-      print('고메모리 콜백 호출됨: $highMemoryCallbackCalled');
-      print('메모리 이벤트 데이터: $memoryEventData');
+      print('High memory callback called: $highMemoryCallbackCalled');
+      print('Memory event data: $memoryEventData');
       
-      // 낮은 임계점이므로 콜백이 호출되어야 함
+      // Callback should be called due to low threshold
       expect(highMemoryCallbackCalled, isTrue);
       expect(memoryEventData, isNotNull);
     });
 
-    test('리소스 의존성 관리 테스트', () async {
-      print('=== 리소스 의존성 관리 테스트 ===');
+    test('Resource dependency management test', () async {
+      print('=== Resource Dependency Management Test ===');
       
       final resourceManager = ResourceManager.instance;
       final disposedOrder = <String>[];
       
-      // 의존성이 있는 리소스들 등록
+      // Register resources with dependencies
       resourceManager.register<String>(
         'dependency1',
         'resource1',
         (resource) async {
           disposedOrder.add('dependency1');
-          print('dependency1 정리됨');
+          print('dependency1 cleaned up');
         },
         priority: ResourceManager.highPriority,
       );
@@ -205,7 +205,7 @@ void main() {
         'resource2',
         (resource) async {
           disposedOrder.add('dependency2');
-          print('dependency2 정리됨');
+          print('dependency2 cleaned up');
         },
         dependencies: ['dependency1'],
         priority: ResourceManager.mediumPriority,
@@ -216,90 +216,90 @@ void main() {
         'main',
         (resource) async {
           disposedOrder.add('main_resource');
-          print('main_resource 정리됨');
+          print('main_resource cleaned up');
         },
         dependencies: ['dependency1', 'dependency2'],
         priority: ResourceManager.lowPriority,
       );
       
-      // 메인 리소스 정리 (의존성이 먼저 정리되어야 함)
+      // Clean up main resource (dependencies should be cleaned up first)
       await resourceManager.dispose('dependency1');
       
-      print('정리 순서: $disposedOrder');
+      print('Cleanup order: $disposedOrder');
       
-      // 의존성 때문에 main_resource와 dependency2가 먼저 정리되었는지 확인
+      // Check if main_resource and dependency2 were cleaned up first due to dependencies
       expect(disposedOrder.contains('main_resource'), isTrue);
       expect(disposedOrder.contains('dependency2'), isTrue);
-      expect(disposedOrder.last, equals('dependency1')); // dependency1이 마지막에 정리
+      expect(disposedOrder.last, equals('dependency1')); // dependency1 cleaned up last
     });
 
-    test('메모리 청크 처리 테스트', () async {
-      print('=== 메모리 청크 처리 테스트 ===');
+    test('Memory chunk processing test', () async {
+      print('=== Memory Chunk Processing Test ===');
       
-      // 큰 데이터 생성
+      // Create large data
       final largeDataSet = List.generate(1000, (index) => 'data_item_$index');
       
       final initialMemory = ProcessInfo.currentRss;
-      print('청크 처리 전 메모리: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory before chunk processing: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
       
-      // 청크별로 처리 (메모리 효율적)
+      // Process by chunks (memory efficient)
       final results = await MemoryManager.processInChunks<String, String>(
         items: largeDataSet,
         processItem: (item) async {
-          // 약간의 처리 시간과 메모리 사용
+          // Some processing time and memory usage
           await Future.delayed(Duration(milliseconds: 1));
           return item.toUpperCase();
         },
-        chunkSize: 50, // 50개씩 처리
-        pauseBetweenChunks: Duration(milliseconds: 10), // 청크 간 일시정지
+        chunkSize: 50, // Process 50 items at a time
+        pauseBetweenChunks: Duration(milliseconds: 10), // Pause between chunks
       );
       
       final afterProcessingMemory = ProcessInfo.currentRss;
-      print('청크 처리 후 메모리: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory after chunk processing: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
       
       expect(results.length, equals(largeDataSet.length));
       expect(results.first, equals('DATA_ITEM_0'));
       
-      // 메모리 사용량이 제어되었는지 확인 (큰 증가가 없어야 함)
+      // Check if memory usage was controlled (should not have large increase)
       final memoryIncrease = afterProcessingMemory - initialMemory;
-      print('메모리 증가량: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
       
-      // 청크 처리로 인해 메모리 증가가 제한적이어야 함
-      expect(memoryIncrease, lessThan(50 * 1024 * 1024)); // 50MB 미만으로 증가
+      // Memory increase should be limited due to chunk processing
+      expect(memoryIncrease, lessThan(50 * 1024 * 1024)); // Increase less than 50MB
     });
 
-    test('병렬 청크 처리와 동시성 제어 테스트', () async {
-      print('=== 병렬 청크 처리와 동시성 제어 테스트 ===');
+    test('Parallel chunk processing and concurrency control test', () async {
+      print('=== Parallel Chunk Processing and Concurrency Control Test ===');
       
       final dataSet = List.generate(100, (index) => index);
       
       final initialMemory = ProcessInfo.currentRss;
-      print('병렬 처리 전 메모리: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory before parallel processing: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
       
-      // 제한된 동시성으로 병렬 처리
+      // Parallel processing with limited concurrency
       final results = await MemoryManager.processInParallelChunks<int, int>(
         items: dataSet,
         processItem: (item) async {
-          // CPU 집약적 작업 시뮬레이션
+          // Simulate CPU-intensive work
           await Future.delayed(Duration(milliseconds: 10));
           return item * item;
         },
-        maxConcurrent: 3, // 최대 3개 동시 실행
+        maxConcurrent: 3, // Maximum 3 concurrent executions
         chunkSize: 10,
         pauseBetweenChunks: Duration(milliseconds: 5),
       );
       
       final afterProcessingMemory = ProcessInfo.currentRss;
-      print('병렬 처리 후 메모리: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory after parallel processing: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
       
       expect(results.length, equals(dataSet.length));
       expect(results[5], equals(25)); // 5^2 = 25
       
-      // 동시성 제어로 메모리 사용량이 제한되었는지 확인
+      // Check if memory usage was limited by concurrency control
       final memoryIncrease = afterProcessingMemory - initialMemory;
-      print('메모리 증가량: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
       
-      expect(memoryIncrease, lessThan(30 * 1024 * 1024)); // 30MB 미만 증가
+      expect(memoryIncrease, lessThan(30 * 1024 * 1024)); // Increase less than 30MB
     });
   });
 }

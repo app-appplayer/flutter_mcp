@@ -48,7 +48,7 @@ void main() {
       expect(restored.value, equals(metric.value));
       expect(restored.capacity, equals(metric.capacity));
       
-      print('ResourceUsageMetric 생성 및 직렬화 성공');
+      print('ResourceUsageMetric creation and serialization successful');
     });
 
     test('should create and record CounterMetric', () {
@@ -75,7 +75,7 @@ void main() {
       expect(restored.value, equals(metric.value));
       expect(restored.increment, equals(metric.increment));
       
-      print('CounterMetric 생성 및 직렬화 성공');
+      print('CounterMetric creation and serialization successful');
     });
 
     test('should create and record TimerMetric', () {
@@ -109,7 +109,7 @@ void main() {
       expect(errorMetric.success, isFalse);
       expect(errorMetric.errorMessage, equals('Network timeout'));
       
-      print('TimerMetric 생성 및 오류 처리 성공');
+      print('TimerMetric creation and error handling successful');
     });
 
     test('should create and analyze HistogramMetric', () {
@@ -146,7 +146,7 @@ void main() {
       expect(metric.bucketCounts[75.0], equals(2)); // 60, 70
       expect(metric.bucketCounts[100.0], equals(3)); // 80, 90, 100
       
-      print('HistogramMetric 분석 및 통계 계산 성공');
+      print('HistogramMetric analysis and statistics calculation successful');
     });
 
     test('should create and record NetworkMetric', () {
@@ -183,7 +183,7 @@ void main() {
       
       expect(throughputMetric.unit, equals('bytes_per_second'));
       
-      print('NetworkMetric 생성 및 처리량 계산 성공');
+      print('NetworkMetric creation and throughput calculation successful');
     });
 
     test('should create and work with CustomMetric', () {
@@ -210,7 +210,7 @@ void main() {
       expect(metric.metadata['cache_type'], equals('redis'));
       expect(metric.metadata['ttl'], equals(3600));
       
-      print('CustomMetric 생성 및 메타데이터 처리 성공');
+      print('CustomMetric creation and metadata processing successful');
     });
 
     test('should create and analyze MetricCollection', () {
@@ -259,7 +259,7 @@ void main() {
       expect(stats['min'], equals(10.0));
       expect(stats['max'], equals(100000.0)); // TimerMetric value in microseconds
       
-      print('MetricCollection 필터링 및 통계 분석 성공');
+      print('MetricCollection filtering and statistical analysis successful');
     });
 
     test('should integrate typed metrics with PerformanceMonitor', () async {
@@ -328,7 +328,7 @@ void main() {
       expect(report.containsKey('typed_metrics'), isTrue);
       expect(report.containsKey('metric_collections'), isTrue);
       
-      print('PerformanceMonitor 통합 테스트 성공');
+      print('PerformanceMonitor integration test successful');
     });
 
     test('should handle event publishing for typed metrics', () async {
@@ -369,7 +369,7 @@ void main() {
       expect(errorEvent.value, equals(1.0));
       expect(errorEvent.type, equals(MetricType.counter));
       
-      print('타입 메트릭 이벤트 발행 성공');
+      print('Typed metrics event publishing successful');
     });
 
     test('should handle resource type and unit detection', () {
@@ -401,7 +401,7 @@ void main() {
       expect(batteryMetric?.resourceType, equals(ResourceType.battery));
       expect(batteryMetric?.unit, equals('%'));
       
-      print('리소스 타입 및 단위 자동 감지 성공');
+      print('Resource type and unit auto-detection successful');
     });
 
     test('should handle metric collection serialization', () {
@@ -442,7 +442,7 @@ void main() {
       expect(resources.length, equals(1));
       expect(resources.first.name, equals('test.memory'));
       
-      print('MetricCollection 직렬화 및 타입 보존 성공');
+      print('MetricCollection serialization and type preservation successful');
     });
   });
 }

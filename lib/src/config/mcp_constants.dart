@@ -1,185 +1,185 @@
-/// MCP 시스템 전체에서 사용되는 상수들을 정의합니다.
+/// Defines constants used throughout the MCP system.
 /// 
-/// 이 클래스는 매직 넘버를 방지하고 일관된 설정 값을 제공합니다.
+/// This class prevents magic numbers and provides consistent configuration values.
 class MCPConstants {
   // Private constructor to prevent instantiation
   MCPConstants._();
 
-  // === Object Pool 관련 상수 ===
+  // === Object Pool Related Constants ===
   
-  /// 기본 객체 풀 크기
+  /// Default object pool size
   static const int defaultObjectPoolSize = 50;
   
-  /// 기본 객체 풀 초기 크기
+  /// Default object pool initial size
   static const int defaultObjectPoolInitialSize = 10;
   
-  /// 객체 풀 최대 크기
+  /// Maximum object pool size
   static const int maxObjectPoolSize = 200;
 
-  // === 로깅 관련 상수 ===
+  // === Logging Related Constants ===
   
-  /// 최대 로그 파일 크기 (10MB)
+  /// Maximum log file size (10MB)
   static const int maxLogFileSizeBytes = 10 * 1024 * 1024;
   
-  /// 최대 로그 파일 개수
+  /// Maximum number of log files
   static const int maxLogFiles = 5;
   
-  /// 로그 정리 주기 (분)
+  /// Log cleanup interval (minutes)
   static const int logCleanupIntervalMinutes = 60;
 
-  // === 성능 모니터링 관련 상수 ===
+  // === Performance Monitoring Related Constants ===
   
-  /// 최근 작업 큐 최대 크기
+  /// Maximum size of recent operations queue
   static const int maxRecentOperations = 100;
   
-  /// 성능 메트릭 샘플링 간격 (초)
+  /// Performance metrics sampling interval (seconds)
   static const int performanceMetricsSamplingSeconds = 30;
   
-  /// 메모리 모니터링 간격 (초)
+  /// Memory monitoring interval (seconds)
   static const int memoryMonitoringIntervalSeconds = 30;
 
-  // === 네트워크 관련 상수 ===
+  // === Network Related Constants ===
   
-  /// 기본 연결 타임아웃 (초)
+  /// Default connection timeout (seconds)
   static const int defaultConnectionTimeoutSeconds = 30;
   
-  /// 기본 요청 타임아웃 (초) 
+  /// Default request timeout (seconds) 
   static const int defaultRequestTimeoutSeconds = 60;
   
-  /// 최대 재시도 횟수
+  /// Maximum retry attempts
   static const int maxRetryAttempts = 3;
   
-  /// 재시도 간격 (밀리초)
+  /// Retry interval (milliseconds)
   static const int retryIntervalMilliseconds = 1000;
 
-  // === 스케줄러 관련 상수 ===
+  // === Scheduler Related Constants ===
   
-  /// 스케줄러 체크 간격 (초)
+  /// Scheduler check interval (seconds)
   static const int schedulerCheckIntervalSeconds = 1;
   
-  /// 최대 동시 실행 작업 수
+  /// Maximum concurrent jobs
   static const int maxConcurrentJobs = 10;
   
-  /// 작업 실행 기록 최대 개수
+  /// Maximum job execution history count
   static const int maxJobExecutionHistory = 100;
 
-  // === 메모리 관리 관련 상수 ===
+  // === Memory Management Related Constants ===
   
-  /// 고메모리 임계값 (MB)
+  /// High memory threshold (MB)
   static const int highMemoryThresholdMB = 512;
   
-  /// 메모리 정리 임계값 (MB)
+  /// Memory cleanup threshold (MB)
   static const int memoryCleanupThresholdMB = 256;
   
-  /// 메모리 모니터링 기록 최대 개수
+  /// Maximum memory monitoring record count
   static const int maxMemoryReadings = 60;
 
-  // === 캐시 관련 상수 ===
+  // === Cache Related Constants ===
   
-  /// 시맨틱 캐시 기본 크기
+  /// Default semantic cache size
   static const int defaultSemanticCacheSize = 1000;
   
-  /// 시맨틱 캐시 TTL (분)
+  /// Semantic cache TTL (minutes)
   static const int semanticCacheTTLMinutes = 60;
   
-  /// 유사도 임계값 (0.0 ~ 1.0)
+  /// Similarity threshold (0.0 ~ 1.0)
   static const double semanticSimilarityThreshold = 0.8;
 
-  // === 백그라운드 서비스 관련 상수 ===
+  // === Background Service Related Constants ===
   
-  /// 기본 백그라운드 간격 (밀리초)
-  static const int defaultBackgroundIntervalMs = 60000; // 1분
+  /// Default background interval (milliseconds)
+  static const int defaultBackgroundIntervalMs = 60000; // 1 minute
   
-  /// iOS 최소 백그라운드 간격 (밀리초)
-  static const int iosMinBackgroundIntervalMs = 900000; // 15분
+  /// iOS minimum background interval (milliseconds)
+  static const int iosMinBackgroundIntervalMs = 900000; // 15 minutes
   
-  /// 최대 연속 에러 횟수
+  /// Maximum consecutive error count
   static const int maxConsecutiveErrors = 5;
 
-  // === 암호화 관련 상수 ===
+  // === Encryption Related Constants ===
   
-  /// AES 키 크기 (비트)
+  /// AES key size (bits)
   static const int aesKeySizeBits = 256;
   
-  /// 솔트 크기 (바이트)
+  /// Salt size (bytes)
   static const int saltSizeBytes = 32;
   
-  /// PBKDF2 반복 횟수
+  /// PBKDF2 iteration count
   static const int pbkdf2Iterations = 100000;
 
-  // === 플러그인 관련 상수 ===
+  // === Plugin Related Constants ===
   
-  /// 플러그인 로딩 타임아웃 (초)
+  /// Plugin loading timeout (seconds)
   static const int pluginLoadTimeoutSeconds = 30;
   
-  /// 플러그인 초기화 타임아웃 (초)
+  /// Plugin initialization timeout (seconds)
   static const int pluginInitTimeoutSeconds = 10;
   
-  /// 최대 플러그인 개수
+  /// Maximum plugin count
   static const int maxPluginCount = 100;
 
-  // === Duration 상수들 ===
+  // === Duration Constants ===
   
-  /// 기본 연결 타임아웃
+  /// Default connection timeout
   static const Duration defaultConnectionTimeout = Duration(seconds: defaultConnectionTimeoutSeconds);
   
-  /// 기본 요청 타임아웃
+  /// Default request timeout
   static const Duration defaultRequestTimeout = Duration(seconds: defaultRequestTimeoutSeconds);
   
-  /// 스케줄러 체크 간격
+  /// Scheduler check interval
   static const Duration schedulerCheckInterval = Duration(seconds: schedulerCheckIntervalSeconds);
   
-  /// 메모리 모니터링 간격
+  /// Memory monitoring interval
   static const Duration memoryMonitoringInterval = Duration(seconds: memoryMonitoringIntervalSeconds);
   
-  /// 백그라운드 서비스 기본 간격
+  /// Default background service interval
   static const Duration defaultBackgroundInterval = Duration(milliseconds: defaultBackgroundIntervalMs);
   
-  /// iOS 최소 백그라운드 간격
+  /// iOS minimum background interval
   static const Duration iosMinBackgroundInterval = Duration(milliseconds: iosMinBackgroundIntervalMs);
   
-  /// 로그 정리 주기
+  /// Log cleanup interval
   static const Duration logCleanupInterval = Duration(minutes: logCleanupIntervalMinutes);
   
-  /// 성능 메트릭 샘플링 간격
+  /// Performance metrics sampling interval
   static const Duration performanceMetricsSamplingInterval = Duration(seconds: performanceMetricsSamplingSeconds);
 
-  // === 파일 경로 관련 상수 ===
+  // === File Path Related Constants ===
   
-  /// 로그 파일 확장자
+  /// Log file extension
   static const String logFileExtension = '.log';
   
-  /// 설정 파일 확장자
+  /// Configuration file extension
   static const String configFileExtension = '.json';
   
-  /// 백업 파일 확장자
+  /// Backup file extension
   static const String backupFileExtension = '.bak';
 
-  // === 이벤트 토픽 상수 ===
+  // === Event Topic Constants ===
   
-  /// MCP 초기화 완료 이벤트
+  /// MCP initialization complete event
   static const String eventMcpInitialized = 'mcp.initialized';
   
-  /// MCP 종료 이벤트
+  /// MCP shutdown event
   static const String eventMcpShutdown = 'mcp.shutdown';
   
-  /// 고메모리 경고 이벤트
+  /// High memory warning event
   static const String eventHighMemoryWarning = 'mcp.memory.high';
   
-  /// Circuit Breaker 열림 이벤트
+  /// Circuit breaker opened event
   static const String eventCircuitBreakerOpened = 'circuit_breaker.opened';
   
-  /// Circuit Breaker 닫힘 이벤트
+  /// Circuit breaker closed event
   static const String eventCircuitBreakerClosed = 'circuit_breaker.closed';
 
-  // === 버전 정보 ===
+  // === Version Information ===
   
-  /// 현재 MCP 버전
+  /// Current MCP version
   static const String mcpVersion = '1.0.0';
   
-  /// 최소 지원 Flutter 버전
+  /// Minimum supported Flutter version
   static const String minFlutterVersion = '3.3.0';
   
-  /// 최소 지원 Dart 버전
+  /// Minimum supported Dart version
   static const String minDartVersion = '3.7.2';
 }

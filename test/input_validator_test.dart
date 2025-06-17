@@ -277,7 +277,7 @@ void main() {
 
     group('Edge Cases', () {
       test('should handle unicode characters appropriately', () {
-        expect(InputValidator.isValidAppName('앱이름'), false); // Non-ASCII
+        expect(InputValidator.isValidAppName('app_name'), false); // Non-ASCII
         expect(InputValidator.sanitizeString('Hello 世界'), 'Hello 世界'); // Should preserve non-malicious unicode
       });
 

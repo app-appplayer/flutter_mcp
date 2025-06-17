@@ -31,7 +31,7 @@ void main() {
       expect(config.enableCaching, equals(false));
       expect(config.maxCacheSize, equals(500));
       
-      print('MemoryConfig 생성 및 파싱 성공');
+      print('MemoryConfig creation and parsing successful');
     });
 
     test('should create LoggingConfig with enum values', () {
@@ -61,7 +61,7 @@ void main() {
       expect(config.remoteLogEndpoint, equals('https://logs.example.com'));
       expect(config.excludeLoggers, equals(['debug_logger', 'test_logger']));
       
-      print('LoggingConfig enum 및 컬렉션 파싱 성공');
+      print('LoggingConfig enum and collection parsing successful');
     });
 
     test('should handle complex nested TrayConfig', () {
@@ -124,7 +124,7 @@ void main() {
       expect(config.menuItems[1].subItems[0].id, equals('general'));
       expect(config.menuItems[1].subItems[0].label, equals('General'));
       
-      print('중첩된 TrayConfig 파싱 성공');
+      print('Nested TrayConfig parsing successful');
     });
 
     test('should create TypedAppConfig from complete map', () {
@@ -208,7 +208,7 @@ void main() {
       expect(config.platform.storage.enableSecureStorage, equals(true));
       expect(config.platform.storage.maxCacheSize, equals(52428800));
       
-      print('완전한 TypedAppConfig 생성 및 검증 성공');
+      print('Complete TypedAppConfig creation and validation successful');
     });
 
     test('should handle round-trip serialization', () {
@@ -285,7 +285,7 @@ void main() {
       expect(restoredConfig.security.allowedOrigins, 
              equals(originalConfig.security.allowedOrigins));
       
-      print('라운드 트립 직렬화 성공');
+      print('Round-trip serialization successful');
     });
 
     test('should integrate with AppConfig', () async {
@@ -313,7 +313,7 @@ void main() {
       expect(typedConfig.security, isNotNull);
       expect(typedConfig.platform, isNotNull);
       
-      print('AppConfig 통합 테스트 성공');
+      print('AppConfig integration test successful');
     });
 
     test('should handle default values correctly', () {
@@ -340,7 +340,7 @@ void main() {
       expect(performanceConfig.cpuThreshold, equals(80.0));
       expect(performanceConfig.enabledMetrics, equals(['memory', 'cpu', 'network']));
       
-      print('기본값 테스트 성공');
+      print('Default values test successful');
     });
   });
 }

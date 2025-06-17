@@ -48,10 +48,10 @@ void main() {
     late MockPlatformServices mockPlatformServices;
     
     setUp(() {
-      // 실제 플랫폼 대신 모의 객체 사용
+      // Use mock objects instead of real platform services
       mockPlatformServices = MockPlatformServices();
       
-      // 기본 모의 동작 설정
+      // Set up default mock behavior
       when(mockPlatformServices.initialize(any)).thenAnswer((_) async {});
       when(mockPlatformServices.isBackgroundServiceRunning).thenReturn(false);
       when(mockPlatformServices.startBackgroundService()).thenAnswer((_) async => true);
@@ -65,7 +65,7 @@ void main() {
       when(mockPlatformServices.secureStore(any, any)).thenAnswer((_) async {});
       when(mockPlatformServices.secureRead(any)).thenAnswer((_) async => 'mock-stored-value');
       
-      // PlatformTestFlutterMCP 사용
+      // Use PlatformTestFlutterMCP
       mcp = PlatformTestFlutterMCP(mockPlatformServices);
     });
     

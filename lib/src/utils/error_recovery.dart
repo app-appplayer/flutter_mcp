@@ -17,7 +17,7 @@ class ErrorRecovery {
         Duration? maxDelay,
         String? operationName,
         bool Function(Exception)? retryIf,
-        void Function(int attempt, Exception error)? onRetry, // 추가된 부분
+        void Function(int attempt, Exception error)? onRetry, // Added parameter
       }) async {
     final name = operationName ?? 'operation';
     int attempt = 0;
@@ -48,7 +48,7 @@ class ErrorRecovery {
         if (e is Exception) {
           lastException = e;
 
-          // 추가된 onRetry 콜백
+          // Call onRetry callback if provided
           if (onRetry != null) {
             onRetry(attempt - 1, lastException);
           }
@@ -229,7 +229,7 @@ class ErrorRecovery {
       Future<T> Function() operation, {
         int maxRetries = 3,
         Duration initialDelay = const Duration(milliseconds: 500),
-        double backoffFactor = 2.0,  // 추가된 부분
+        double backoffFactor = 2.0,  // Added parameter
         Duration? maxDelay,
         Duration? timeout,
         bool Function(Exception)? retryIf,

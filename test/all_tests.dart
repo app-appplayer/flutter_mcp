@@ -23,6 +23,7 @@ import 'platform_notification_service_test.dart' as platform_notification;
 import 'platform_tray_service_test.dart' as platform_tray;
 import 'security_test.dart' as security;
 import 'transport_test.dart' as transport;
+import 'transport_configuration_test.dart' as transport_config;
 import 'native_channel_integration_test.dart' as native_channel;
 
 void main() {
@@ -65,6 +66,7 @@ void main() {
 
   // Transport tests
   transport.main();
+  transport_config.main();
 
   // Mock tests
   mock.main();

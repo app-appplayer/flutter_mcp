@@ -263,6 +263,192 @@ await FlutterMCP.instance.shutdown();
 | Windows  | ✅                | ✅             | ✅          |
 | Linux    | ✅                | ✅             | ✅          |
 
+## Transport Configuration
+
+Transport is the core communication mechanism in MCP. Flutter MCP supports three transport types, each with its own configuration options.
+
+### Transport Types
+
+| Transport Type | Description | Use Case |
+|---------------|-------------|----------|
+| **STDIO** | Standard Input/Output communication | Local process communication, subprocess execution |
+| **SSE** | Server-Sent Events over HTTP | Real-time streaming, web-compatible communication |
+| **StreamableHTTP** | HTTP with streaming support | REST-like API with streaming capabilities |
+
+### Server Transport Configuration
+
+#### STDIO Server
+```dart
+final serverId = await FlutterMCP.instance.createServer(
+  name: 'STDIO Server',
+  version: '1.0.0',
+  config: MCPServerConfig(
+    name: 'STDIO Server',
+    version: '1.0.0',
+    transportType: 'stdio',  // Required: must be explicitly specified
+  ),
+);
+```
+
+#### SSE Server
+```dart
+final serverId = await FlutterMCP.instance.createServer(
+  name: 'SSE Server',
+  version: '1.0.0',
+  config: MCPServerConfig(
+    name: 'SSE Server',
+    version: '1.0.0',
+    transportType: 'sse',    // Required: must be explicitly specified
+    ssePort: 8080,           // Required for SSE
+    host: 'localhost',       // Optional: default 'localhost'
+    endpoint: '/sse',        // Optional: default '/sse'
+    messagesEndpoint: '/message',  // Optional: default '/message'
+    fallbackPorts: [8081, 8082],   // Optional: alternative ports
+    authToken: 'secret',     // Optional: authentication
+    middleware: [],          // Optional: custom middleware
+  ),
+);
+```
+
+#### StreamableHTTP Server
+```dart
+final serverId = await FlutterMCP.instance.createServer(
+  name: 'StreamableHTTP Server',
+  version: '1.0.0',
+  config: MCPServerConfig(
+    name: 'StreamableHTTP Server',
+    version: '1.0.0',
+    transportType: 'streamablehttp',  // Required: must be explicitly specified
+    streamableHttpPort: 8080,         // Required for StreamableHTTP
+    host: 'localhost',                // Optional: default 'localhost'
+    endpoint: '/mcp',                 // Optional: default '/mcp'
+    messagesEndpoint: '/message',     // Optional: default '/message'
+    fallbackPorts: [8081, 8082],      // Optional: alternative ports
+    authToken: 'secret',              // Optional: authentication
+    isJsonResponseEnabled: false,     // Optional: false = SSE mode (default), true = JSON mode
+    jsonResponseMode: 'sync',         // Optional: 'sync' or 'async' (only for JSON mode)
+    maxRequestSize: 4194304,          // Optional: max request size in bytes (default 4MB)
+    requestTimeout: Duration(seconds: 30),  // Optional: request timeout
+    corsConfig: {                     // Optional: CORS configuration
+      'allowOrigin': '*',
+      'allowMethods': 'POST, GET, OPTIONS',
+      'allowHeaders': 'Content-Type, Authorization',
+    },
+  ),
+);
+```
+
+### Client Transport Configuration
+
+#### STDIO Client
+```dart
+final clientId = await FlutterMCP.instance.createClient(
+  name: 'STDIO Client',
+  version: '1.0.0',
+  config: MCPClientConfig(
+    name: 'STDIO Client',
+    version: '1.0.0',
+    transportType: 'stdio',        // Required: must be explicitly specified
+    transportCommand: 'python',    // Required for STDIO
+    transportArgs: ['server.py', '--mode', 'mcp'],  // Optional: command arguments
+  ),
+);
+```
+
+#### SSE Client
+```dart
+final clientId = await FlutterMCP.instance.createClient(
+  name: 'SSE Client',
+  version: '1.0.0',
+  config: MCPClientConfig(
+    name: 'SSE Client',
+    version: '1.0.0',
+    transportType: 'sse',              // Required: must be explicitly specified
+    serverUrl: 'http://localhost:8080', // Required for SSE
+    endpoint: '/sse',                  // Optional: will be appended to serverUrl
+    authToken: 'secret',               // Optional: authentication
+    headers: {                         // Optional: additional headers
+      'X-Custom-Header': 'value',
+    },
+    timeout: Duration(seconds: 30),    // Optional: request timeout
+    sseReadTimeout: Duration(minutes: 5),  // Optional: SSE stream timeout
+  ),
+);
+```
+
+#### StreamableHTTP Client
+```dart
+final clientId = await FlutterMCP.instance.createClient(
+  name: 'StreamableHTTP Client',
+  version: '1.0.0',
+  config: MCPClientConfig(
+    name: 'StreamableHTTP Client',
+    version: '1.0.0',
+    transportType: 'streamablehttp',    // Required: must be explicitly specified
+    serverUrl: 'http://localhost:8080', // Required for StreamableHTTP (base URL only)
+    endpoint: '/mcp',                   // Optional: server should use the same endpoint
+    authToken: 'secret',                // Optional: authentication
+    headers: {                          // Optional: additional headers
+      'X-Custom-Header': 'value',
+    },
+    timeout: Duration(seconds: 30),     // Optional: request timeout
+    maxConcurrentRequests: 10,          // Optional: max concurrent requests
+    useHttp2: true,                     // Optional: use HTTP/2 if available
+    terminateOnClose: true,             // Optional: terminate session on close
+  ),
+);
+```
+
+### Important Notes
+
+1. **Transport Type is Required**: Starting from v1.0.1, `transportType` must be explicitly specified. Automatic inference has been removed to prevent unexpected behavior.
+
+2. **URL Handling**:
+   - For **SSE**: The `endpoint` is appended to `serverUrl` if provided
+   - For **StreamableHTTP**: The client connects to the base `serverUrl`, and the server's endpoint configuration must match
+
+3. **Default Endpoints**:
+   - SSE Server: `/sse` (messages) and `/message` (commands)
+   - StreamableHTTP Server: `/mcp` (all communications)
+
+4. **Authentication**: All transports support bearer token authentication via the `authToken` field
+
+5. **Port Configuration**:
+   - Servers can specify `fallbackPorts` for automatic failover
+   - Clients connect to the specific port in the `serverUrl`
+
+### Connection Example
+
+```dart
+// 1. Create and start a StreamableHTTP server
+final serverId = await FlutterMCP.instance.createServer(
+  name: 'My Server',
+  version: '1.0.0',
+  config: MCPServerConfig(
+    name: 'My Server',
+    version: '1.0.0',
+    transportType: 'streamablehttp',
+    streamableHttpPort: 8080,
+    endpoint: '/mcp',  // Server listens at http://localhost:8080/mcp
+  ),
+);
+await FlutterMCP.instance.connectServer(serverId);
+
+// 2. Create and connect a client to the server
+final clientId = await FlutterMCP.instance.createClient(
+  name: 'My Client',
+  version: '1.0.0',
+  config: MCPClientConfig(
+    name: 'My Client',
+    version: '1.0.0',
+    transportType: 'streamablehttp',
+    serverUrl: 'http://localhost:8080',  // Base URL only
+    endpoint: '/mcp',  // Must match server's endpoint
+  ),
+);
+await FlutterMCP.instance.connectClient(clientId);
+```
+
 ## Permissions
 
 Flutter MCP automatically requests necessary permissions based on your configuration:

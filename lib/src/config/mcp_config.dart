@@ -34,6 +34,27 @@ class MCPClientConfig {
   /// Authentication token for the transport
   final String? authToken;
 
+  /// Endpoint path for SSE/StreamableHttp (e.g., '/sse', '/mcp')
+  final String? endpoint;
+
+  /// Request timeout
+  final Duration? timeout;
+
+  /// SSE read timeout (longer for streaming)
+  final Duration? sseReadTimeout;
+
+  /// Maximum number of concurrent requests
+  final int? maxConcurrentRequests;
+
+  /// Whether to use HTTP/2 if available
+  final bool? useHttp2;
+
+  /// Whether to terminate session on close
+  final bool? terminateOnClose;
+
+  /// Additional headers to send with requests
+  final Map<String, String>? headers;
+
   /// Creates a new MCP client configuration
   MCPClientConfig({
     required this.name,
@@ -44,12 +65,15 @@ class MCPClientConfig {
     this.transportArgs,
     this.serverUrl,
     this.authToken,
-  }) : transportType = transportType ??
-            (transportCommand != null
-                ? 'stdio'
-                : serverUrl != null
-                    ? 'sse'
-                    : 'stdio');
+    this.endpoint,
+    this.timeout,
+    this.sseReadTimeout,
+    this.maxConcurrentRequests,
+    this.useHttp2,
+    this.terminateOnClose,
+    this.headers,
+  }) : transportType = transportType ?? 
+            (throw ArgumentError('transportType must be specified. Valid values: stdio, sse, streamablehttp'));
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() {
@@ -77,6 +101,34 @@ class MCPClientConfig {
 
     if (authToken != null) {
       json['authToken'] = authToken;
+    }
+
+    if (endpoint != null) {
+      json['endpoint'] = endpoint;
+    }
+
+    if (timeout != null) {
+      json['timeout'] = timeout!.inMilliseconds;
+    }
+
+    if (sseReadTimeout != null) {
+      json['sseReadTimeout'] = sseReadTimeout!.inMilliseconds;
+    }
+
+    if (maxConcurrentRequests != null) {
+      json['maxConcurrentRequests'] = maxConcurrentRequests;
+    }
+
+    if (useHttp2 != null) {
+      json['useHttp2'] = useHttp2;
+    }
+
+    if (terminateOnClose != null) {
+      json['terminateOnClose'] = terminateOnClose;
+    }
+
+    if (headers != null) {
+      json['headers'] = headers;
     }
 
     return json;
@@ -113,6 +165,33 @@ class MCPServerConfig {
   /// Authentication token for the transport
   final String? authToken;
 
+  /// Host to bind the server to (default: 'localhost')
+  final String? host;
+
+  /// Endpoint path for SSE/StreamableHttp (default: '/sse' for SSE, '/mcp' for StreamableHttp)
+  final String? endpoint;
+
+  /// Messages endpoint path for SSE (default: '/message')
+  final String? messagesEndpoint;
+
+  /// CORS configuration (host, methods, headers)
+  final Map<String, dynamic>? corsConfig;
+
+  /// Maximum request size in bytes (default: 4MB)
+  final int? maxRequestSize;
+
+  /// Request timeout
+  final Duration? requestTimeout;
+
+  /// Enable JSON response mode for StreamableHttp (default: false for SSE mode)
+  final bool? isJsonResponseEnabled;
+
+  /// JSON response mode for StreamableHttp ('sync' or 'async', default: 'sync')
+  final String? jsonResponseMode;
+
+  /// Custom middleware for SSE transport
+  final List<dynamic>? middleware;
+
   /// Creates a new MCP server configuration
   MCPServerConfig({
     required this.name,
@@ -124,14 +203,19 @@ class MCPServerConfig {
     this.streamableHttpPort,
     this.fallbackPorts,
     this.authToken,
+    this.host,
+    this.endpoint,
+    this.messagesEndpoint,
+    this.corsConfig,
+    this.maxRequestSize,
+    this.requestTimeout,
+    this.isJsonResponseEnabled,
+    this.jsonResponseMode,
+    this.middleware,
   }) : transportType = transportType ??
             (useStdioTransport == true
                 ? 'stdio'
-                : ssePort != null
-                    ? 'sse'
-                    : streamableHttpPort != null
-                        ? 'streamablehttp'
-                        : 'stdio');
+                : throw ArgumentError('transportType must be specified. Valid values: stdio, sse, streamablehttp'));
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() {
@@ -159,6 +243,42 @@ class MCPServerConfig {
 
     if (authToken != null) {
       json['authToken'] = authToken;
+    }
+
+    if (host != null) {
+      json['host'] = host;
+    }
+
+    if (endpoint != null) {
+      json['endpoint'] = endpoint;
+    }
+
+    if (messagesEndpoint != null) {
+      json['messagesEndpoint'] = messagesEndpoint;
+    }
+
+    if (corsConfig != null) {
+      json['corsConfig'] = corsConfig;
+    }
+
+    if (maxRequestSize != null) {
+      json['maxRequestSize'] = maxRequestSize;
+    }
+
+    if (requestTimeout != null) {
+      json['requestTimeout'] = requestTimeout!.inMilliseconds;
+    }
+
+    if (isJsonResponseEnabled != null) {
+      json['isJsonResponseEnabled'] = isJsonResponseEnabled;
+    }
+
+    if (jsonResponseMode != null) {
+      json['jsonResponseMode'] = jsonResponseMode;
+    }
+
+    if (middleware != null) {
+      json['middleware'] = middleware;
     }
 
     return json;

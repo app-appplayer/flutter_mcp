@@ -1,4 +1,18 @@
-## 1.0.1 - 2025-06-18
+## 1.0.2
+
+### Bug Fixes
+
+* **Transport Configuration**
+    * Fixed transport configuration options not being passed to underlying mcp_server/mcp_client packages
+    * Fixed StreamableHTTP session termination issues
+    * Fixed constructor syntax error in MCPClientConfig
+    * Added missing shelf dependency
+    * Made transportType explicitly required to prevent configuration errors
+
+* **Documentation**
+    * Added Transport Configuration documentation to clarify proper usage
+
+## 1.0.1 
 
 ### Bug Fixes and Security Improvements
 

@@ -132,7 +132,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "1.0.1"
+    version: "1.0.2"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -248,26 +248,28 @@ packages:
     source: hosted
     version: "0.11.1"
   mcp_client:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: "../../mcp_client"
-      relative: true
-    source: path
+      name: mcp_client
+      sha256: "2913067e48558330ba2c3a926a969a710c93f21f079640a1965c667d9ef8811e"
+      url: "https://pub.dev"
+    source: hosted
     version: "1.0.0"
   mcp_llm:
     dependency: transitive
     description:
       name: mcp_llm
-      sha256: f55ad8ea9c7f01082fe00c74905f29961114e38bf46940ad39531b72485461c3
+      sha256: "71d942a9223e3880d09556e48c085cd6a115c3328d334486a199b235d0a23d40"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.0"
+    version: "1.0.1"
   mcp_server:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: "../../mcp_server"
-      relative: true
-    source: path
+      name: mcp_server
+      sha256: f906842845ebea88a3fef31e670478131f0cd4005141d705af026431a77fa6db
+      url: "https://pub.dev"
+    source: hosted
     version: "1.0.1"
   meta:
     dependency: transitive

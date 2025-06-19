@@ -9,6 +9,7 @@ import 'package:flutter_mcp/src/utils/error_recovery.dart';
 import 'package:mcp_client/mcp_client.dart' as client;
 import 'package:mcp_server/mcp_server.dart' as server;
 import 'package:mcp_llm/mcp_llm.dart' as llm;
+import 'package:shelf/shelf.dart' as shelf;
 
 import 'src/config/mcp_config.dart';
 import 'src/config/job.dart';
@@ -1269,22 +1270,36 @@ class FlutterMCP {
       // Create transport with proper Result handling
       client.ClientTransport? transport;
 
-      // Determine transport type and parameters from config or direct params
-      final transportType = config?.transportType ??
-          (transportCommand != null || config?.transportCommand != null
-              ? 'stdio'
-              : serverUrl != null || config?.serverUrl != null
-                  ? 'sse'
-                  : 'stdio');
+      // Get transport type from config - must be explicitly specified
+      final transportType = config?.transportType;
+      if (transportType == null) {
+        throw MCPValidationException(
+            'transportType must be specified in config',
+            {'transport': 'Missing transport type'});
+      }
 
       final effectiveTransportCommand =
           config?.transportCommand ?? transportCommand;
       final effectiveServerUrl = config?.serverUrl ?? serverUrl;
 
+      // Validate transport-specific required parameters
+      if (transportType == 'stdio' && effectiveTransportCommand == null) {
+        throw MCPValidationException(
+            'transportCommand is required for stdio transport',
+            {'transport': 'Missing transportCommand'});
+      }
+      
+      if ((transportType == 'sse' || transportType == 'streamablehttp') && 
+          effectiveServerUrl == null) {
+        throw MCPValidationException(
+            'serverUrl is required for $transportType transport',
+            {'transport': 'Missing serverUrl'});
+      }
+
       if (transportType == 'stdio' && effectiveTransportCommand != null) {
         final result = await client.McpClient.createStdioTransport(
           command: effectiveTransportCommand,
-          arguments: transportArgs ?? [],
+          arguments: config?.transportArgs ?? transportArgs ?? [],
         );
         // Handle Result type properly using fold pattern
         transport = result.fold(
@@ -1295,10 +1310,24 @@ class FlutterMCP {
           ),
         );
       } else if (transportType == 'sse' && effectiveServerUrl != null) {
+        // Build full URL with endpoint if provided
+        final fullUrl = config?.endpoint != null 
+            ? effectiveServerUrl + config!.endpoint!
+            : effectiveServerUrl;
+            
+        // Merge headers from config with auth header
+        final headers = <String, String>{};
+        if (config?.headers != null) {
+          headers.addAll(config!.headers!);
+        }
+        final effectiveAuthToken = config?.authToken ?? authToken;
+        if (effectiveAuthToken != null) {
+          headers['Authorization'] = 'Bearer $effectiveAuthToken';
+        }
+        
         final result = await client.McpClient.createSseTransport(
-          serverUrl: effectiveServerUrl,
-          headers:
-              authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
+          serverUrl: fullUrl,
+          headers: headers.isNotEmpty ? headers : null,
         );
         // Handle Result type properly using fold pattern
         transport = result.fold(
@@ -1310,10 +1339,28 @@ class FlutterMCP {
         );
       } else if (transportType == 'streamablehttp' &&
           effectiveServerUrl != null) {
+        // For streamablehttp, we need to append the endpoint to the baseUrl
+        // since mcp_client uses the URL as-is without appending any endpoint
+        final fullUrl = config?.endpoint != null
+            ? effectiveServerUrl + config!.endpoint!
+            : effectiveServerUrl;
+        
+        // Merge headers from config with auth header
+        final headers = <String, String>{};
+        if (config?.headers != null) {
+          headers.addAll(config!.headers!);
+        }
+        final effectiveAuthToken = config?.authToken ?? authToken;
+        if (effectiveAuthToken != null) {
+          headers['Authorization'] = 'Bearer $effectiveAuthToken';
+        }
+        
         final result = await client.McpClient.createStreamableHttpTransport(
-          baseUrl: effectiveServerUrl,
-          headers:
-              authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
+          baseUrl: fullUrl,
+          headers: headers.isNotEmpty ? headers : null,
+          timeout: config?.timeout,
+          maxConcurrentRequests: config?.maxConcurrentRequests,
+          useHttp2: config?.useHttp2,
         );
         // Handle Result type properly using fold pattern
         transport = result.fold(
@@ -1388,15 +1435,15 @@ class FlutterMCP {
       // Create transport with proper Result handling
       server.ServerTransport? transport;
 
-      // Determine transport type
-      final transportType = config?.transportType ??
-          (useStdioTransport
-              ? 'stdio'
-              : ssePort != null
-                  ? 'sse'
-                  : config?.streamableHttpPort != null
-                      ? 'streamablehttp'
-                      : 'stdio');
+      // Get transport type from config - must be explicitly specified
+      final transportType = config?.transportType ?? 
+          (useStdioTransport ? 'stdio' : null);
+      
+      if (transportType == null) {
+        throw MCPValidationException(
+            'transportType must be specified in config',
+            {'transport': 'Missing transport type'});
+      }
 
       // Validate transport type
       final validTransportTypes = ['stdio', 'sse', 'streamablehttp'];
@@ -1405,6 +1452,20 @@ class FlutterMCP {
             'Invalid transport type: $transportType. Valid types are: ${validTransportTypes.join(', ')}',
             null,
             null);
+      }
+
+      // Validate transport-specific required parameters
+      if (transportType == 'sse' && config?.ssePort == null && ssePort == null) {
+        throw MCPValidationException(
+            'ssePort is required for sse transport',
+            {'transport': 'Missing ssePort'});
+      }
+      
+      if (transportType == 'streamablehttp' && 
+          config?.streamableHttpPort == null && ssePort == null) {
+        throw MCPValidationException(
+            'streamableHttpPort or ssePort is required for streamablehttp transport',
+            {'transport': 'Missing port configuration'});
       }
 
       if (transportType == 'stdio') {
@@ -1417,15 +1478,25 @@ class FlutterMCP {
             error,
           ),
         );
-      } else if (transportType == 'sse' && ssePort != null) {
+      } else if (transportType == 'sse') {
         // Create SSE transport using TransportConfig
+        final effectiveSsePort = config?.ssePort ?? ssePort;
+        if (effectiveSsePort == null) {
+          throw MCPValidationException(
+              'ssePort is required for sse transport',
+              {'transport': 'Missing ssePort'});
+        }
+        
         try {
           final result = server.McpServer.createTransport(
             server.TransportConfig.sse(
-              host: 'localhost',
-              port: ssePort,
-              fallbackPorts: fallbackPorts ?? [],
-              authToken: authToken,
+              host: config?.host ?? 'localhost',
+              port: effectiveSsePort,
+              endpoint: config?.endpoint ?? '/sse',
+              messagesEndpoint: config?.messagesEndpoint ?? '/message',
+              fallbackPorts: config?.fallbackPorts ?? fallbackPorts ?? [],
+              authToken: config?.authToken ?? authToken,
+              middleware: (config?.middleware ?? []).cast<shelf.Middleware>(),
             ),
           );
           transport = await result.fold(
@@ -1435,7 +1506,7 @@ class FlutterMCP {
               error,
             ),
           );
-          _logger.info('SSE server transport created on port $ssePort');
+          _logger.info('SSE server transport created on port $effectiveSsePort');
         } catch (error) {
           throw MCPOperationFailedException(
             'Failed to create SSE server transport: ${error.toString()}',
@@ -1445,15 +1516,23 @@ class FlutterMCP {
         }
       } else if (transportType == 'streamablehttp') {
         // Create Streamable HTTP transport
-        final httpPort = config?.streamableHttpPort ?? ssePort ?? 8080;
+        final httpPort = config?.streamableHttpPort ?? ssePort;
+        if (httpPort == null) {
+          throw MCPValidationException(
+              'streamableHttpPort is required for streamablehttp transport',
+              {'transport': 'Missing streamableHttpPort'});
+        }
         try {
           final result = server.McpServer.createTransport(
             server.TransportConfig.streamableHttp(
-              host: 'localhost',
+              host: config?.host ?? 'localhost',
               port: httpPort,
-              fallbackPorts: fallbackPorts ?? [],
-              authToken: authToken,
-              isJsonResponseEnabled: false, // Use SSE mode by default
+              endpoint: config?.endpoint ?? '/mcp',
+              messagesEndpoint: config?.messagesEndpoint ?? '/message',
+              fallbackPorts: config?.fallbackPorts ?? fallbackPorts ?? [],
+              authToken: config?.authToken ?? authToken,
+              isJsonResponseEnabled: config?.isJsonResponseEnabled ?? false,
+              middleware: (config?.middleware ?? []).cast<shelf.Middleware>(),
             ),
           );
           transport = await result.fold(

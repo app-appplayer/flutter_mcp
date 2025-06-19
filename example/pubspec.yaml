@@ -33,11 +33,5 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^2.0.2
 
-dependency_overrides:
-  mcp_server:
-    path: ../../mcp_server
-  mcp_client:
-    path: ../../mcp_client
-
 flutter:
   uses-material-design: true

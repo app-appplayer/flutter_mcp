@@ -176,6 +176,7 @@ await mcp.backgroundService.registerTask(
 
 ## Next Steps
 
+- [Transport Configuration](transport-configuration.md) - Learn about different transport types and their configuration
 - [Architecture](architecture.md) - Understand the plugin's internal structure
 - [Plugin System](../plugins/development.md) - Develop custom plugins
 - [Platform Guides](../platform/README.md) - Platform-specific optimizations

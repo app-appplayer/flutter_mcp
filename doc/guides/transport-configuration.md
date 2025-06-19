@@ -357,7 +357,7 @@ final serverId = await FlutterMCP.instance.createServer(
     version: '1.0.0',
     transportType: 'streamablehttp',
     streamableHttpPort: 8443,
-    endpoint: '/api/mcp',
+    endpoint: '/mcp',
     authToken: 'server-secret-key',
     isJsonResponseEnabled: false,  // Use SSE for streaming
     fallbackPorts: [8444, 8445],
@@ -374,7 +374,7 @@ final clientId = await FlutterMCP.instance.createClient(
     version: '1.0.0',
     transportType: 'streamablehttp',
     serverUrl: 'http://localhost:8443',
-    endpoint: '/api/mcp',  // Must match server
+    endpoint: '/mcp',  // Must match server
     authToken: 'server-secret-key',
     maxConcurrentRequests: 20,
     useHttp2: true,

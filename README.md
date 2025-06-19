@@ -54,7 +54,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_mcp: ^1.0.1
+  flutter_mcp: ^1.0.2
 ```
 
 Or install via command line:

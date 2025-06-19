@@ -5,25 +5,25 @@ import 'package:mcp_llm/mcp_llm.dart' as llm;
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
 import '../utils/performance_monitor.dart';
-import '../utils/event_system.dart';
+import '../events/event_system.dart';
 
 /// Configuration for batch processing
 class BatchConfig {
   /// Maximum number of requests in a single batch
   final int maxBatchSize;
-  
+
   /// Maximum time to wait before processing a batch
   final Duration maxWaitTime;
-  
+
   /// Maximum concurrent batches
   final int maxConcurrentBatches;
-  
+
   /// Whether to retry failed requests
   final bool retryFailedRequests;
-  
+
   /// Maximum number of retries for failed requests
   final int maxRetries;
-  
+
   BatchConfig({
     this.maxBatchSize = 50,
     this.maxWaitTime = const Duration(milliseconds: 100),
@@ -40,7 +40,7 @@ class _BatchRequest<T> {
   final Completer<T> completer;
   final DateTime createdAt;
   int retryCount;
-  
+
   _BatchRequest({
     required this.id,
     required this.requestFunction,
@@ -51,7 +51,7 @@ class _BatchRequest<T> {
 }
 
 /// Manages batch processing for MCP operations
-/// 
+///
 /// Provides 40-60% performance improvement for bulk operations
 /// by batching requests and processing them efficiently.
 class MCPBatchManager {
@@ -59,30 +59,27 @@ class MCPBatchManager {
   final Map<String, llm.BatchRequestManager> _batchManagers = {};
   final Map<String, BatchConfig> _configs = {};
   final Map<String, _BatchProcessor> _processors = {};
-  
+
   // Singleton
   static MCPBatchManager? _instance;
-  
+
   /// Get singleton instance
   static MCPBatchManager get instance {
     _instance ??= MCPBatchManager._internal();
     return _instance!;
   }
-  
+
   MCPBatchManager._internal();
-  
+
   /// Initialize a batch manager for a specific LLM instance
-  void initializeBatchManager(
-    String llmId, 
-    llm.MCPLlm mcpLlm, 
-    {BatchConfig? config}
-  ) {
+  void initializeBatchManager(String llmId, llm.MCPLlm mcpLlm,
+      {BatchConfig? config}) {
     if (!_batchManagers.containsKey(llmId)) {
       final batchManager = llm.BatchRequestManager();
-      
+
       // Register the LLM client with the batch manager
       batchManager.registerClient(llmId, mcpLlm);
-      
+
       _batchManagers[llmId] = batchManager;
       _configs[llmId] = config ?? BatchConfig();
       _processors[llmId] = _BatchProcessor(
@@ -94,7 +91,7 @@ class MCPBatchManager {
       _logger.info('Initialized batch manager for LLM: $llmId');
     }
   }
-  
+
   /// Add a request to the batch queue
   Future<T> addToBatch<T>({
     required String llmId,
@@ -105,7 +102,7 @@ class MCPBatchManager {
     if (processor == null) {
       throw MCPException('Batch manager not initialized for LLM: $llmId');
     }
-    
+
     final completer = Completer<T>();
     final batchRequest = _BatchRequest<T>(
       id: '${llmId}_${DateTime.now().microsecondsSinceEpoch}',
@@ -113,12 +110,12 @@ class MCPBatchManager {
       completer: completer,
       createdAt: DateTime.now(),
     );
-    
+
     processor.addRequest(batchRequest);
-    
+
     return completer.future;
   }
-  
+
   /// Process a batch of requests immediately
   Future<List<T>> processBatch<T>({
     required String llmId,
@@ -126,45 +123,48 @@ class MCPBatchManager {
     String? operationName,
   }) async {
     final config = _configs[llmId] ?? BatchConfig();
-    final timer = PerformanceMonitor.instance.startTimer(
-      'batch.process.${operationName ?? 'unknown'}'
-    );
-    
+    final timer = PerformanceMonitor.instance
+        .startTimer('batch.process.${operationName ?? 'unknown'}');
+
     try {
-      _logger.fine('Processing batch of ${requests.length} requests for LLM: $llmId');
-      
+      _logger.fine(
+          'Processing batch of ${requests.length} requests for LLM: $llmId');
+
       // Split into smaller batches if needed
       final batches = <List<Future<T> Function()>>[];
       for (int i = 0; i < requests.length; i += config.maxBatchSize) {
         final end = math.min(i + config.maxBatchSize, requests.length);
         batches.add(requests.sublist(i, end));
       }
-      
+
       // Process batches concurrently
       final results = <T>[];
-      final concurrentBatches = math.min(batches.length, config.maxConcurrentBatches);
-      
+      final concurrentBatches =
+          math.min(batches.length, config.maxConcurrentBatches);
+
       for (int i = 0; i < batches.length; i += concurrentBatches) {
         final batchGroup = batches.skip(i).take(concurrentBatches);
-        final batchFutures = batchGroup.map((batch) => _processSingleBatch<T>(batch, config));
-        
+        final batchFutures =
+            batchGroup.map((batch) => _processSingleBatch<T>(batch, config));
+
         final batchResults = await Future.wait(batchFutures);
         for (final batchResult in batchResults) {
           results.addAll(batchResult);
         }
       }
-      
+
       PerformanceMonitor.instance.stopTimer(timer, success: true);
-      _logger.info('Successfully processed batch of ${results.length} requests');
-      
+      _logger
+          .info('Successfully processed batch of ${results.length} requests');
+
       // Publish batch completion event
-      EventSystem.instance.publish('batch.completed', {
+      EventSystem.instance.publishTopic('batch.completed', {
         'llmId': llmId,
         'operationName': operationName,
         'requestCount': requests.length,
         'resultCount': results.length,
       });
-      
+
       return results;
     } catch (e, stackTrace) {
       PerformanceMonitor.instance.stopTimer(timer, success: false);
@@ -176,7 +176,7 @@ class MCPBatchManager {
       );
     }
   }
-  
+
   /// Process a single batch with concurrency control
   Future<List<T>> _processSingleBatch<T>(
     List<Future<T> Function()> requests,
@@ -184,7 +184,7 @@ class MCPBatchManager {
   ) async {
     final results = <T>[];
     final errors = <Object>[];
-    
+
     // Process requests concurrently
     await Future.wait(
       requests.map((request) async {
@@ -201,25 +201,29 @@ class MCPBatchManager {
             }
             retries++;
             // Exponential backoff
-            await Future.delayed(Duration(milliseconds: 100 * math.pow(2, retries).toInt()));
+            await Future.delayed(
+                Duration(milliseconds: 100 * math.pow(2, retries).toInt()));
           }
         }
       }),
     );
-    
+
     if (errors.isNotEmpty) {
-      _logger.warning('Batch had ${errors.length} failed requests out of ${requests.length}');
+      _logger.warning(
+          'Batch had ${errors.length} failed requests out of ${requests.length}');
     }
-    
+
     return results;
   }
-  
+
   /// Process batch requests internally
-  Future<void> _processBatchInternal(String llmId, List<_BatchRequest> requests) async {
+  Future<void> _processBatchInternal(
+      String llmId, List<_BatchRequest> requests) async {
     final config = _configs[llmId]!;
-    
-    _logger.fine('Processing internal batch of ${requests.length} requests for LLM: $llmId');
-    
+
+    _logger.fine(
+        'Processing internal batch of ${requests.length} requests for LLM: $llmId');
+
     // Group requests by type if possible
     final futures = requests.map((req) async {
       try {
@@ -235,10 +239,10 @@ class MCPBatchManager {
         }
       }
     });
-    
+
     await Future.wait(futures);
   }
-  
+
   /// Process multiple chat requests in a batch
   Future<List<String>> batchChat({
     required String llmId,
@@ -251,27 +255,29 @@ class MCPBatchManager {
     if (batchManager == null) {
       throw MCPException('Batch manager not initialized for LLM: $llmId');
     }
-    
+
     return processBatch<String>(
       llmId: llmId,
       operationName: 'chat',
-      requests: messagesList.map((messages) => () async {
-        // Use actual LLM batch processing API
-        final result = await batchManager.addRequest(
-          'chat/completions',
-          {
-            'messages': messages.map((msg) => msg.toJson()).toList(),
-            'options': options ?? {},
-          },
-          clientId: llmClientId,
-        );
-        
-        // Extract response from batch result
-        return result['response'] as String? ?? 'No response from LLM';
-      }).toList(),
+      requests: messagesList
+          .map((messages) => () async {
+                // Use actual LLM batch processing API
+                final result = await batchManager.addRequest(
+                  'chat/completions',
+                  {
+                    'messages': messages.map((msg) => msg.toJson()).toList(),
+                    'options': options ?? {},
+                  },
+                  clientId: llmClientId,
+                );
+
+                // Extract response from batch result
+                return result['response'] as String? ?? 'No response from LLM';
+              })
+          .toList(),
     );
   }
-  
+
   /// Process multiple embedding requests in a batch
   Future<List<List<double>>> batchEmbeddings({
     required String llmId,
@@ -283,26 +289,28 @@ class MCPBatchManager {
     if (batchManager == null) {
       throw MCPException('Batch manager not initialized for LLM: $llmId');
     }
-    
+
     return processBatch<List<double>>(
       llmId: llmId,
       operationName: 'embeddings',
-      requests: texts.map((text) => () async {
-        final result = await batchManager.addRequest(
-          'embeddings',
-          {
-            'input': text,
-            'options': options ?? {},
-          },
-          clientId: llmClientId,
-        );
-        
-        final embedding = result['embedding'] as List?;
-        return embedding?.cast<double>() ?? <double>[];
-      }).toList(),
+      requests: texts
+          .map((text) => () async {
+                final result = await batchManager.addRequest(
+                  'embeddings',
+                  {
+                    'input': text,
+                    'options': options ?? {},
+                  },
+                  clientId: llmClientId,
+                );
+
+                final embedding = result['embedding'] as List?;
+                return embedding?.cast<double>() ?? <double>[];
+              })
+          .toList(),
     );
   }
-  
+
   /// Process multiple tool call requests in a batch
   Future<List<Map<String, dynamic>>> batchToolCalls({
     required String llmId,
@@ -314,32 +322,35 @@ class MCPBatchManager {
     if (batchManager == null) {
       throw MCPException('Batch manager not initialized for LLM: $llmId');
     }
-    
+
     return processBatch<Map<String, dynamic>>(
       llmId: llmId,
       operationName: 'tool_calls',
-      requests: toolCalls.map((toolCall) => () async {
-        final result = await batchManager.addRequest(
-          'tools/call',
-          {
-            'tool_call': toolCall,
-            'options': options ?? {},
-          },
-          clientId: llmClientId,
-        );
-        
-        return result['result'] as Map<String, dynamic>? ?? <String, dynamic>{};
-      }).toList(),
+      requests: toolCalls
+          .map((toolCall) => () async {
+                final result = await batchManager.addRequest(
+                  'tools/call',
+                  {
+                    'tool_call': toolCall,
+                    'options': options ?? {},
+                  },
+                  clientId: llmClientId,
+                );
+
+                return result['result'] as Map<String, dynamic>? ??
+                    <String, dynamic>{};
+              })
+          .toList(),
     );
   }
-  
+
   /// Get batch manager statistics
   Map<String, dynamic> getStatistics(String llmId) {
     final processor = _processors[llmId];
     if (processor == null) {
       return {'error': 'No batch processor for LLM: $llmId'};
     }
-    
+
     return {
       'llmId': llmId,
       'isActive': processor.isActive,
@@ -349,7 +360,7 @@ class MCPBatchManager {
       'averageBatchSize': processor.averageBatchSize,
     };
   }
-  
+
   /// Get all batch manager statistics
   Map<String, Map<String, dynamic>> getAllStatistics() {
     final stats = <String, Map<String, dynamic>>{};
@@ -358,7 +369,7 @@ class MCPBatchManager {
     }
     return stats;
   }
-  
+
   /// Flush pending requests for an LLM
   Future<void> flush(String llmId) async {
     final processor = _processors[llmId];
@@ -366,31 +377,31 @@ class MCPBatchManager {
       await processor.flush();
     }
   }
-  
+
   /// Flush all pending requests
   Future<void> flushAll() async {
     await Future.wait(_processors.values.map((p) => p.flush()));
   }
-  
+
   /// Dispose of a batch manager
   void disposeBatchManager(String llmId) {
     if (_batchManagers.containsKey(llmId)) {
       _processors[llmId]?.dispose();
       _processors.remove(llmId);
-      
+
       // Unregister the client and dispose the batch manager
       final batchManager = _batchManagers[llmId];
       if (batchManager != null) {
         batchManager.unregisterClient(llmId);
         batchManager.dispose();
       }
-      
+
       _batchManagers.remove(llmId);
       _configs.remove(llmId);
       _logger.info('Disposed batch manager for LLM: $llmId');
     }
   }
-  
+
   /// Dispose of all batch managers
   void dispose() {
     for (final llmId in _batchManagers.keys.toList()) {
@@ -406,43 +417,43 @@ class _BatchProcessor {
   final Future<void> Function(String, List<_BatchRequest>) onProcess;
   final Queue<_BatchRequest> _queue = Queue();
   final Logger _logger = Logger('flutter_mcp.batch_processor');
-  
+
   Timer? _processTimer;
   bool _isProcessing = false;
   bool _isActive = false;
   int _processedBatches = 0;
   int _totalProcessed = 0;
-  
+
   _BatchProcessor({
     required this.llmId,
     required this.config,
     required this.onProcess,
   });
-  
+
   /// Start the batch processor
   void start() {
     _isActive = true;
     _scheduleProcessing();
   }
-  
+
   /// Add a request to the queue
   void addRequest(_BatchRequest request) {
     _queue.add(request);
-    
+
     // Process immediately if batch is full
     if (_queue.length >= config.maxBatchSize) {
       _processQueue();
     }
   }
-  
+
   /// Schedule batch processing
   void _scheduleProcessing() {
     _processTimer?.cancel();
-    
+
     if (!_isActive || _queue.isEmpty) {
       return;
     }
-    
+
     _processTimer = Timer(config.maxWaitTime, () {
       if (_queue.isNotEmpty && !_isProcessing) {
         _processQueue();
@@ -450,22 +461,22 @@ class _BatchProcessor {
       _scheduleProcessing();
     });
   }
-  
+
   /// Process the current queue
   Future<void> _processQueue() async {
     if (_isProcessing || _queue.isEmpty) {
       return;
     }
-    
+
     _isProcessing = true;
-    
+
     try {
       // Take up to maxBatchSize items
       final batch = <_BatchRequest>[];
       while (batch.length < config.maxBatchSize && _queue.isNotEmpty) {
         batch.add(_queue.removeFirst());
       }
-      
+
       if (batch.isNotEmpty) {
         _logger.fine('Processing batch of ${batch.length} requests for $llmId');
         await onProcess(llmId, batch);
@@ -475,14 +486,14 @@ class _BatchProcessor {
       }
     } finally {
       _isProcessing = false;
-      
+
       // Process again if queue is still full
       if (_queue.length >= config.maxBatchSize) {
         _processQueue();
       }
     }
   }
-  
+
   /// Flush all pending requests
   Future<void> flush() async {
     while (_queue.isNotEmpty || _isProcessing) {
@@ -492,19 +503,20 @@ class _BatchProcessor {
       await Future.delayed(Duration(milliseconds: 10));
     }
   }
-  
+
   /// Get statistics
   bool get isActive => _isActive;
   int get pendingCount => _queue.length;
   int get processedBatches => _processedBatches;
   int get totalProcessed => _totalProcessed;
-  double get averageBatchSize => _processedBatches > 0 ? _totalProcessed / _processedBatches : 0;
-  
+  double get averageBatchSize =>
+      _processedBatches > 0 ? _totalProcessed / _processedBatches : 0;
+
   /// Dispose the processor
   void dispose() {
     _isActive = false;
     _processTimer?.cancel();
-    
+
     // Complete all pending requests with errors
     while (_queue.isNotEmpty) {
       final request = _queue.removeFirst();

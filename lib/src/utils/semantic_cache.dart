@@ -24,7 +24,8 @@ class SemanticCacheEntry<T> {
 
 /// Semantic cache for vector-based similarity search
 class SemanticCache<T> {
-  final LinkedHashMap<String, SemanticCacheEntry<T>> _exactCache = LinkedHashMap();
+  final LinkedHashMap<String, SemanticCacheEntry<T>> _exactCache =
+      LinkedHashMap();
   final List<SemanticCacheEntry<T>> _semanticEntries = [];
 
   final int maxSize;
@@ -80,7 +81,8 @@ class SemanticCache<T> {
             // Skip expired entries
             if (entry.isExpired(ttl)) continue;
 
-            final similarity = _cosineSimilarity(queryEmbedding, entry.embedding!);
+            final similarity =
+                _cosineSimilarity(queryEmbedding, entry.embedding!);
             if (similarity > highestSimilarity) {
               highestSimilarity = similarity;
               mostSimilar = entry;

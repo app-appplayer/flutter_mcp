@@ -3,8 +3,6 @@ import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
 import 'package:mcp_server/mcp_server.dart';
 import 'package:mcp_llm/mcp_llm.dart';
 
-import '../utils/logger.dart';
-import 'package:logging/logging.dart' show Level;
 import 'background_config.dart';
 import 'notification_config.dart';
 import 'tray_config.dart';
@@ -46,9 +44,12 @@ class MCPClientConfig {
     this.transportArgs,
     this.serverUrl,
     this.authToken,
-  }) : transportType = transportType ?? 
-         (transportCommand != null ? 'stdio' : 
-          serverUrl != null ? 'sse' : 'stdio');
+  }) : transportType = transportType ??
+            (transportCommand != null
+                ? 'stdio'
+                : serverUrl != null
+                    ? 'sse'
+                    : 'stdio');
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() {
@@ -123,10 +124,14 @@ class MCPServerConfig {
     this.streamableHttpPort,
     this.fallbackPorts,
     this.authToken,
-  }) : transportType = transportType ?? 
-         (useStdioTransport == true ? 'stdio' : 
-          ssePort != null ? 'sse' : 
-          streamableHttpPort != null ? 'streamablehttp' : 'stdio');
+  }) : transportType = transportType ??
+            (useStdioTransport == true
+                ? 'stdio'
+                : ssePort != null
+                    ? 'sse'
+                    : streamableHttpPort != null
+                        ? 'streamablehttp'
+                        : 'stdio');
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() {
@@ -184,11 +189,11 @@ class MCPLlmClientConfig {
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() => {
-    'providerName': providerName,
-    'config': config.toJson(),
-    'isDefault': isDefault,
-    'mcpClientIds': mcpClientIds,
-  };
+        'providerName': providerName,
+        'config': config.toJson(),
+        'isDefault': isDefault,
+        'mcpClientIds': mcpClientIds,
+      };
 }
 
 /// Configuration for LLM servers with explicit MCP server relationships
@@ -215,11 +220,11 @@ class MCPLlmServerConfig {
 
   /// Converts this configuration to JSON
   Map<String, dynamic> toJson() => {
-    'providerName': providerName,
-    'config': config.toJson(),
-    'isDefault': isDefault,
-    'mcpServerIds': mcpServerIds,
-  };
+        'providerName': providerName,
+        'config': config.toJson(),
+        'isDefault': isDefault,
+        'mcpServerIds': mcpServerIds,
+      };
 }
 
 /// Main configuration class for Flutter MCP
@@ -461,20 +466,24 @@ class MCPConfig {
 
     if (autoStartServer != null) {
       // Convert to JSON using existing methods
-      json['autoStartServer'] = autoStartServer!.map((server) => server.toJson()).toList();
+      json['autoStartServer'] =
+          autoStartServer!.map((server) => server.toJson()).toList();
     }
 
     if (autoStartClient != null) {
       // Convert to JSON using existing methods
-      json['autoStartClient'] = autoStartClient!.map((client) => client.toJson()).toList();
+      json['autoStartClient'] =
+          autoStartClient!.map((client) => client.toJson()).toList();
     }
 
     if (autoStartLlmClient != null) {
-      json['autoStartLlmClient'] = autoStartLlmClient!.map((e) => e.toJson()).toList();
+      json['autoStartLlmClient'] =
+          autoStartLlmClient!.map((e) => e.toJson()).toList();
     }
 
     if (autoStartLlmServer != null) {
-      json['autoStartLlmServer'] = autoStartLlmServer!.map((e) => e.toJson()).toList();
+      json['autoStartLlmServer'] =
+          autoStartLlmServer!.map((e) => e.toJson()).toList();
     }
 
     // Add new plugin-related options
@@ -550,13 +559,16 @@ class MCPConfig {
       lifecycleManaged: lifecycleManaged ?? this.lifecycleManaged,
       autoStart: autoStart ?? this.autoStart,
       loggingLevel: loggingLevel ?? this.loggingLevel,
-      enablePerformanceMonitoring: enablePerformanceMonitoring ?? this.enablePerformanceMonitoring,
+      enablePerformanceMonitoring:
+          enablePerformanceMonitoring ?? this.enablePerformanceMonitoring,
       enableMetricsExport: enableMetricsExport ?? this.enableMetricsExport,
       metricsExportPath: metricsExportPath ?? this.metricsExportPath,
       autoLoadPlugins: autoLoadPlugins ?? this.autoLoadPlugins,
       pluginConfigurations: pluginConfigurations ?? this.pluginConfigurations,
-      highMemoryThresholdMB: highMemoryThresholdMB ?? this.highMemoryThresholdMB,
-      lowBatteryWarningThreshold: lowBatteryWarningThreshold ?? this.lowBatteryWarningThreshold,
+      highMemoryThresholdMB:
+          highMemoryThresholdMB ?? this.highMemoryThresholdMB,
+      lowBatteryWarningThreshold:
+          lowBatteryWarningThreshold ?? this.lowBatteryWarningThreshold,
       maxConnectionRetries: maxConnectionRetries ?? this.maxConnectionRetries,
       llmRequestTimeoutMs: llmRequestTimeoutMs ?? this.llmRequestTimeoutMs,
       background: background ?? this.background,
@@ -567,9 +579,12 @@ class MCPConfig {
       autoStartClient: autoStartClient ?? this.autoStartClient,
       autoStartLlmClient: autoStartLlmClient ?? this.autoStartLlmClient,
       autoStartLlmServer: autoStartLlmServer ?? this.autoStartLlmServer,
-      autoRegisterLlmPlugins: autoRegisterLlmPlugins ?? this.autoRegisterLlmPlugins,
-      registerMcpPluginsWithLlm: registerMcpPluginsWithLlm ?? this.registerMcpPluginsWithLlm,
-      registerCoreLlmPlugins: registerCoreLlmPlugins ?? this.registerCoreLlmPlugins,
+      autoRegisterLlmPlugins:
+          autoRegisterLlmPlugins ?? this.autoRegisterLlmPlugins,
+      registerMcpPluginsWithLlm:
+          registerMcpPluginsWithLlm ?? this.registerMcpPluginsWithLlm,
+      registerCoreLlmPlugins:
+          registerCoreLlmPlugins ?? this.registerCoreLlmPlugins,
       enableRetrieval: enableRetrieval ?? this.enableRetrieval,
       extraOptions: extraOptions ?? this.extraOptions,
     );

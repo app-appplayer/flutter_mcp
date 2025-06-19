@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
 import 'package:flutter_mcp/src/security/oauth_manager.dart';
-import 'package:flutter_mcp/src/security/credential_manager.dart';
-import 'package:flutter_mcp/src/utils/exceptions.dart';
 
 void main() {
   setUp(() {
@@ -91,7 +89,7 @@ void main() {
     test('Sensitive data handling', () {
       // Test that sensitive data can be handled carefully
       final sensitiveData = 'super_secret_api_key';
-      
+
       try {
         // Don't pass sensitive data as originalError
         throw MCPAuthenticationException(
@@ -127,12 +125,12 @@ void main() {
     test('Secure transport configuration', () {
       // Test that sensitive transport data is handled securely
       const authToken = 'secret_auth_token';
-      
+
       // In real implementation, tokens should be:
       // 1. Stored securely
       // 2. Transmitted over HTTPS only
       // 3. Not logged in plain text
-      
+
       expect(authToken, isNotEmpty);
       expect(authToken.length, greaterThan(10));
     });
@@ -173,7 +171,7 @@ void main() {
       // Test that exceptions can be created without leaking sensitive information
       const sensitiveInfo = 'password123';
       const safeMessage = 'Authentication failed';
-      
+
       // Don't include sensitive info in originalError
       final exception = MCPAuthenticationException.withContext(
         safeMessage,
@@ -213,7 +211,7 @@ void main() {
     test('OAuth scope validation', () {
       // Test scope handling
       final scopes = ['read', 'write', 'delete', 'admin'];
-      
+
       // Validate scope format
       for (final scope in scopes) {
         expect(scope, matches(RegExp(r'^[a-z]+$')));
@@ -240,7 +238,7 @@ void main() {
       // Validate header format
       expect(headers['Authorization'], startsWith('Bearer '));
       expect(headers['Authorization']!.split(' ').length, 2);
-      
+
       // Headers should not contain sensitive info in keys
       for (final key in headers.keys) {
         expect(key, isNot(contains('password')));
@@ -274,14 +272,14 @@ void main() {
     test('Output encoding', () {
       // Test that outputs are properly encoded
       const rawOutput = 'User said: "Hello & goodbye"';
-      
+
       // HTML encoding
       final htmlEncoded = rawOutput
           .replaceAll('&', '&amp;')
           .replaceAll('"', '&quot;')
           .replaceAll('<', '&lt;')
           .replaceAll('>', '&gt;');
-      
+
       expect(htmlEncoded, contains('&amp;'));
       expect(htmlEncoded, contains('&quot;'));
       expect(htmlEncoded, isNot(contains('"')));
@@ -293,9 +291,9 @@ void main() {
       // Test token generation patterns
       const minTokenLength = 32;
       const mockToken = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6'; // 32 chars
-      
+
       expect(mockToken.length, greaterThanOrEqualTo(minTokenLength));
-      
+
       // Token should contain alphanumeric characters
       expect(mockToken, matches(RegExp(r'^[a-zA-Z0-9]+$')));
     });
@@ -303,13 +301,13 @@ void main() {
     test('Secure random generation', () {
       // Test that random values are sufficiently random
       final random1 = DateTime.now().microsecondsSinceEpoch.toString();
-      
+
       // Wait a bit
       final random2 = DateTime.now().microsecondsSinceEpoch.toString();
-      
+
       // Values should be different
       expect(random1, isNot(equals(random2)));
-      
+
       // Values should have sufficient entropy (length)
       expect(random1.length, greaterThanOrEqualTo(10));
     });

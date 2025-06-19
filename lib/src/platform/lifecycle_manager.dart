@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import '../utils/logger.dart';
-import '../utils/event_system.dart';
+import '../events/event_system.dart';
 
 /// Lifecycle manager for handling app lifecycle events
 class LifecycleManager with WidgetsBindingObserver {
@@ -40,42 +40,42 @@ class LifecycleManager with WidgetsBindingObserver {
   }
 
   /// Subscribe to app becoming foreground
-  String onForeground(Function() callback) {
-    return EventSystem.instance.subscribe<AppLifecycleState>(
+  Future<String> onForeground(Function() callback) async {
+    return await EventSystem.instance.subscribeTopic(
       _topicForeground,
-          (_) => callback(),
+      (_) => callback(),
     );
   }
 
   /// Subscribe to app going to background
-  String onBackground(Function() callback) {
-    return EventSystem.instance.subscribe<AppLifecycleState>(
+  Future<String> onBackground(Function() callback) async {
+    return await EventSystem.instance.subscribeTopic(
       _topicBackground,
-          (_) => callback(),
+      (_) => callback(),
     );
   }
 
   /// Subscribe to app becoming inactive
-  String onInactive(Function() callback) {
-    return EventSystem.instance.subscribe<AppLifecycleState>(
+  Future<String> onInactive(Function() callback) async {
+    return await EventSystem.instance.subscribeTopic(
       _topicInactive,
-          (_) => callback(),
+      (_) => callback(),
     );
   }
 
   /// Subscribe to app being detached
-  String onDetached(Function() callback) {
-    return EventSystem.instance.subscribe<AppLifecycleState>(
+  Future<String> onDetached(Function() callback) async {
+    return await EventSystem.instance.subscribeTopic(
       _topicDetached,
-          (_) => callback(),
+      (_) => callback(),
     );
   }
 
   /// Subscribe to any lifecycle change
-  String onLifecycleChange(Function(AppLifecycleState) callback) {
-    return EventSystem.instance.subscribe<AppLifecycleState>(
+  Future<String> onLifecycleChange(Function(AppLifecycleState) callback) async {
+    return await EventSystem.instance.subscribeTopic(
       _topicAny,
-      callback,
+      (data) => callback(data as AppLifecycleState),
     );
   }
 
@@ -95,26 +95,26 @@ class LifecycleManager with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         _logger.fine('App resumed to foreground');
-        EventSystem.instance.publish(_topicForeground, state);
+        EventSystem.instance.publishTopic(_topicForeground, state);
         break;
       case AppLifecycleState.inactive:
         _logger.fine('App became inactive');
-        EventSystem.instance.publish(_topicInactive, state);
+        EventSystem.instance.publishTopic(_topicInactive, state);
         break;
       case AppLifecycleState.paused:
         _logger.fine('App paused to background');
-        EventSystem.instance.publish(_topicBackground, state);
+        EventSystem.instance.publishTopic(_topicBackground, state);
         break;
       case AppLifecycleState.detached:
         _logger.fine('App detached');
-        EventSystem.instance.publish(_topicDetached, state);
+        EventSystem.instance.publishTopic(_topicDetached, state);
         break;
       default:
         _logger.fine('Unknown lifecycle state: $state');
     }
 
     // Publish to any listener
-    EventSystem.instance.publish(_topicAny, state);
+    EventSystem.instance.publishTopic(_topicAny, state);
 
     // Call callback
     if (_onLifecycleStateChange != null) {
@@ -128,7 +128,8 @@ class LifecycleManager with WidgetsBindingObserver {
   }
 
   /// Handle specific lifecycle transitions
-  void _handleLifecycleTransition(AppLifecycleState from, AppLifecycleState to) {
+  void _handleLifecycleTransition(
+      AppLifecycleState from, AppLifecycleState to) {
     // Detect app coming to foreground from background
     if (from == AppLifecycleState.paused && to == AppLifecycleState.resumed) {
       _logger.fine('App returned to foreground from background');
@@ -158,11 +159,10 @@ class LifecycleManager with WidgetsBindingObserver {
   AppLifecycleState? get currentState => _previousState;
 
   /// Check if app is in foreground
-  bool get isInForeground =>
-      _previousState == AppLifecycleState.resumed;
+  bool get isInForeground => _previousState == AppLifecycleState.resumed;
 
   /// Check if app is in background
   bool get isInBackground =>
       _previousState == AppLifecycleState.paused ||
-          _previousState == AppLifecycleState.detached;
+      _previousState == AppLifecycleState.detached;
 }

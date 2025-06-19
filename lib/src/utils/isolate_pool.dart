@@ -38,7 +38,7 @@ class IsolatePool {
 
     // Find available worker or queue
     final availableWorker = _workers.firstWhere(
-          (worker) => !worker.busy,
+      (worker) => !worker.busy,
       orElse: () => _workers.first,
     );
 
@@ -99,8 +99,7 @@ class IsolatePool {
     // Fail any pending work
     for (final workItem in _workQueue) {
       workItem.completer.completeError(
-          StateError('Isolate pool stopped before work could be processed')
-      );
+          StateError('Isolate pool stopped before work could be processed'));
     }
 
     _workQueue.clear();
@@ -183,8 +182,7 @@ class _IsolateWorker {
     // Fail any pending completers
     for (final completer in _completers.values) {
       completer.completeError(
-          StateError('Worker terminated before operation completed')
-      );
+          StateError('Worker terminated before operation completed'));
     }
 
     _completers.clear();

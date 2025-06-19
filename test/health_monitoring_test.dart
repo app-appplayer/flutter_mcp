@@ -30,7 +30,8 @@ void main() {
         Map<String, dynamic> components = currentHealth['components'];
         expect(components.containsKey('test_component'), isTrue);
         expect(components['test_component']['status'], equals('healthy'));
-        expect(components['test_component']['message'], equals('Component is running normally'));
+        expect(components['test_component']['message'],
+            equals('Component is running normally'));
       });
 
       test('should update existing component health', () {
@@ -52,14 +53,18 @@ void main() {
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         Map<String, dynamic> components = currentHealth['components'];
         expect(components['test_component']['status'], equals('degraded'));
-        expect(components['test_component']['message'], equals('Updated status'));
+        expect(
+            components['test_component']['message'], equals('Updated status'));
       });
 
       test('should handle multiple component tracking', () {
         // Act
-        healthMonitor.updateComponentHealth('component1', MCPHealthStatus.healthy, 'Component 1 OK');
-        healthMonitor.updateComponentHealth('component2', MCPHealthStatus.degraded, 'Component 2 Warning');
-        healthMonitor.updateComponentHealth('component3', MCPHealthStatus.unhealthy, 'Component 3 Error');
+        healthMonitor.updateComponentHealth(
+            'component1', MCPHealthStatus.healthy, 'Component 1 OK');
+        healthMonitor.updateComponentHealth(
+            'component2', MCPHealthStatus.degraded, 'Component 2 Warning');
+        healthMonitor.updateComponentHealth(
+            'component3', MCPHealthStatus.unhealthy, 'Component 3 Error');
 
         // Assert
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
@@ -74,46 +79,53 @@ void main() {
     group('Overall Health Assessment', () {
       test('should return healthy when all components are healthy', () {
         // Arrange
-        healthMonitor.updateComponentHealth('component1', MCPHealthStatus.healthy, 'OK');
-        healthMonitor.updateComponentHealth('component2', MCPHealthStatus.healthy, 'OK');
+        healthMonitor.updateComponentHealth(
+            'component1', MCPHealthStatus.healthy, 'OK');
+        healthMonitor.updateComponentHealth(
+            'component2', MCPHealthStatus.healthy, 'OK');
 
         // Act
         bool isHealthy = healthMonitor.isHealthy();
 
         // Assert
         expect(isHealthy, isTrue);
-        
+
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         expect(currentHealth['status'], equals('healthy'));
       });
 
       test('should return degraded when some components are degraded', () {
         // Arrange
-        healthMonitor.updateComponentHealth('component1', MCPHealthStatus.healthy, 'OK');
-        healthMonitor.updateComponentHealth('component2', MCPHealthStatus.degraded, 'Warning');
+        healthMonitor.updateComponentHealth(
+            'component1', MCPHealthStatus.healthy, 'OK');
+        healthMonitor.updateComponentHealth(
+            'component2', MCPHealthStatus.degraded, 'Warning');
 
         // Act
         bool isHealthy = healthMonitor.isHealthy();
 
         // Assert
         expect(isHealthy, isFalse);
-        
+
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         expect(currentHealth['status'], equals('degraded'));
       });
 
       test('should return unhealthy when any component is unhealthy', () {
         // Arrange
-        healthMonitor.updateComponentHealth('component1', MCPHealthStatus.healthy, 'OK');
-        healthMonitor.updateComponentHealth('component2', MCPHealthStatus.degraded, 'Warning');
-        healthMonitor.updateComponentHealth('component3', MCPHealthStatus.unhealthy, 'Error');
+        healthMonitor.updateComponentHealth(
+            'component1', MCPHealthStatus.healthy, 'OK');
+        healthMonitor.updateComponentHealth(
+            'component2', MCPHealthStatus.degraded, 'Warning');
+        healthMonitor.updateComponentHealth(
+            'component3', MCPHealthStatus.unhealthy, 'Error');
 
         // Act
         bool isHealthy = healthMonitor.isHealthy();
 
         // Assert
         expect(isHealthy, isFalse);
-        
+
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         expect(currentHealth['status'], equals('unhealthy'));
       });
@@ -124,7 +136,7 @@ void main() {
 
         // Assert
         expect(isHealthy, isTrue);
-        
+
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         expect(currentHealth['status'], equals('healthy'));
       });
@@ -134,22 +146,27 @@ void main() {
       test('should stream health updates', () async {
         // Arrange
         List<MCPHealthCheckResult> capturedResults = [];
-        
-        StreamSubscription subscription = healthMonitor.healthStream.listen((result) {
+
+        StreamSubscription subscription =
+            healthMonitor.healthStream.listen((result) {
           capturedResults.add(result);
         });
 
         // Act
-        healthMonitor.updateComponentHealth('test_component', MCPHealthStatus.healthy, 'Initial');
-        healthMonitor.updateComponentHealth('test_component', MCPHealthStatus.degraded, 'Warning');
+        healthMonitor.updateComponentHealth(
+            'test_component', MCPHealthStatus.healthy, 'Initial');
+        healthMonitor.updateComponentHealth(
+            'test_component', MCPHealthStatus.degraded, 'Warning');
 
         // Wait for stream processing
         await Future.delayed(Duration(milliseconds: 100));
 
         // Assert
         expect(capturedResults.length, greaterThanOrEqualTo(2));
-        expect(capturedResults.any((r) => r.status == MCPHealthStatus.healthy), isTrue);
-        expect(capturedResults.any((r) => r.status == MCPHealthStatus.degraded), isTrue);
+        expect(capturedResults.any((r) => r.status == MCPHealthStatus.healthy),
+            isTrue);
+        expect(capturedResults.any((r) => r.status == MCPHealthStatus.degraded),
+            isTrue);
 
         // Cleanup
         await subscription.cancel();
@@ -158,13 +175,14 @@ void main() {
       test('should emit health events immediately', () async {
         // Arrange
         List<MCPHealthCheckResult> capturedResults = [];
-        
+
         healthMonitor.healthStream.listen((result) {
           capturedResults.add(result);
         });
 
         // Act
-        healthMonitor.updateComponentHealth('immediate_component', MCPHealthStatus.unhealthy, 'Immediate error');
+        healthMonitor.updateComponentHealth('immediate_component',
+            MCPHealthStatus.unhealthy, 'Immediate error');
 
         // Small delay for async processing
         await Future.delayed(Duration(milliseconds: 50));
@@ -185,13 +203,14 @@ void main() {
         Map<String, dynamic> components = currentHealth['components'];
         expect(components.containsKey('registered_component'), isTrue);
         expect(components['registered_component']['status'], equals('healthy'));
-        expect(components['registered_component']['message'], equals('Component registered'));
+        expect(components['registered_component']['message'],
+            equals('Component registered'));
       });
 
       test('should unregister components', () {
         // Arrange
         healthMonitor.registerComponent('temp_component');
-        
+
         Map<String, dynamic> beforeHealth = healthMonitor.currentHealth;
         Map<String, dynamic> beforeComponents = beforeHealth['components'];
         expect(beforeComponents.containsKey('temp_component'), isTrue);
@@ -208,7 +227,8 @@ void main() {
       test('should handle duplicate registration gracefully', () {
         // Act
         healthMonitor.registerComponent('duplicate_component');
-        expect(() => healthMonitor.registerComponent('duplicate_component'), returnsNormally);
+        expect(() => healthMonitor.registerComponent('duplicate_component'),
+            returnsNormally);
 
         // Assert - Should still exist
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
@@ -220,10 +240,14 @@ void main() {
     group('Health Summary', () {
       test('should generate health summary', () {
         // Arrange
-        healthMonitor.updateComponentHealth('healthy1', MCPHealthStatus.healthy, 'OK');
-        healthMonitor.updateComponentHealth('healthy2', MCPHealthStatus.healthy, 'OK');
-        healthMonitor.updateComponentHealth('degraded1', MCPHealthStatus.degraded, 'Warning');
-        healthMonitor.updateComponentHealth('unhealthy1', MCPHealthStatus.unhealthy, 'Error');
+        healthMonitor.updateComponentHealth(
+            'healthy1', MCPHealthStatus.healthy, 'OK');
+        healthMonitor.updateComponentHealth(
+            'healthy2', MCPHealthStatus.healthy, 'OK');
+        healthMonitor.updateComponentHealth(
+            'degraded1', MCPHealthStatus.degraded, 'Warning');
+        healthMonitor.updateComponentHealth(
+            'unhealthy1', MCPHealthStatus.unhealthy, 'Error');
 
         // Act
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
@@ -242,11 +266,14 @@ void main() {
         // Arrange
         healthMonitor.registerComponent('component1');
         healthMonitor.registerComponent('component2');
-        healthMonitor.updateComponentHealth('component1', MCPHealthStatus.healthy, 'OK');
-        healthMonitor.updateComponentHealth('component2', MCPHealthStatus.degraded, 'Warning');
+        healthMonitor.updateComponentHealth(
+            'component1', MCPHealthStatus.healthy, 'OK');
+        healthMonitor.updateComponentHealth(
+            'component2', MCPHealthStatus.degraded, 'Warning');
 
         // Act
-        Map<String, dynamic> healthReport = await healthMonitor.performFullHealthCheck();
+        Map<String, dynamic> healthReport =
+            await healthMonitor.performFullHealthCheck();
 
         // Assert
         expect(healthReport['status'], isNotNull);
@@ -259,10 +286,12 @@ void main() {
     group('Component History', () {
       test('should track component history', () {
         // Arrange
-        healthMonitor.updateComponentHealth('history_component', MCPHealthStatus.healthy, 'Initial');
+        healthMonitor.updateComponentHealth(
+            'history_component', MCPHealthStatus.healthy, 'Initial');
 
         // Act
-        List<ComponentHealth> history = healthMonitor.getComponentHistory('history_component');
+        List<ComponentHealth> history =
+            healthMonitor.getComponentHistory('history_component');
 
         // Assert
         expect(history.length, equals(1));
@@ -273,7 +302,8 @@ void main() {
 
       test('should return empty history for non-existent component', () {
         // Act
-        List<ComponentHealth> history = healthMonitor.getComponentHistory('non_existent');
+        List<ComponentHealth> history =
+            healthMonitor.getComponentHistory('non_existent');
 
         // Assert
         expect(history.isEmpty, isTrue);
@@ -283,8 +313,11 @@ void main() {
     group('Error Handling', () {
       test('should handle empty component IDs gracefully', () {
         // Act & Assert - Should not throw
-        expect(() => healthMonitor.updateComponentHealth('', MCPHealthStatus.healthy, 'Test'), returnsNormally);
-        
+        expect(
+            () => healthMonitor.updateComponentHealth(
+                '', MCPHealthStatus.healthy, 'Test'),
+            returnsNormally);
+
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         Map<String, dynamic> components = currentHealth['components'];
         expect(components.containsKey(''), isTrue);
@@ -292,8 +325,11 @@ void main() {
 
       test('should handle null messages gracefully', () {
         // Act & Assert - Should not throw
-        expect(() => healthMonitor.updateComponentHealth('test', MCPHealthStatus.healthy, null), returnsNormally);
-        
+        expect(
+            () => healthMonitor.updateComponentHealth(
+                'test', MCPHealthStatus.healthy, null),
+            returnsNormally);
+
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         Map<String, dynamic> components = currentHealth['components'];
         expect(components['test']['message'], isNull);
@@ -319,7 +355,8 @@ void main() {
     group('Resource Management', () {
       test('should clean up resources on dispose', () {
         // Arrange
-        healthMonitor.updateComponentHealth('disposable_component', MCPHealthStatus.healthy, 'Test');
+        healthMonitor.updateComponentHealth(
+            'disposable_component', MCPHealthStatus.healthy, 'Test');
 
         // Act
         healthMonitor.dispose();
@@ -357,29 +394,31 @@ void main() {
       test('should efficiently update existing components', () {
         // Arrange - Create initial components
         for (int i = 0; i < 100; i++) {
-          healthMonitor.updateComponentHealth('perf_component_$i', MCPHealthStatus.healthy, 'Initial');
+          healthMonitor.updateComponentHealth(
+              'perf_component_$i', MCPHealthStatus.healthy, 'Initial');
         }
 
         Stopwatch stopwatch = Stopwatch()..start();
 
         // Act - Update all components
         for (int i = 0; i < 100; i++) {
-          healthMonitor.updateComponentHealth('perf_component_$i', MCPHealthStatus.degraded, 'Updated');
+          healthMonitor.updateComponentHealth(
+              'perf_component_$i', MCPHealthStatus.degraded, 'Updated');
         }
 
         stopwatch.stop();
 
         // Assert - Updates should be fast
         expect(stopwatch.elapsedMilliseconds, lessThan(50));
-        
+
         Map<String, dynamic> currentHealth = healthMonitor.currentHealth;
         Map<String, dynamic> components = currentHealth['components'];
         expect(components.length, equals(100));
-        
+
         // Check that all components were updated
-        bool allUpdated = components.values.every((component) => 
-          component['status'] == 'degraded' && component['message'] == 'Updated'
-        );
+        bool allUpdated = components.values.every((component) =>
+            component['status'] == 'degraded' &&
+            component['message'] == 'Updated');
         expect(allUpdated, isTrue);
       });
     });

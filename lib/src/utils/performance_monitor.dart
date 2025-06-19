@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../utils/logger.dart';
 import '../metrics/typed_metrics.dart';
 import '../events/event_models.dart';
-import '../utils/event_system.dart';
+import '../events/event_system.dart';
 
 /// Performance monitoring utility for tracking operation metrics
 class PerformanceMonitor {
@@ -19,7 +19,7 @@ class PerformanceMonitor {
   final Map<String, _MetricCounter> _counters = {};
   final Map<String, _MetricTimer> _timers = {};
   final Map<String, _ResourceUsage> _resources = {};
-  
+
   // Typed metrics storage
   final Map<String, PerformanceMetric> _typedMetrics = {};
   final Map<String, MetricCollection> _metricCollections = {};
@@ -50,8 +50,7 @@ class PerformanceMonitor {
     bool enableLogging = false,
     bool enableMetricsExport = false,
     Duration autoExportInterval = const Duration(minutes: 5),
-  }) :
-        _maxRecentOperations = maxRecentOperations,
+  })  : _maxRecentOperations = maxRecentOperations,
         _enableLogging = enableLogging,
         _enableMetricsExport = enableMetricsExport,
         _autoExportInterval = autoExportInterval;
@@ -64,7 +63,8 @@ class PerformanceMonitor {
     Duration? autoExportInterval,
     String? exportPath,
   }) {
-    if (maxRecentOperations != null && maxRecentOperations != _maxRecentOperations) {
+    if (maxRecentOperations != null &&
+        maxRecentOperations != _maxRecentOperations) {
       // Resize operations queue if needed
       while (_recentOperations.length > maxRecentOperations) {
         _recentOperations.removeFirst();
@@ -73,7 +73,8 @@ class PerformanceMonitor {
 
     // Set configuration values
     if (enableLogging != null && enableLogging != _enableLogging) {
-      _logger.fine('Performance logging ${enableLogging ? 'enabled' : 'disabled'}');
+      _logger.fine(
+          'Performance logging ${enableLogging ? 'enabled' : 'disabled'}');
     }
 
     // Update export path
@@ -82,7 +83,8 @@ class PerformanceMonitor {
     }
 
     // Set up auto-export timer if enabled
-    if (enableMetricsExport != null && enableMetricsExport != _enableMetricsExport) {
+    if (enableMetricsExport != null &&
+        enableMetricsExport != _enableMetricsExport) {
       if (enableMetricsExport) {
         _setupExportTimer(autoExportInterval ?? _autoExportInterval);
       } else if (_exportTimer != null) {
@@ -124,7 +126,8 @@ class PerformanceMonitor {
   }
 
   /// Stop a timer and record its duration
-  Duration stopTimer(String operationId, {bool success = true, Map<String, dynamic>? metadata}) {
+  Duration stopTimer(String operationId,
+      {bool success = true, Map<String, dynamic>? metadata}) {
     final stopwatch = _activeTimers.remove(operationId);
 
     if (stopwatch == null) {
@@ -151,8 +154,7 @@ class PerformanceMonitor {
     if (_enableLogging) {
       _logger.fine(
           'Completed operation: $operationName in ${duration.inMilliseconds}ms '
-              '(ID: $operationId, success: $success)'
-      );
+          '(ID: $operationId, success: $success)');
     }
 
     return duration;
@@ -172,7 +174,7 @@ class PerformanceMonitor {
       unit: 'count',
     );
     _typedMetrics[name] = typedMetric;
-    
+
     // Publish typed event
     EventSystem.instance.publishTyped<PerformanceEvent>(typedMetric.toEvent());
 
@@ -206,7 +208,7 @@ class PerformanceMonitor {
       unit: _getResourceUnit(resource),
     );
     _typedMetrics[resource] = typedMetric;
-    
+
     // Publish typed event
     EventSystem.instance.publishTyped<PerformanceEvent>(typedMetric.toEvent());
 
@@ -217,14 +219,8 @@ class PerformanceMonitor {
   }
 
   /// Record a generic metric with optional metadata
-  void recordMetric(
-      String name,
-      int duration,
-      {
-        bool success = true,
-        Map<String, dynamic>? metadata
-      }
-      ) {
+  void recordMetric(String name, int duration,
+      {bool success = true, Map<String, dynamic>? metadata}) {
     // Record as a timer metric
     _timers.putIfAbsent(name, () => _MetricTimer(name));
     _timers[name]!.record(Duration(milliseconds: duration), success);
@@ -246,17 +242,13 @@ class PerformanceMonitor {
     // Optional logging if enabled
     if (_enableLogging) {
       _logger.fine(
-          'Metric $name: ${duration}ms (success: $success, metadata: $metadata)'
-      );
+          'Metric $name: ${duration}ms (success: $success, metadata: $metadata)');
     }
   }
 
   /// Record an operation
-  void _recordOperation(
-      String operation,
-      Duration duration,
-      {bool success = true, Map<String, dynamic>? metadata}
-      ) {
+  void _recordOperation(String operation, Duration duration,
+      {bool success = true, Map<String, dynamic>? metadata}) {
     // Update timer metrics
     _timers.putIfAbsent(operation, () => _MetricTimer(operation));
     _timers[operation]!.record(duration, success);
@@ -270,7 +262,7 @@ class PerformanceMonitor {
       errorMessage: success ? null : 'Operation failed',
     );
     _typedMetrics['timer.$operation'] = typedMetric;
-    
+
     // Publish typed event
     EventSystem.instance.publishTyped<PerformanceEvent>(typedMetric.toEvent());
 
@@ -303,7 +295,8 @@ class PerformanceMonitor {
       return ResourceType.cpu;
     } else if (lowerName.contains('disk') || lowerName.contains('storage')) {
       return ResourceType.disk;
-    } else if (lowerName.contains('network') || lowerName.contains('bandwidth')) {
+    } else if (lowerName.contains('network') ||
+        lowerName.contains('bandwidth')) {
       return ResourceType.network;
     } else if (lowerName.contains('battery') || lowerName.contains('power')) {
       return ResourceType.battery;
@@ -338,12 +331,13 @@ class PerformanceMonitor {
   /// Record a typed performance metric
   void recordTypedMetric(PerformanceMetric metric) {
     _typedMetrics[metric.name] = metric;
-    
+
     // Publish typed event
     EventSystem.instance.publishTyped<PerformanceEvent>(metric.toEvent());
-    
+
     if (_enableLogging) {
-      _logger.fine('Recorded typed metric: ${metric.name} = ${metric.value} ${metric.unit ?? ''}');
+      _logger.fine(
+          'Recorded typed metric: ${metric.name} = ${metric.value} ${metric.unit ?? ''}');
     }
   }
 
@@ -357,10 +351,10 @@ class PerformanceMonitor {
     int? statusCode,
     String? endpoint,
   }) {
-    final value = operation == NetworkOperation.throughput 
+    final value = operation == NetworkOperation.throughput
         ? bytes / latency.inMilliseconds * 1000.0 // bytes per second
         : latency.inMilliseconds.toDouble();
-        
+
     final metric = NetworkMetric(
       name: name,
       value: value,
@@ -371,7 +365,7 @@ class PerformanceMonitor {
       statusCode: statusCode,
       endpoint: endpoint,
     );
-    
+
     recordTypedMetric(metric);
   }
 
@@ -388,7 +382,7 @@ class PerformanceMonitor {
       buckets: buckets,
       unit: unit,
     );
-    
+
     recordTypedMetric(metric);
   }
 
@@ -411,7 +405,7 @@ class PerformanceMonitor {
       unit: unit,
       metadata: metadata,
     );
-    
+
     recordTypedMetric(metric);
   }
 
@@ -428,7 +422,7 @@ class PerformanceMonitor {
   /// Create a metric collection from current metrics
   MetricCollection createMetricCollection(String name, {Pattern? namePattern}) {
     List<PerformanceMetric> metrics;
-    
+
     if (namePattern != null) {
       metrics = _typedMetrics.values
           .where((m) => namePattern.allMatches(m.name).isNotEmpty)
@@ -436,10 +430,10 @@ class PerformanceMonitor {
     } else {
       metrics = _typedMetrics.values.toList();
     }
-    
+
     final collection = MetricCollection(name: name, metrics: metrics);
     _metricCollections[name] = collection;
-    
+
     return collection;
   }
 
@@ -451,22 +445,22 @@ class PerformanceMonitor {
   /// Get typed metrics summary
   Map<String, dynamic> getTypedMetricsSummary() {
     final summary = <String, dynamic>{};
-    
+
     // Group by metric type
     final byType = <MetricType, List<PerformanceMetric>>{};
     for (final metric in _typedMetrics.values) {
       byType.putIfAbsent(metric.type, () => []).add(metric);
     }
-    
+
     // Calculate summaries for each type
     for (final entry in byType.entries) {
       final type = entry.key;
       final metrics = entry.value;
-      
+
       if (metrics.isNotEmpty) {
         final values = metrics.map((m) => m.value).toList();
         values.sort();
-        
+
         summary[type.name] = {
           'count': metrics.length,
           'sum': values.reduce((a, b) => a + b),
@@ -477,7 +471,7 @@ class PerformanceMonitor {
         };
       }
     }
-    
+
     return summary;
   }
 
@@ -489,11 +483,14 @@ class PerformanceMonitor {
       'timestamp': now.toIso8601String(),
       'counters': _counters.map((key, value) => MapEntry(key, value.toJson())),
       'timers': _timers.map((key, value) => MapEntry(key, value.toJson())),
-      'resources': _resources.map((key, value) => MapEntry(key, value.toJson())),
+      'resources':
+          _resources.map((key, value) => MapEntry(key, value.toJson())),
       'recent_operations': _recentOperations.map((op) => op.toJson()).toList(),
       'caching_topics': _cachingTopics.toList(),
-      'typed_metrics': _typedMetrics.map((key, value) => MapEntry(key, value.toMap())),
-      'metric_collections': _metricCollections.map((key, value) => MapEntry(key, value.toMap())),
+      'typed_metrics':
+          _typedMetrics.map((key, value) => MapEntry(key, value.toMap())),
+      'metric_collections':
+          _metricCollections.map((key, value) => MapEntry(key, value.toMap())),
     };
   }
 
@@ -571,7 +568,7 @@ class PerformanceMonitor {
       return false;
     }
   }
-  
+
   /// Export metrics as JSON string (cross-platform)
   String exportMetricsAsJson() {
     try {
@@ -582,12 +579,12 @@ class PerformanceMonitor {
       return '{}';
     }
   }
-  
+
   /// Import metrics from JSON string (useful for web)
   bool importMetricsFromJson(String jsonString) {
     try {
       final data = jsonDecode(jsonString) as Map<String, dynamic>;
-      
+
       // Import counters
       if (data.containsKey('counters')) {
         final counters = data['counters'] as Map<String, dynamic>;
@@ -596,7 +593,7 @@ class PerformanceMonitor {
           _counters[key]!._value = value['value'] ?? 0;
         });
       }
-      
+
       _logger.info('Metrics imported from JSON');
       return true;
     } catch (e, stackTrace) {
@@ -628,7 +625,8 @@ class PerformanceMonitor {
       exportMetrics(filePath);
     });
 
-    _logger.fine('Auto-export timer set up with interval: ${interval.inSeconds}s');
+    _logger
+        .fine('Auto-export timer set up with interval: ${interval.inSeconds}s');
   }
 
   /// Reset all metrics
@@ -723,8 +721,7 @@ class _MetricTimer {
     if (_recentDurations.isEmpty) return Duration.zero;
 
     final total = _recentDurations.fold<int>(
-        0, (sum, duration) => sum + duration.inMicroseconds
-    );
+        0, (sum, duration) => sum + duration.inMicroseconds);
 
     return Duration(microseconds: total ~/ _recentDurations.length);
   }
@@ -774,7 +771,8 @@ class _MetricTimer {
       'min_ms': minDuration.inMilliseconds,
       'max_ms': maxDuration.inMilliseconds,
       'recent_average_ms': recentAverageDuration.inMilliseconds,
-      'recent_durations_ms': _recentDurations.map((d) => d.inMilliseconds).toList(),
+      'recent_durations_ms':
+          _recentDurations.map((d) => d.inMilliseconds).toList(),
     };
   }
 }

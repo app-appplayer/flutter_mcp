@@ -328,7 +328,8 @@ void main() {
 
       // Set reasonable thresholds for test environment
       expect(timerTime, lessThan(5000)); // Allow more time in test environment
-      expect(counterTime, lessThan(3000)); // Counter ops should be faster but allow more time
+      expect(counterTime,
+          lessThan(3000)); // Counter ops should be faster but allow more time
     });
   });
 }

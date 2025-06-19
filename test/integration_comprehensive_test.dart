@@ -13,7 +13,7 @@ void main() {
     setUpAll(() async {
       // Initialize Flutter bindings for testing
       TestWidgetsFlutterBinding.ensureInitialized();
-      
+
       // Mock platform channels with comprehensive support
       const MethodChannel channel = MethodChannel('flutter_mcp');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -53,7 +53,9 @@ void main() {
               'appName': 'Integration Test App',
               'appVersion': '1.0.0',
               'platformName': 'Test Platform',
-              'performanceMetrics': {'lastCleanup': DateTime.now().toIso8601String()},
+              'performanceMetrics': {
+                'lastCleanup': DateTime.now().toIso8601String()
+              },
               'health': {'status': 'healthy', 'components': {}},
               'servers': [],
               'clients': [],
@@ -87,14 +89,16 @@ void main() {
             maxConnectionRetries: 1,
             llmRequestTimeoutMs: 5000, // Shorter timeout
           ));
-          
-          print('FlutterMCP initialization completed. isInitialized: ${FlutterMCP.instance.isInitialized}');
+
+          print(
+              'FlutterMCP initialization completed. isInitialized: ${FlutterMCP.instance.isInitialized}');
         } catch (e) {
           print('FlutterMCP initialization error: $e');
           // Don't fail setUp, let individual tests handle it
         }
       } else {
-        print('FlutterMCP already initialized. isInitialized: ${FlutterMCP.instance.isInitialized}');
+        print(
+            'FlutterMCP already initialized. isInitialized: ${FlutterMCP.instance.isInitialized}');
       }
     });
 
@@ -102,7 +106,7 @@ void main() {
       // Don't shutdown between tests to maintain state
       // Individual tests can clean up their own resources if needed
     });
-    
+
     tearDownAll(() async {
       // Only shutdown at the end of all tests
       try {
@@ -122,13 +126,15 @@ void main() {
           print('Skipping test: FlutterMCP not initialized');
           return;
         }
-        
+
         // Act
-        Map<String, dynamic> systemStatus = FlutterMCP.instance.getSystemStatus();
+        Map<String, dynamic> systemStatus =
+            FlutterMCP.instance.getSystemStatus();
 
         // Assert - Check basic system status
-        expect(systemStatus, isNotNull, reason: 'System status should not be null');
-        
+        expect(systemStatus, isNotNull,
+            reason: 'System status should not be null');
+
         // Check initialization status using the correct key
         if (systemStatus.containsKey('initialized')) {
           expect(systemStatus['initialized'], isTrue);
@@ -138,7 +144,7 @@ void main() {
           // If no initialization field, check that FlutterMCP instance says it's initialized
           expect(FlutterMCP.instance.isInitialized, isTrue);
         }
-        
+
         // Check app information if available (optional)
         if (systemStatus.containsKey('appName')) {
           expect(systemStatus['appName'], equals('Integration Test App'));
@@ -146,19 +152,21 @@ void main() {
         if (systemStatus.containsKey('appVersion')) {
           expect(systemStatus['appVersion'], equals('1.0.0'));
         }
-        
+
         print('System status keys: ${systemStatus.keys.toList()}');
       });
 
       test('should handle component lifecycle correctly', () async {
         // Act - Create components
-        String serverId = await FlutterMCP.instance.createServer(
+        // Create server - serverId is not used in this test
+        await FlutterMCP.instance.createServer(
           name: 'Test Server',
           version: '1.0.0',
           capabilities: ServerCapabilities(),
         );
 
-        String clientId = await FlutterMCP.instance.createClient(
+        // Create client - clientId is not used in this test
+        await FlutterMCP.instance.createClient(
           name: 'Test Client',
           version: '1.0.0',
           transportCommand: 'echo',
@@ -167,7 +175,6 @@ void main() {
 
         // Skip LLM creation as test_provider is not registered
         // Instead, verify that the system correctly rejects invalid providers
-        String? llmId;
         try {
           final (id, _) = await FlutterMCP.instance.createLlmClient(
             providerName: 'test_provider',
@@ -176,7 +183,9 @@ void main() {
               model: 'test_model',
             ),
           );
-          llmId = id;
+          // LLM creation should fail
+          fail(
+              'Expected LLM creation to fail for unregistered provider, but got id: $id');
         } catch (e) {
           // Expected to fail since test_provider is not registered
           expect(e, isA<MCPOperationFailedException>());
@@ -188,7 +197,7 @@ void main() {
         expect(status['servers'], isA<int>());
         expect(status['clients'], isA<int>());
         expect(status['llms'], isA<int>());
-        
+
         // Verify counts increased
         expect(status['servers'], greaterThanOrEqualTo(1));
         expect(status['clients'], greaterThanOrEqualTo(1));
@@ -202,17 +211,18 @@ void main() {
 
     group('Health Monitoring Integration', () {
       test('should integrate health monitoring with system status', () async {
-        // Since health monitor has stream lifecycle issues, 
+        // Since health monitor has stream lifecycle issues,
         // just verify that system status includes health info
         try {
           // Act - Get system status
-          Map<String, dynamic> systemStatus = FlutterMCP.instance.getSystemStatus();
-          
+          Map<String, dynamic> systemStatus =
+              FlutterMCP.instance.getSystemStatus();
+
           // Assert - Health should be reflected in system status
           expect(systemStatus, isNotNull);
           expect(systemStatus.containsKey('health'), isTrue);
           expect(systemStatus['health'], isNotNull);
-          
+
           // The mock returns a basic health structure
           Map<String, dynamic> health = systemStatus['health'];
           expect(health.containsKey('status'), isTrue);
@@ -231,11 +241,11 @@ void main() {
           Map<String, dynamic> status1 = FlutterMCP.instance.getSystemStatus();
           await Future.delayed(Duration(milliseconds: 50));
           Map<String, dynamic> status2 = FlutterMCP.instance.getSystemStatus();
-          
+
           // Assert - Both should have health info
           expect(status1['health'], isNotNull);
           expect(status2['health'], isNotNull);
-          
+
           // Health monitoring concept is verified
           expect(status1['health']['status'], equals('healthy'));
           expect(status2['health']['status'], equals('healthy'));
@@ -253,21 +263,38 @@ void main() {
         auditManager.initialize();
 
         // Act - Perform authentication attempts
-        bool success1 = await FlutterMCP.instance.authenticateUser('test_user', 'password123');
-        bool success2 = await FlutterMCP.instance.authenticateUser('test_user', 'wrongpassword');
-        bool success3 = await FlutterMCP.instance.authenticateUser('test_user', 'password123');
+        bool success1 = await FlutterMCP.instance
+            .authenticateUser('test_user', 'password123');
+        bool success2 = await FlutterMCP.instance
+            .authenticateUser('test_user', 'wrongpassword');
+        bool success3 = await FlutterMCP.instance
+            .authenticateUser('test_user', 'password123');
 
         // Assert - Authentication results should be logged
         // Note: The actual implementation may not have real auth, so check if it works
-        expect(success1, anyOf(isTrue, isFalse)); // Could be either depending on implementation
-        expect(success2, anyOf(isTrue, isFalse)); // Could be either depending on implementation
-        expect(success3, anyOf(isTrue, isFalse)); // Could be either depending on implementation
+        expect(
+            success1,
+            anyOf(isTrue,
+                isFalse)); // Could be either depending on implementation
+        expect(
+            success2,
+            anyOf(isTrue,
+                isFalse)); // Could be either depending on implementation
+        expect(
+            success3,
+            anyOf(isTrue,
+                isFalse)); // Could be either depending on implementation
 
-        List<SecurityAuditEvent> userEvents = auditManager.getUserAuditEvents('test_user');
-        expect(userEvents.length, greaterThanOrEqualTo(0)); // May be 0 if audit system not fully operational
+        List<SecurityAuditEvent> userEvents =
+            auditManager.getUserAuditEvents('test_user');
+        expect(
+            userEvents.length,
+            greaterThanOrEqualTo(
+                0)); // May be 0 if audit system not fully operational
         // Only check event contents if we actually have events
         if (userEvents.isNotEmpty) {
-          expect(userEvents.any((e) => e.success == true || e.success == false), isTrue);
+          expect(userEvents.any((e) => e.success == true || e.success == false),
+              isTrue);
         }
 
         // Cleanup
@@ -280,14 +307,18 @@ void main() {
         encryptionManager.initialize();
 
         // Act - Store and retrieve encrypted data
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.aes256);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
         String sensitiveData = 'This is confidential information';
-        
-        EncryptedData encrypted = encryptionManager.encrypt(keyId, sensitiveData);
+
+        EncryptedData encrypted =
+            encryptionManager.encrypt(keyId, sensitiveData);
         String serializedData = jsonEncode(encrypted.toJson());
-        
-        await FlutterMCP.instance.secureStore('encrypted_test_data', serializedData);
-        String? retrievedData = await FlutterMCP.instance.secureRead('encrypted_test_data');
+
+        await FlutterMCP.instance
+            .secureStore('encrypted_test_data', serializedData);
+        String? retrievedData =
+            await FlutterMCP.instance.secureRead('encrypted_test_data');
 
         // Assert - Data should be encrypted and decryptable
         expect(retrievedData, isNotNull);
@@ -297,11 +328,12 @@ void main() {
           expect(retrievedData, equals('mock_secure_data'));
           return; // Skip the decryption test with mock data
         }
-        
+
         Map<String, dynamic> deserializedData = jsonDecode(retrievedData!);
-        EncryptedData restoredEncrypted = EncryptedData.fromJson(deserializedData);
+        EncryptedData restoredEncrypted =
+            EncryptedData.fromJson(deserializedData);
         String decryptedData = encryptionManager.decrypt(restoredEncrypted);
-        
+
         expect(decryptedData, equals(sensitiveData));
 
         // Cleanup
@@ -318,18 +350,21 @@ void main() {
         // Act - Generate activity
         await FlutterMCP.instance.authenticateUser('user1', 'password123');
         await FlutterMCP.instance.authenticateUser('user2', 'wrongpass');
-        
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.aes256);
+
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
         encryptionManager.encrypt(keyId, 'test data');
 
         // Generate reports
-        Map<String, dynamic> auditReport = auditManager.generateSecurityReport();
-        Map<String, dynamic> encryptionReport = encryptionManager.generateSecurityReport();
+        Map<String, dynamic> auditReport =
+            auditManager.generateSecurityReport();
+        Map<String, dynamic> encryptionReport =
+            encryptionManager.generateSecurityReport();
 
         // Assert - Reports should contain activity data
         expect(auditReport['totalEvents'], greaterThan(0));
         expect(auditReport['generatedAt'], isNotNull);
-        
+
         expect(encryptionReport['totalKeys'], greaterThan(0));
         expect(encryptionReport['activeKeys'], greaterThan(0));
 
@@ -344,18 +379,18 @@ void main() {
         // Arrange
         List<SecurityEvent> capturedSecurityEvents = [];
         List<PerformanceEvent> capturedPerformanceEvents = [];
-        
+
         EnhancedTypedEventSystem.instance.subscribe<SecurityEvent>((event) {
           capturedSecurityEvents.add(event);
         });
-        
+
         EnhancedTypedEventSystem.instance.subscribe<PerformanceEvent>((event) {
           capturedPerformanceEvents.add(event);
         });
 
         // Act - Generate various activities
         await FlutterMCP.instance.authenticateUser('event_user', 'password123');
-        
+
         // Generate performance metric
         // (This would normally be done by the performance monitor)
         EnhancedTypedEventSystem.instance.publish(PerformanceEvent(
@@ -379,7 +414,8 @@ void main() {
     group('Configuration Management', () {
       test('should provide current configuration in system status', () async {
         // Act - Get current configuration through system status
-        Map<String, dynamic> systemStatus = FlutterMCP.instance.getSystemStatus();
+        Map<String, dynamic> systemStatus =
+            FlutterMCP.instance.getSystemStatus();
 
         // Assert - System status should be available (config may not be directly exposed)
         expect(systemStatus, isNotNull);
@@ -390,7 +426,8 @@ void main() {
 
       test('should provide app metadata', () async {
         // Act - Get system status
-        Map<String, dynamic> systemStatus = FlutterMCP.instance.getSystemStatus();
+        Map<String, dynamic> systemStatus =
+            FlutterMCP.instance.getSystemStatus();
 
         // Assert - Basic system metadata should be available
         expect(systemStatus['initialized'], isTrue);
@@ -412,7 +449,10 @@ void main() {
           );
         } catch (e) {
           // The actual error might be MCPOperationFailedException due to stream issues
-          expect(e, anyOf(isA<MCPValidationException>(), isA<MCPOperationFailedException>()));
+          expect(
+              e,
+              anyOf(isA<MCPValidationException>(),
+                  isA<MCPOperationFailedException>()));
         }
 
         try {
@@ -427,11 +467,12 @@ void main() {
         }
 
         // Assert - System should remain stable after errors
-        Map<String, dynamic> systemStatus = FlutterMCP.instance.getSystemStatus();
+        Map<String, dynamic> systemStatus =
+            FlutterMCP.instance.getSystemStatus();
         // Check for either key that might indicate initialization
-        bool isInitialized = systemStatus['isInitialized'] == true || 
-                           systemStatus['initialized'] == true || 
-                           FlutterMCP.instance.isInitialized;
+        bool isInitialized = systemStatus['isInitialized'] == true ||
+            systemStatus['initialized'] == true ||
+            FlutterMCP.instance.isInitialized;
         expect(isInitialized, isTrue);
       });
     });
@@ -444,7 +485,8 @@ void main() {
         MemoryManager.instance.performMemoryCleanup();
 
         // Assert - Cleanup should have been performed
-        Map<String, dynamic> finalStatus = FlutterMCP.instance.getSystemStatus();
+        Map<String, dynamic> finalStatus =
+            FlutterMCP.instance.getSystemStatus();
         // Memory cleanup doesn't directly expose lastCleanup in system status
         // Just verify system is still operational after cleanup
         expect(finalStatus['initialized'], isTrue);
@@ -453,7 +495,7 @@ void main() {
       test('should monitor memory usage over time', () async {
         // Arrange - Enable performance monitoring
         Map<String, dynamic> status1 = FlutterMCP.instance.getSystemStatus();
-        
+
         // Act - Generate some memory usage
         List<String> largeStrings = [];
         for (int i = 0; i < 1000; i++) {
@@ -468,7 +510,7 @@ void main() {
         expect(status2['initialized'], isTrue);
         expect(status1['memory'], isNotNull);
         expect(status2['memory'], isNotNull);
-        
+
         // Clean up
         largeStrings.clear();
       });
@@ -484,7 +526,8 @@ void main() {
           'config_param': 'test_value',
         });
 
-        Map<String, dynamic> result = await FlutterMCP.instance.executeToolPlugin(
+        Map<String, dynamic> result =
+            await FlutterMCP.instance.executeToolPlugin(
           'test_tool',
           {'input': 'test_input'},
         );
@@ -501,15 +544,16 @@ void main() {
         HealthMonitor healthMonitor = HealthMonitor.instance;
         SecurityAuditManager auditManager = SecurityAuditManager.instance;
         EncryptionManager encryptionManager = EncryptionManager.instance;
-        
+
         healthMonitor.initialize();
         auditManager.initialize();
         encryptionManager.initialize();
 
         // Act - Perform complex workflow
-        
+
         // 1. Authentication
-        bool authResult = await FlutterMCP.instance.authenticateUser('workflow_user', 'secure_password');
+        bool authResult = await FlutterMCP.instance
+            .authenticateUser('workflow_user', 'secure_password');
         expect(authResult, isTrue);
 
         // 2. Create MCP components (may fail due to stream issues, handle gracefully)
@@ -528,26 +572,31 @@ void main() {
         // healthMonitor.updateComponentHealth(serverId, MCPHealthStatus.healthy, 'Server running');
 
         // 4. Generate and use encryption key
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.aes256);
-        EncryptedData encrypted = encryptionManager.encrypt(keyId, 'Workflow data');
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
+        EncryptedData encrypted =
+            encryptionManager.encrypt(keyId, 'Workflow data');
 
         // 5. Store encrypted data
-        await FlutterMCP.instance.secureStore('workflow_data', jsonEncode(encrypted.toJson()));
+        await FlutterMCP.instance
+            .secureStore('workflow_data', jsonEncode(encrypted.toJson()));
 
         // 6. Generate reports
-        Map<String, dynamic> systemStatus = FlutterMCP.instance.getSystemStatus();
-        Map<String, dynamic> securityReport = SecurityAuditManager.instance.generateSecurityReport();
+        Map<String, dynamic> systemStatus =
+            FlutterMCP.instance.getSystemStatus();
+        Map<String, dynamic> securityReport =
+            SecurityAuditManager.instance.generateSecurityReport();
 
         // Assert - Core operations should complete successfully
-        bool isInitialized = systemStatus['isInitialized'] == true || 
-                           systemStatus['initialized'] == true || 
-                           FlutterMCP.instance.isInitialized;
+        bool isInitialized = systemStatus['isInitialized'] == true ||
+            systemStatus['initialized'] == true ||
+            FlutterMCP.instance.isInitialized;
         expect(isInitialized, isTrue);
         if (serverId != null) {
           expect(systemStatus['servers'], greaterThanOrEqualTo(1));
         }
         expect(securityReport['totalEvents'], greaterThanOrEqualTo(0));
-        
+
         // Skip health data check due to stream issues
         // Map<String, dynamic> healthData = healthMonitor.currentHealth;
         // expect(healthData['components'], contains(serverId));
@@ -573,12 +622,12 @@ class TestToolPlugin extends MCPToolPlugin {
   String get description => 'Test tool plugin for integration testing';
 
   Map<String, dynamic> get schema => {
-    'type': 'object',
-    'properties': {
-      'input': {'type': 'string', 'description': 'Input data'},
-    },
-    'required': ['input'],
-  };
+        'type': 'object',
+        'properties': {
+          'input': {'type': 'string', 'description': 'Input data'},
+        },
+        'required': ['input'],
+      };
 
   @override
   Future<void> initialize(Map<String, dynamic> config) async {

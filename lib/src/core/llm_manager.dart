@@ -60,22 +60,26 @@ class MCPLlmManager {
 
   /// Generate new LLM client ID
   String generateLlmClientId(String llmId) {
-    final id = 'llm_client_${_clientIdCounter++}_${DateTime.now().millisecondsSinceEpoch}';
+    final id =
+        'llm_client_${_clientIdCounter++}_${DateTime.now().millisecondsSinceEpoch}';
     _llmClientIdToLlmId[id] = llmId;
     return id;
   }
 
   /// Generate new LLM server ID
   String generateLlmServerId(String llmId) {
-    final id = 'llm_server_${_serverIdCounter++}_${DateTime.now().millisecondsSinceEpoch}';
+    final id =
+        'llm_server_${_serverIdCounter++}_${DateTime.now().millisecondsSinceEpoch}';
     _llmServerIdToLlmId[id] = llmId;
     return id;
   }
 
   /// Register LLM with flexible initialization
   /// Allows creation with client, server, both, or neither
-  void registerLlm(String id, llm.MCPLlm mcpLlm, {llm.LlmClient? initialClient, llm.LlmServer? initialServer}) {
-    _logger.fine('Registering LLM: $id${initialClient != null ? " with initial client" : ""}${initialServer != null ? " with initial server" : ""}');
+  void registerLlm(String id, llm.MCPLlm mcpLlm,
+      {llm.LlmClient? initialClient, llm.LlmServer? initialServer}) {
+    _logger.fine(
+        'Registering LLM: $id${initialClient != null ? " with initial client" : ""}${initialServer != null ? " with initial server" : ""}');
 
     _llms[id] = LlmInfo(
       id: id,
@@ -86,7 +90,8 @@ class MCPLlmManager {
   }
 
   /// Add a new LLM client to an existing LLM
-  Future<String> addLlmClient(String llmId, String llmClientId, llm.LlmClient client) async {
+  Future<String> addLlmClient(
+      String llmId, String llmClientId, llm.LlmClient client) async {
     _logger.fine('Adding LLM client to LLM: $llmId');
     final llmInfo = _llms[llmId];
     if (llmInfo == null) {
@@ -94,7 +99,8 @@ class MCPLlmManager {
         llmId,
         resourceType: 'LLM',
         errorCode: 'LLM_NOT_FOUND',
-        resolution: 'Ensure the LLM is properly registered before adding clients to it.',
+        resolution:
+            'Ensure the LLM is properly registered before adding clients to it.',
       );
     }
 
@@ -114,7 +120,8 @@ class MCPLlmManager {
   }
 
   /// Add a new LLM server to an existing LLM
-  Future<String> addLlmServer(String llmId, String llmServerId, llm.LlmServer server) async {
+  Future<String> addLlmServer(
+      String llmId, String llmServerId, llm.LlmServer server) async {
     _logger.fine('Adding LLM server to LLM: $llmId');
     final llmInfo = _llms[llmId];
     if (llmInfo == null) {
@@ -122,7 +129,8 @@ class MCPLlmManager {
         llmId,
         resourceType: 'LLM',
         errorCode: 'LLM_NOT_FOUND',
-        resolution: 'Ensure the LLM is properly registered before adding servers to it.',
+        resolution:
+            'Ensure the LLM is properly registered before adding servers to it.',
       );
     }
 
@@ -181,10 +189,7 @@ class MCPLlmManager {
 
   /// Add MCP client to LLM client by client ID
   Future<void> addMcpClientToLlmClient(
-      String llmClientId,
-      String mcpClientId,
-      client.Client mcpClient
-      ) async {
+      String llmClientId, String mcpClientId, client.Client mcpClient) async {
     _logger.fine('Adding MCP client $mcpClientId to LLM client $llmClientId');
 
     // Find the LLM containing this client
@@ -195,7 +200,8 @@ class MCPLlmManager {
         llmClientId,
         resourceType: 'LlmClient',
         errorCode: 'LLM_CLIENT_NOT_FOUND',
-        resolution: 'Verify that the LLM client ID is correct and the client has been properly registered.',
+        resolution:
+            'Verify that the LLM client ID is correct and the client has been properly registered.',
       );
     }
 
@@ -206,14 +212,17 @@ class MCPLlmManager {
         llmClientId,
         resourceType: 'LlmClient',
         errorCode: 'LLM_CLIENT_OBJECT_NOT_FOUND',
-        resolution: 'The LLM client ID exists but the object is missing. This may indicate an internal consistency issue.',
+        resolution:
+            'The LLM client ID exists but the object is missing. This may indicate an internal consistency issue.',
       );
     }
 
     // Directly add MCP client to the LLM client
     try {
-      llmInfo.mcpLlm.addMcpClientToLlmClient(llmClientId, mcpClientId, mcpClient);
-      _logger.info('Added MCP client $mcpClientId directly to LLM client $llmClientId');
+      llmInfo.mcpLlm
+          .addMcpClientToLlmClient(llmClientId, mcpClientId, mcpClient);
+      _logger.info(
+          'Added MCP client $mcpClientId directly to LLM client $llmClientId');
     } catch (e) {
       _logger.severe('Failed to add MCP client directly: $e');
       throw MCPOperationFailedException.withContext(
@@ -226,7 +235,8 @@ class MCPLlmManager {
           'mcpClientId': mcpClientId,
         },
         recoverable: true,
-        resolution: 'Check if the MCP client is valid and that the LLM client supports additional MCP clients.',
+        resolution:
+            'Check if the MCP client is valid and that the LLM client supports additional MCP clients.',
       );
     }
 
@@ -234,15 +244,13 @@ class MCPLlmManager {
     llmInfo.associateMcpClient(mcpClientId, llmClientId);
     _mcpClientToLlmMap.putIfAbsent(mcpClientId, () => {}).add(llmId);
 
-    _logger.info('Associated MCP client $mcpClientId with LLM client $llmClientId');
+    _logger.info(
+        'Associated MCP client $mcpClientId with LLM client $llmClientId');
   }
 
   /// Add MCP server to LLM server by server ID
   Future<void> addMcpServerToLlmServer(
-      String llmServerId,
-      String mcpServerId,
-      server.Server mcpServer
-      ) async {
+      String llmServerId, String mcpServerId, server.Server mcpServer) async {
     _logger.fine('Adding MCP server $mcpServerId to LLM server $llmServerId');
 
     // Find the LLM containing this server
@@ -253,7 +261,8 @@ class MCPLlmManager {
         llmServerId,
         resourceType: 'LlmServer',
         errorCode: 'LLM_SERVER_NOT_FOUND',
-        resolution: 'Verify that the LLM server ID is correct and the server has been properly registered.',
+        resolution:
+            'Verify that the LLM server ID is correct and the server has been properly registered.',
       );
     }
 
@@ -264,14 +273,17 @@ class MCPLlmManager {
         llmServerId,
         resourceType: 'LlmServer',
         errorCode: 'LLM_SERVER_OBJECT_NOT_FOUND',
-        resolution: 'The LLM server ID exists but the object is missing. This may indicate an internal consistency issue.',
+        resolution:
+            'The LLM server ID exists but the object is missing. This may indicate an internal consistency issue.',
       );
     }
 
     // Directly add MCP server to the LLM server
     try {
-      llmInfo.mcpLlm.addMcpServerToLlmServer(llmServerId, mcpServerId, mcpServer);
-      _logger.info('Added MCP server $mcpServerId directly to LLM server $llmServerId');
+      llmInfo.mcpLlm
+          .addMcpServerToLlmServer(llmServerId, mcpServerId, mcpServer);
+      _logger.info(
+          'Added MCP server $mcpServerId directly to LLM server $llmServerId');
     } catch (e) {
       _logger.severe('Failed to add MCP server directly: $e');
       throw MCPOperationFailedException.withContext(
@@ -284,7 +296,8 @@ class MCPLlmManager {
           'mcpServerId': mcpServerId,
         },
         recoverable: true,
-        resolution: 'Check if the MCP server is valid and that the LLM server supports additional MCP servers.',
+        resolution:
+            'Check if the MCP server is valid and that the LLM server supports additional MCP servers.',
       );
     }
 
@@ -292,7 +305,8 @@ class MCPLlmManager {
     llmInfo.associateMcpServer(mcpServerId, llmServerId);
     _mcpServerToLlmMap.putIfAbsent(mcpServerId, () => {}).add(llmId);
 
-    _logger.info('Associated MCP server $mcpServerId with LLM server $llmServerId');
+    _logger.info(
+        'Associated MCP server $mcpServerId with LLM server $llmServerId');
   }
 
   /// Find default LLM client ID for an LLM
@@ -303,7 +317,8 @@ class MCPLlmManager {
         llmId,
         resourceType: 'LLM',
         errorCode: 'LLM_NOT_FOUND',
-        resolution: 'Verify that the LLM ID is correct and the LLM has been registered.',
+        resolution:
+            'Verify that the LLM ID is correct and the LLM has been registered.',
       );
     }
 
@@ -315,7 +330,8 @@ class MCPLlmManager {
         errorCode: 'NO_LLM_CLIENTS',
         context: {'llmId': llmId},
         recoverable: true,
-        resolution: 'Create at least one LLM client for this LLM before trying to get the default client.',
+        resolution:
+            'Create at least one LLM client for this LLM before trying to get the default client.',
       );
     }
 
@@ -328,7 +344,8 @@ class MCPLlmManager {
         errorCode: 'NO_DEFAULT_LLM_CLIENT',
         context: {'llmId': llmId},
         recoverable: true,
-        resolution: 'Set a default LLM client for this LLM using setDefaultLlmClient() method.',
+        resolution:
+            'Set a default LLM client for this LLM using setDefaultLlmClient() method.',
       );
     }
 
@@ -336,27 +353,25 @@ class MCPLlmManager {
   }
 
   /// Add MCP client to default LLM client for an LLM
-  Future<void> addMcpClientToDefaultLlmClient(String llmId, client.Client mcpClient) async {
+  Future<void> addMcpClientToDefaultLlmClient(
+      String llmId, client.Client mcpClient) async {
     final defaultLlmClientId = await getDefaultLlmClientId(llmId);
     await addMcpClientToLlmClient(
-        defaultLlmClientId,
-        mcpClient.name,
-        mcpClient
-    );
+        defaultLlmClientId, mcpClient.name, mcpClient);
   }
 
   /// Remove MCP client from LLM client
   Future<void> removeMcpClientFromLlmClient(
-      String llmClientId,
-      String mcpClientId
-      ) async {
-    _logger.fine('Removing MCP client $mcpClientId from LLM client $llmClientId');
+      String llmClientId, String mcpClientId) async {
+    _logger
+        .fine('Removing MCP client $mcpClientId from LLM client $llmClientId');
 
     // Find the LLM containing this client
     final (llmInfo, llmId) = _findLlmInfoByClientId(llmClientId);
 
     if (llmInfo == null || llmId == null) {
-      _logger.warning('LLM client not found when removing MCP client: $llmClientId');
+      _logger.warning(
+          'LLM client not found when removing MCP client: $llmClientId');
       return;
     }
 
@@ -370,7 +385,8 @@ class MCPLlmManager {
     // Remove the MCP client
     try {
       llmInfo.mcpLlm.removeMcpClientFromLlmClient(llmClientId, mcpClientId);
-      _logger.info('Removed MCP client $mcpClientId from LLM client $llmClientId');
+      _logger
+          .info('Removed MCP client $mcpClientId from LLM client $llmClientId');
     } catch (e) {
       _logger.severe('Failed to remove MCP client: $e');
     }
@@ -390,16 +406,16 @@ class MCPLlmManager {
 
   /// Remove MCP server from LLM server
   Future<void> removeMcpServerFromLlmServer(
-      String llmServerId,
-      String mcpServerId
-      ) async {
-    _logger.fine('Removing MCP server $mcpServerId from LLM server $llmServerId');
+      String llmServerId, String mcpServerId) async {
+    _logger
+        .fine('Removing MCP server $mcpServerId from LLM server $llmServerId');
 
     // Find the LLM containing this server
     final (llmInfo, llmId) = _findLlmInfoByServerId(llmServerId);
 
     if (llmInfo == null || llmId == null) {
-      _logger.warning('LLM server not found when removing MCP server: $llmServerId');
+      _logger.warning(
+          'LLM server not found when removing MCP server: $llmServerId');
       return;
     }
 
@@ -413,7 +429,8 @@ class MCPLlmManager {
     // Remove the MCP server
     try {
       llmInfo.mcpLlm.removeMcpServerFromLlmServer(llmServerId, mcpServerId);
-      _logger.info('Removed MCP server $mcpServerId from LLM server $llmServerId');
+      _logger
+          .info('Removed MCP server $mcpServerId from LLM server $llmServerId');
     } catch (e) {
       _logger.severe('Failed to remove MCP server: $e');
     }
@@ -433,10 +450,9 @@ class MCPLlmManager {
 
   /// Set default MCP client for a specific LLM client
   Future<void> setDefaultMcpClientForLlmClient(
-      String llmClientId,
-      String mcpClientId
-      ) async {
-    _logger.fine('Setting default MCP client $mcpClientId for LLM client $llmClientId');
+      String llmClientId, String mcpClientId) async {
+    _logger.fine(
+        'Setting default MCP client $mcpClientId for LLM client $llmClientId');
 
     // Find the LLM containing this client
     final (llmInfo, llmId) = _findLlmInfoByClientId(llmClientId);
@@ -446,18 +462,21 @@ class MCPLlmManager {
         llmClientId,
         resourceType: 'LlmClient',
         errorCode: 'LLM_CLIENT_NOT_FOUND',
-        resolution: 'Verify that the LLM client ID is correct and the client has been properly registered.',
+        resolution:
+            'Verify that the LLM client ID is correct and the client has been properly registered.',
       );
     }
 
     // Verify the MCP client is associated with this LLM client
-    final associatedLlmClientIds = llmInfo.getLlmClientIdsForMcpClient(mcpClientId);
+    final associatedLlmClientIds =
+        llmInfo.getLlmClientIdsForMcpClient(mcpClientId);
     if (!associatedLlmClientIds.contains(llmClientId)) {
       throw MCPValidationException(
         'MCP client $mcpClientId is not associated with LLM client $llmClientId',
         {'mcpClientId': mcpClientId, 'llmClientId': llmClientId},
         errorCode: 'INVALID_ASSOCIATION',
-        resolution: 'Associate the MCP client with the LLM client first using addMcpClientToLlmClient().',
+        resolution:
+            'Associate the MCP client with the LLM client first using addMcpClientToLlmClient().',
       );
     }
 
@@ -468,14 +487,16 @@ class MCPLlmManager {
         llmClientId,
         resourceType: 'LlmClient',
         errorCode: 'LLM_CLIENT_OBJECT_NOT_FOUND',
-        resolution: 'The LLM client ID exists but the object is missing. This may indicate an internal consistency issue.',
+        resolution:
+            'The LLM client ID exists but the object is missing. This may indicate an internal consistency issue.',
       );
     }
 
     // Set as default (assuming this method exists on LlmClient)
     try {
       llmInfo.mcpLlm.setDefaultMcpClient(llmClientId, mcpClientId);
-      _logger.info('Set default MCP client to $mcpClientId for LLM client $llmClientId');
+      _logger.info(
+          'Set default MCP client to $mcpClientId for LLM client $llmClientId');
     } catch (e) {
       _logger.severe('Failed to set default MCP client: $e');
       throw MCPOperationFailedException.withContext(
@@ -488,17 +509,17 @@ class MCPLlmManager {
           'mcpClientId': mcpClientId,
         },
         recoverable: true,
-        resolution: 'Check if the MCP client is valid and that the LLM client supports setting a default MCP client.',
+        resolution:
+            'Check if the MCP client is valid and that the LLM client supports setting a default MCP client.',
       );
     }
   }
 
   /// Set default MCP server for a specific LLM server
   Future<void> setDefaultMcpServerForLlmServer(
-      String llmServerId,
-      String mcpServerId
-      ) async {
-    _logger.fine('Setting default MCP server $mcpServerId for LLM server $llmServerId');
+      String llmServerId, String mcpServerId) async {
+    _logger.fine(
+        'Setting default MCP server $mcpServerId for LLM server $llmServerId');
 
     // Find the LLM containing this server
     final (llmInfo, llmId) = _findLlmInfoByServerId(llmServerId);
@@ -508,18 +529,21 @@ class MCPLlmManager {
         llmServerId,
         resourceType: 'LlmServer',
         errorCode: 'LLM_SERVER_NOT_FOUND',
-        resolution: 'Verify that the LLM server ID is correct and the server has been properly registered.',
+        resolution:
+            'Verify that the LLM server ID is correct and the server has been properly registered.',
       );
     }
 
     // Verify the MCP server is associated with this LLM server
-    final associatedLlmServerIds = llmInfo.getLlmServerIdsForMcpServer(mcpServerId);
+    final associatedLlmServerIds =
+        llmInfo.getLlmServerIdsForMcpServer(mcpServerId);
     if (!associatedLlmServerIds.contains(llmServerId)) {
       throw MCPValidationException(
         'MCP server $mcpServerId is not associated with LLM server $llmServerId',
         {'mcpServerId': mcpServerId, 'llmServerId': llmServerId},
         errorCode: 'INVALID_ASSOCIATION',
-        resolution: 'Associate the MCP server with the LLM server first using addMcpServerToLlmServer().',
+        resolution:
+            'Associate the MCP server with the LLM server first using addMcpServerToLlmServer().',
       );
     }
 
@@ -530,14 +554,16 @@ class MCPLlmManager {
         llmServerId,
         resourceType: 'LlmServer',
         errorCode: 'LLM_SERVER_OBJECT_NOT_FOUND',
-        resolution: 'The LLM server ID exists but the object is missing. This may indicate an internal consistency issue.',
+        resolution:
+            'The LLM server ID exists but the object is missing. This may indicate an internal consistency issue.',
       );
     }
 
     // Set as default (assuming this method exists on LlmServer)
     try {
       llmInfo.mcpLlm.setDefaultMcpServer(llmServerId, mcpServerId);
-      _logger.info('Set default MCP server to $mcpServerId for LLM server $llmServerId');
+      _logger.info(
+          'Set default MCP server to $mcpServerId for LLM server $llmServerId');
     } catch (e) {
       _logger.severe('Failed to set default MCP server: $e');
       throw MCPOperationFailedException.withContext(
@@ -550,7 +576,8 @@ class MCPLlmManager {
           'mcpServerId': mcpServerId,
         },
         recoverable: true,
-        resolution: 'Check if the MCP server is valid and that the LLM server supports setting a default MCP server.',
+        resolution:
+            'Check if the MCP server is valid and that the LLM server supports setting a default MCP server.',
       );
     }
   }
@@ -563,7 +590,8 @@ class MCPLlmManager {
         llmId,
         resourceType: 'LLM',
         errorCode: 'LLM_NOT_FOUND',
-        resolution: 'Verify that the LLM ID is correct and the LLM has been registered.',
+        resolution:
+            'Verify that the LLM ID is correct and the LLM has been registered.',
       );
     }
 
@@ -573,7 +601,8 @@ class MCPLlmManager {
         resourceType: 'LlmClient',
         errorCode: 'LLM_CLIENT_NOT_FOUND_IN_LLM',
         context: {'llmId': llmId},
-        resolution: 'Verify that the LLM client ID is correct and has been added to this LLM.',
+        resolution:
+            'Verify that the LLM client ID is correct and has been added to this LLM.',
       );
     }
 
@@ -589,7 +618,8 @@ class MCPLlmManager {
         llmId,
         resourceType: 'LLM',
         errorCode: 'LLM_NOT_FOUND',
-        resolution: 'Verify that the LLM ID is correct and the LLM has been registered.',
+        resolution:
+            'Verify that the LLM ID is correct and the LLM has been registered.',
       );
     }
 
@@ -599,7 +629,8 @@ class MCPLlmManager {
         resourceType: 'LlmServer',
         errorCode: 'LLM_SERVER_NOT_FOUND_IN_LLM',
         context: {'llmId': llmId},
-        resolution: 'Verify that the LLM server ID is correct and has been added to this LLM.',
+        resolution:
+            'Verify that the LLM server ID is correct and has been added to this LLM.',
       );
     }
 
@@ -656,7 +687,9 @@ class MCPLlmManager {
 
     final result = <String>{};
     for (final mcpClientId in llmInfo.getAllMcpClientIds()) {
-      if (llmInfo.getLlmClientIdsForMcpClient(mcpClientId).contains(llmClientId)) {
+      if (llmInfo
+          .getLlmClientIdsForMcpClient(mcpClientId)
+          .contains(llmClientId)) {
         result.add(mcpClientId);
       }
     }
@@ -672,7 +705,9 @@ class MCPLlmManager {
 
     final result = <String>{};
     for (final mcpServerId in llmInfo.getAllMcpServerIds()) {
-      if (llmInfo.getLlmServerIdsForMcpServer(mcpServerId).contains(llmServerId)) {
+      if (llmInfo
+          .getLlmServerIdsForMcpServer(mcpServerId)
+          .contains(llmServerId)) {
         result.add(mcpServerId);
       }
     }
@@ -850,7 +885,8 @@ class MCPLlmManager {
         errorCode: 'LLM_CLOSE_ERRORS',
         context: {'errors': errors},
         recoverable: false,
-        resolution: 'Check the error details to identify which LLMs failed to close properly.',
+        resolution:
+            'Check the error details to identify which LLMs failed to close properly.',
       );
     }
   }
@@ -860,36 +896,35 @@ class MCPLlmManager {
     return {
       'total': _llms.length,
       'llms': _llms.map((key, value) => MapEntry(key, {
-        'clientCount': value.llmClients.length,
-        'serverCount': value.llmServers.length,
-        'mcpClientCount': value.getAllMcpClientIds().length,
-        'mcpServerCount': value.getAllMcpServerIds().length,
-        'defaultLlmClientId': value.defaultLlmClientId,
-        'defaultLlmServerId': value.defaultLlmServerId,
-      })),
+            'clientCount': value.llmClients.length,
+            'serverCount': value.llmServers.length,
+            'mcpClientCount': value.getAllMcpClientIds().length,
+            'mcpServerCount': value.getAllMcpServerIds().length,
+            'defaultLlmClientId': value.defaultLlmClientId,
+            'defaultLlmServerId': value.defaultLlmServerId,
+          })),
       'registeredPlugins': _pluginIntegrator.getRegisteredLlmPluginNames(),
     };
   }
 
   /// Register core LLM plugins with improved registration process
   Future<Map<String, bool>> registerCoreLlmPlugins(
-      String llmId,
-      {
-        String? llmClientId,
-        String? llmServerId,
-        bool includeCompletionPlugin = true,
-        bool includeStreamingPlugin = true,
-        bool includeEmbeddingPlugin = true,
-        bool includeRetrievalPlugins = false,
-      }
-      ) async {
+    String llmId, {
+    String? llmClientId,
+    String? llmServerId,
+    bool includeCompletionPlugin = true,
+    bool includeStreamingPlugin = true,
+    bool includeEmbeddingPlugin = true,
+    bool includeRetrievalPlugins = false,
+  }) async {
     final llmInfo = _llms[llmId];
     if (llmInfo == null) {
       throw MCPResourceNotFoundException.withContext(
         llmId,
         resourceType: 'LLM',
         errorCode: 'LLM_NOT_FOUND',
-        resolution: 'Verify that the LLM ID is correct and the LLM has been registered.',
+        resolution:
+            'Verify that the LLM ID is correct and the LLM has been registered.',
       );
     }
 
@@ -904,7 +939,8 @@ class MCPLlmManager {
           resourceType: 'LlmClient',
           errorCode: 'LLM_CLIENT_NOT_FOUND_IN_LLM',
           context: {'llmId': llmId},
-          resolution: 'Verify that the LLM client ID is correct and has been added to this LLM.',
+          resolution:
+              'Verify that the LLM client ID is correct and has been added to this LLM.',
         );
       }
 
@@ -918,7 +954,8 @@ class MCPLlmManager {
           resourceType: 'LlmServer',
           errorCode: 'LLM_SERVER_NOT_FOUND_IN_LLM',
           context: {'llmId': llmId},
-          resolution: 'Verify that the LLM server ID is correct and has been added to this LLM.',
+          resolution:
+              'Verify that the LLM server ID is correct and has been added to this LLM.',
         );
       }
 
@@ -929,7 +966,8 @@ class MCPLlmManager {
         'Either llmClientId or llmServerId must be provided',
         {'llmId': llmId},
         errorCode: 'MISSING_REQUIRED_PARAMETER',
-        resolution: 'Provide either llmClientId or llmServerId parameter to specify the LLM component to use for plugin registration.',
+        resolution:
+            'Provide either llmClientId or llmServerId parameter to specify the LLM component to use for plugin registration.',
       );
     }
 

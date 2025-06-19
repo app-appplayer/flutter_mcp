@@ -1,4 +1,5 @@
-/// Type-safe configuration classes to replace Map<String, dynamic> usage
+/// Type-safe configuration classes to replace Map`<String, dynamic>` usage
+library;
 
 /// App information configuration
 class AppInfo {
@@ -7,7 +8,7 @@ class AppInfo {
   final String? description;
   final String? author;
   final String? homepage;
-  
+
   AppInfo({
     required this.name,
     required this.version,
@@ -15,7 +16,7 @@ class AppInfo {
     this.author,
     this.homepage,
   });
-  
+
   factory AppInfo.fromMap(Map<String, dynamic> map) {
     return AppInfo(
       name: map['appName'] ?? map['name'] ?? 'MCP App',
@@ -25,7 +26,7 @@ class AppInfo {
       homepage: map['homepage'],
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -46,7 +47,7 @@ class FeatureFlags {
   final bool lifecycleManaged;
   final bool autoStart;
   final PluginFeatures plugins;
-  
+
   FeatureFlags({
     this.useBackgroundService = false,
     this.useNotification = false,
@@ -56,7 +57,7 @@ class FeatureFlags {
     this.autoStart = true,
     PluginFeatures? plugins,
   }) : plugins = plugins ?? PluginFeatures();
-  
+
   factory FeatureFlags.fromMap(Map<String, dynamic> map) {
     return FeatureFlags(
       useBackgroundService: map['useBackgroundService'] ?? false,
@@ -68,7 +69,7 @@ class FeatureFlags {
       plugins: PluginFeatures.fromMap(map['plugins'] ?? {}),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'useBackgroundService': useBackgroundService,
@@ -87,13 +88,13 @@ class PluginFeatures {
   final bool autoLoad;
   final bool enableHotReload;
   final bool sandboxed;
-  
+
   PluginFeatures({
     this.autoLoad = false,
     this.enableHotReload = false,
     this.sandboxed = true,
   });
-  
+
   factory PluginFeatures.fromMap(Map<String, dynamic> map) {
     return PluginFeatures(
       autoLoad: map['autoLoadPlugins'] ?? map['autoLoad'] ?? false,
@@ -101,7 +102,7 @@ class PluginFeatures {
       sandboxed: map['sandboxed'] ?? true,
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'autoLoad': autoLoad,
@@ -116,18 +117,19 @@ class NetworkConfig {
   final Duration timeout;
   final RetryConfig retryConfig;
   final Map<String, Duration> timeouts;
-  
+
   NetworkConfig({
     Duration? timeout,
     RetryConfig? retryConfig,
     Map<String, Duration>? timeouts,
-  }) : timeout = timeout ?? const Duration(seconds: 30),
-       retryConfig = retryConfig ?? RetryConfig(),
-       timeouts = timeouts ?? {
-         'request': const Duration(seconds: 30),
-         'connect': const Duration(seconds: 10),
-       };
-  
+  })  : timeout = timeout ?? const Duration(seconds: 30),
+        retryConfig = retryConfig ?? RetryConfig(),
+        timeouts = timeouts ??
+            {
+              'request': const Duration(seconds: 30),
+              'connect': const Duration(seconds: 10),
+            };
+
   factory NetworkConfig.fromMap(Map<String, dynamic> map) {
     final timeoutsMap = <String, Duration>{};
     if (map['timeouts'] is Map) {
@@ -137,27 +139,28 @@ class NetworkConfig {
         }
       });
     }
-    
+
     // Handle llmRequestTimeoutMs for backward compatibility
     if (map['llmRequestTimeoutMs'] != null) {
-      timeoutsMap['request'] = Duration(milliseconds: map['llmRequestTimeoutMs']);
+      timeoutsMap['request'] =
+          Duration(milliseconds: map['llmRequestTimeoutMs']);
     }
-    
+
     return NetworkConfig(
-      timeout: map['timeout'] != null 
-          ? Duration(milliseconds: map['timeout']) 
+      timeout: map['timeout'] != null
+          ? Duration(milliseconds: map['timeout'])
           : null,
       retryConfig: RetryConfig.fromMap(map['retry'] ?? {}),
       timeouts: timeoutsMap.isNotEmpty ? timeoutsMap : null,
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     final timeoutsMap = <String, int>{};
     timeouts.forEach((key, duration) {
       timeoutsMap[key] = duration.inMilliseconds;
     });
-    
+
     return {
       'timeout': timeout.inMilliseconds,
       'retry': retryConfig.toMap(),
@@ -172,27 +175,23 @@ class RetryConfig {
   final Duration initialDelay;
   final double backoffMultiplier;
   final Duration maxDelay;
-  
+
   RetryConfig({
     this.maxRetries = 3,
     this.initialDelay = const Duration(seconds: 1),
     this.backoffMultiplier = 2.0,
     this.maxDelay = const Duration(seconds: 30),
   });
-  
+
   factory RetryConfig.fromMap(Map<String, dynamic> map) {
     return RetryConfig(
       maxRetries: map['maxConnectionRetries'] ?? map['maxRetries'] ?? 3,
-      initialDelay: Duration(
-        milliseconds: map['initialDelayMs'] ?? 1000
-      ),
+      initialDelay: Duration(milliseconds: map['initialDelayMs'] ?? 1000),
       backoffMultiplier: (map['backoffMultiplier'] ?? 2.0).toDouble(),
-      maxDelay: Duration(
-        milliseconds: map['maxDelayMs'] ?? 30000
-      ),
+      maxDelay: Duration(milliseconds: map['maxDelayMs'] ?? 30000),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'maxRetries': maxRetries,
@@ -213,7 +212,7 @@ class TypedAppConfig {
   final NetworkConfig network;
   final SecurityConfig security;
   final PlatformConfig platform;
-  
+
   TypedAppConfig({
     required this.appInfo,
     required this.features,
@@ -224,7 +223,7 @@ class TypedAppConfig {
     required this.security,
     required this.platform,
   });
-  
+
   factory TypedAppConfig.fromMap(Map<String, dynamic> map) {
     return TypedAppConfig(
       appInfo: AppInfo.fromMap(map),
@@ -237,14 +236,14 @@ class TypedAppConfig {
       platform: PlatformConfig.fromMap(map['platform'] ?? {}),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     final result = <String, dynamic>{};
-    
+
     // Flatten app info and features at top level for backward compatibility
     result.addAll(appInfo.toMap());
     result.addAll(features.toMap());
-    
+
     // Add nested configs
     result['memory'] = memory.toMap();
     result['logging'] = logging.toMap();
@@ -252,7 +251,7 @@ class TypedAppConfig {
     result['network'] = network.toMap();
     result['security'] = security.toMap();
     result['platform'] = platform.toMap();
-    
+
     return result;
   }
 }
@@ -268,7 +267,7 @@ class MemoryConfig {
   final bool enableMonitoring;
   final bool enableCaching;
   final int maxCacheSize;
-  
+
   MemoryConfig({
     this.monitoringInterval = const Duration(seconds: 30),
     this.maxReadings = 100,
@@ -280,23 +279,23 @@ class MemoryConfig {
     this.enableCaching = true,
     this.maxCacheSize = 1000,
   });
-  
+
   factory MemoryConfig.fromMap(Map<String, dynamic> map) {
     return MemoryConfig(
-      monitoringInterval: Duration(
-        seconds: map['monitoringIntervalSeconds'] ?? 30
-      ),
+      monitoringInterval:
+          Duration(seconds: map['monitoringIntervalSeconds'] ?? 30),
       maxReadings: map['maxReadings'] ?? 100,
       initialSimulationMB: map['initialSimulationMB'] ?? 50,
       gcProbability: (map['gcProbability'] ?? 0.1).toDouble(),
       gcHintArraySize: map['gcHintArraySize'] ?? 10000,
-      highThresholdMB: map['highMemoryThresholdMB'] ?? map['highThresholdMB'] ?? 500,
+      highThresholdMB:
+          map['highMemoryThresholdMB'] ?? map['highThresholdMB'] ?? 500,
       enableMonitoring: map['enableMonitoring'] ?? true,
       enableCaching: map['enableCaching'] ?? true,
       maxCacheSize: map['maxCacheSize'] ?? 1000,
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'monitoringIntervalSeconds': monitoringInterval.inSeconds,
@@ -324,7 +323,7 @@ class LoggingConfig {
   final bool enableRemoteLogging;
   final String? remoteLogEndpoint;
   final List<String> excludeLoggers;
-  
+
   LoggingConfig({
     this.level = LogLevel.info,
     this.enabled = true,
@@ -337,7 +336,7 @@ class LoggingConfig {
     this.remoteLogEndpoint,
     this.excludeLoggers = const [],
   });
-  
+
   factory LoggingConfig.fromMap(Map<String, dynamic> map) {
     // Handle loggingLevel string from config
     LogLevel logLevel = LogLevel.info;
@@ -370,7 +369,7 @@ class LoggingConfig {
         // Default to info if parsing fails
       }
     }
-    
+
     return LoggingConfig(
       level: logLevel,
       enabled: map['loggingLevel'] != null || (map['enabled'] ?? true),
@@ -384,7 +383,7 @@ class LoggingConfig {
       excludeLoggers: List<String>.from(map['excludeLoggers'] ?? []),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'level': level.name,
@@ -412,7 +411,7 @@ class PerformanceConfig {
   final double cpuThreshold;
   final double memoryThreshold;
   final List<String> enabledMetrics;
-  
+
   PerformanceConfig({
     MonitoringConfig? monitoring,
     this.sampleInterval = const Duration(seconds: 5),
@@ -422,21 +421,20 @@ class PerformanceConfig {
     this.memoryThreshold = 80.0,
     this.enabledMetrics = const ['memory', 'cpu', 'network'],
   }) : monitoring = monitoring ?? MonitoringConfig();
-  
+
   factory PerformanceConfig.fromMap(Map<String, dynamic> map) {
     return PerformanceConfig(
       monitoring: MonitoringConfig.fromMap(map),
-      sampleInterval: Duration(
-        seconds: map['sampleIntervalSeconds'] ?? 5
-      ),
+      sampleInterval: Duration(seconds: map['sampleIntervalSeconds'] ?? 5),
       maxSamples: map['maxSamples'] ?? 1000,
       enableProfiling: map['enableProfiling'] ?? false,
       cpuThreshold: (map['cpuThreshold'] ?? 80.0).toDouble(),
       memoryThreshold: (map['memoryThreshold'] ?? 80.0).toDouble(),
-      enabledMetrics: List<String>.from(map['enabledMetrics'] ?? ['memory', 'cpu', 'network']),
+      enabledMetrics: List<String>.from(
+          map['enabledMetrics'] ?? ['memory', 'cpu', 'network']),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       ...monitoring.toMap(),
@@ -456,23 +454,24 @@ class MonitoringConfig {
   final bool enableMetricsExport;
   final String? metricsExportPath;
   final String? metricsEndpoint;
-  
+
   MonitoringConfig({
     this.enabled = true,
     this.enableMetricsExport = false,
     this.metricsExportPath,
     this.metricsEndpoint,
   });
-  
+
   factory MonitoringConfig.fromMap(Map<String, dynamic> map) {
     return MonitoringConfig(
-      enabled: map['enablePerformanceMonitoring'] ?? map['enableMonitoring'] ?? true,
+      enabled:
+          map['enablePerformanceMonitoring'] ?? map['enableMonitoring'] ?? true,
       enableMetricsExport: map['enableMetricsExport'] ?? false,
       metricsExportPath: map['metricsExportPath'],
       metricsEndpoint: map['metricsEndpoint'],
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'enableMonitoring': enabled,
@@ -494,7 +493,7 @@ class SecurityConfig {
   final bool enableEncryption;
   final String? encryptionKey;
   final bool enableAuditLog;
-  
+
   SecurityConfig({
     this.enableHttps = true,
     this.validateCertificates = true,
@@ -506,14 +505,12 @@ class SecurityConfig {
     this.encryptionKey,
     this.enableAuditLog = true,
   });
-  
+
   factory SecurityConfig.fromMap(Map<String, dynamic> map) {
     return SecurityConfig(
       enableHttps: map['enableHttps'] ?? true,
       validateCertificates: map['validateCertificates'] ?? true,
-      tokenExpiration: Duration(
-        hours: map['tokenExpirationHours'] ?? 24
-      ),
+      tokenExpiration: Duration(hours: map['tokenExpirationHours'] ?? 24),
       enableRateLimit: map['enableRateLimit'] ?? true,
       maxRequestsPerMinute: map['maxRequestsPerMinute'] ?? 100,
       allowedOrigins: List<String>.from(map['allowedOrigins'] ?? ['localhost']),
@@ -522,7 +519,7 @@ class SecurityConfig {
       enableAuditLog: map['enableAuditLog'] ?? true,
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'enableHttps': enableHttps,
@@ -544,23 +541,24 @@ class PlatformConfig {
   final BackgroundPlatformConfig background;
   final TrayPlatformConfig tray;
   final StoragePlatformConfig storage;
-  
+
   PlatformConfig({
     required this.notification,
     required this.background,
     required this.tray,
     required this.storage,
   });
-  
+
   factory PlatformConfig.fromMap(Map<String, dynamic> map) {
     return PlatformConfig(
-      notification: NotificationPlatformConfig.fromMap(map['notification'] ?? {}),
+      notification:
+          NotificationPlatformConfig.fromMap(map['notification'] ?? {}),
       background: BackgroundPlatformConfig.fromMap(map['background'] ?? {}),
       tray: TrayPlatformConfig.fromMap(map['tray'] ?? {}),
       storage: StoragePlatformConfig.fromMap(map['storage'] ?? {}),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'notification': notification.toMap(),
@@ -581,7 +579,7 @@ class NotificationPlatformConfig {
   final NotificationPriority priority;
   final String? icon;
   final Duration timeoutDuration;
-  
+
   NotificationPlatformConfig({
     this.enabled = true,
     this.channelId,
@@ -592,7 +590,7 @@ class NotificationPlatformConfig {
     this.icon,
     this.timeoutDuration = const Duration(seconds: 30),
   });
-  
+
   factory NotificationPlatformConfig.fromMap(Map<String, dynamic> map) {
     return NotificationPlatformConfig(
       enabled: map['enabled'] ?? true,
@@ -602,12 +600,10 @@ class NotificationPlatformConfig {
       enableVibration: map['enableVibration'] ?? true,
       priority: NotificationPriority.values.byName(map['priority'] ?? 'high'),
       icon: map['icon'],
-      timeoutDuration: Duration(
-        seconds: map['timeoutSeconds'] ?? 30
-      ),
+      timeoutDuration: Duration(seconds: map['timeoutSeconds'] ?? 30),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'enabled': enabled,
@@ -632,7 +628,7 @@ class BackgroundPlatformConfig {
   final bool enableWakeLock;
   final List<String> allowedNetworks;
   final bool enableBatteryOptimization;
-  
+
   BackgroundPlatformConfig({
     this.enabled = true,
     this.interval = const Duration(minutes: 15),
@@ -641,20 +637,19 @@ class BackgroundPlatformConfig {
     this.allowedNetworks = const ['wifi', 'cellular'],
     this.enableBatteryOptimization = true,
   });
-  
+
   factory BackgroundPlatformConfig.fromMap(Map<String, dynamic> map) {
     return BackgroundPlatformConfig(
       enabled: map['enabled'] ?? true,
-      interval: Duration(
-        minutes: map['intervalMinutes'] ?? 15
-      ),
+      interval: Duration(minutes: map['intervalMinutes'] ?? 15),
       maxConcurrentTasks: map['maxConcurrentTasks'] ?? 3,
       enableWakeLock: map['enableWakeLock'] ?? false,
-      allowedNetworks: List<String>.from(map['allowedNetworks'] ?? ['wifi', 'cellular']),
+      allowedNetworks:
+          List<String>.from(map['allowedNetworks'] ?? ['wifi', 'cellular']),
       enableBatteryOptimization: map['enableBatteryOptimization'] ?? true,
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'enabled': enabled,
@@ -675,7 +670,7 @@ class TrayPlatformConfig {
   final bool showOnStartup;
   final bool minimizeToTray;
   final List<TrayMenuItem> menuItems;
-  
+
   TrayPlatformConfig({
     this.enabled = false,
     this.iconPath,
@@ -684,7 +679,7 @@ class TrayPlatformConfig {
     this.minimizeToTray = false,
     this.menuItems = const [],
   });
-  
+
   factory TrayPlatformConfig.fromMap(Map<String, dynamic> map) {
     return TrayPlatformConfig(
       enabled: map['enabled'] ?? false,
@@ -693,11 +688,13 @@ class TrayPlatformConfig {
       showOnStartup: map['showOnStartup'] ?? false,
       minimizeToTray: map['minimizeToTray'] ?? false,
       menuItems: (map['menuItems'] as List<dynamic>?)
-          ?.map((item) => TrayMenuItem.fromMap(item as Map<String, dynamic>))
-          .toList() ?? [],
+              ?.map(
+                  (item) => TrayMenuItem.fromMap(item as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'enabled': enabled,
@@ -717,7 +714,7 @@ class TrayMenuItem {
   final bool enabled;
   final String? action;
   final List<TrayMenuItem> subItems;
-  
+
   TrayMenuItem({
     required this.id,
     required this.label,
@@ -725,7 +722,7 @@ class TrayMenuItem {
     this.action,
     this.subItems = const [],
   });
-  
+
   factory TrayMenuItem.fromMap(Map<String, dynamic> map) {
     return TrayMenuItem(
       id: map['id'] as String,
@@ -733,11 +730,13 @@ class TrayMenuItem {
       enabled: map['enabled'] ?? true,
       action: map['action'],
       subItems: (map['subItems'] as List<dynamic>?)
-          ?.map((item) => TrayMenuItem.fromMap(item as Map<String, dynamic>))
-          .toList() ?? [],
+              ?.map(
+                  (item) => TrayMenuItem.fromMap(item as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -757,7 +756,7 @@ class StoragePlatformConfig {
   final int maxCacheSize;
   final bool enablePersistence;
   final String? storagePath;
-  
+
   StoragePlatformConfig({
     this.enableSecureStorage = true,
     this.encryptionKey,
@@ -766,20 +765,18 @@ class StoragePlatformConfig {
     this.enablePersistence = true,
     this.storagePath,
   });
-  
+
   factory StoragePlatformConfig.fromMap(Map<String, dynamic> map) {
     return StoragePlatformConfig(
       enableSecureStorage: map['enableSecureStorage'] ?? true,
       encryptionKey: map['encryptionKey'],
-      cacheExpiration: Duration(
-        hours: map['cacheExpirationHours'] ?? 24
-      ),
+      cacheExpiration: Duration(hours: map['cacheExpirationHours'] ?? 24),
       maxCacheSize: map['maxCacheSize'] ?? 100 * 1024 * 1024,
       enablePersistence: map['enablePersistence'] ?? true,
       storagePath: map['storagePath'],
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'enableSecureStorage': enableSecureStorage,

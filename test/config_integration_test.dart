@@ -23,7 +23,7 @@ void main() {
       ''';
 
       final config = ConfigLoader.loadFromString(jsonConfig);
-      
+
       expect(config.appName, equals('Test App'));
       expect(config.appVersion, equals('1.0.0'));
       expect(config.useBackgroundService, isTrue);
@@ -48,13 +48,14 @@ void main() {
       };
 
       final typedConfig = typed.TypedAppConfig.fromMap(map);
-      
+
       expect(typedConfig.appInfo.name, equals('Test App'));
       expect(typedConfig.appInfo.version, equals('2.0.0'));
       expect(typedConfig.memory.highThresholdMB, equals(512));
       expect(typedConfig.logging.level, equals(typed.LogLevel.fine));
       expect(typedConfig.performance.monitoring.enabled, isTrue);
-      expect(typedConfig.network.timeouts['request']?.inMilliseconds, equals(10000));
+      expect(typedConfig.network.timeouts['request']?.inMilliseconds,
+          equals(10000));
     });
 
     test('should handle feature flags correctly', () {
@@ -68,7 +69,7 @@ void main() {
       };
 
       final features = typed.FeatureFlags.fromMap(map);
-      
+
       expect(features.useBackgroundService, isTrue);
       expect(features.useNotification, isFalse);
       expect(features.useTray, isTrue);

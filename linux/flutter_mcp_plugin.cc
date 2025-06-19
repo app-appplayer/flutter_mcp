@@ -564,14 +564,91 @@ static FlMethodResponse* configure_tray(FlValue* args) {
 }
 
 static FlMethodResponse* check_permission(FlValue* args) {
-  // Linux doesn't require most permissions
-  g_autoptr(FlValue) result = fl_value_new_bool(TRUE);
+  if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing arguments", nullptr));
+  }
+  
+  FlValue* permission_value = fl_value_lookup_string(args, "permission");
+  if (!permission_value) {
+    return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing permission", nullptr));
+  }
+  
+  const gchar* permission = fl_value_get_string(permission_value);
+  gboolean granted = FALSE;
+  
+  // Handle Linux-specific permissions
+  if (g_strcmp0(permission, "notification") == 0) {
+    // Check if notification daemon is available
+    GList* capabilities = notify_get_server_caps();
+    granted = (capabilities != NULL);
+    g_list_free_full(capabilities, g_free);
+  } else if (g_strcmp0(permission, "background") == 0) {
+    // Linux allows background execution
+    granted = TRUE;
+  } else if (g_strcmp0(permission, "storage") == 0) {
+    // Check if secret service is available
+    GError* error = nullptr;
+    SecretService* service = secret_service_get_sync(SECRET_SERVICE_NONE, nullptr, &error);
+    if (service) {
+      granted = TRUE;
+      g_object_unref(service);
+    }
+    if (error) {
+      g_error_free(error);
+    }
+  } else if (g_strcmp0(permission, "systemTray") == 0) {
+    // Check if system tray is available (AppIndicator)
+    granted = TRUE; // Assume available
+  } else {
+    // Unknown permission, assume not granted
+    granted = FALSE;
+  }
+  
+  g_autoptr(FlValue) result = fl_value_new_bool(granted);
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
 static FlMethodResponse* request_permission(FlValue* args) {
-  // Linux doesn't require most permissions
-  g_autoptr(FlValue) result = fl_value_new_bool(TRUE);
+  if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing arguments", nullptr));
+  }
+  
+  FlValue* permission_value = fl_value_lookup_string(args, "permission");
+  if (!permission_value) {
+    return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing permission", nullptr));
+  }
+  
+  const gchar* permission = fl_value_get_string(permission_value);
+  gboolean granted = FALSE;
+  
+  // Handle Linux-specific permissions
+  if (g_strcmp0(permission, "notification") == 0) {
+    // Initialize notification system if not already done
+    if (!notify_is_initted()) {
+      GError* error = nullptr;
+      if (notify_init("Flutter MCP")) {
+        granted = TRUE;
+      } else {
+        granted = FALSE;
+      }
+    } else {
+      granted = TRUE;
+    }
+  } else if (g_strcmp0(permission, "background") == 0) {
+    // Linux allows background execution
+    granted = TRUE;
+  } else if (g_strcmp0(permission, "storage") == 0) {
+    // Secret service should be available
+    granted = TRUE;
+  } else if (g_strcmp0(permission, "systemTray") == 0) {
+    // System tray is generally available
+    granted = TRUE;
+  } else {
+    // Unknown permission
+    granted = FALSE;
+  }
+  
+  g_autoptr(FlValue) result = fl_value_new_bool(granted);
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 

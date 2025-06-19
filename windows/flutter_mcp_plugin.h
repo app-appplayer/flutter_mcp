@@ -85,6 +85,10 @@ class FlutterMcpPlugin : public flutter::Plugin {
                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void ConfigureTray(const flutter::MethodCall<flutter::EncodableValue> &method_call,
                      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void CheckPermission(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void RequestPermission(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void Shutdown(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
   // Event sending

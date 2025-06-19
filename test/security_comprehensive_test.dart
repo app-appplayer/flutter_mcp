@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/security/security_audit.dart';
 import 'package:flutter_mcp/src/security/encryption_manager.dart';
-import 'package:flutter_mcp/src/events/enhanced_typed_event_system.dart';
+import 'package:flutter_mcp/src/events/event_system.dart';
 import 'package:flutter_mcp/src/events/event_models.dart';
 import 'package:flutter_mcp/src/utils/exceptions.dart';
 import 'dart:convert';
@@ -15,13 +15,14 @@ void main() {
       auditManager = SecurityAuditManager.instance;
       auditManager.initialize();
       // Clear any existing events
-      await EnhancedTypedEventSystem.instance.reset();
+      await EventSystem.instance.reset();
     });
 
     tearDown(() async {
       auditManager.dispose();
-      // Clear events after test  
-      await EnhancedTypedEventSystem.instance.reset();
+      // Wait a bit to ensure all events are processed
+      await Future.delayed(Duration(milliseconds: 100));
+      await EventSystem.instance.reset();
     });
 
     group('Authentication Management', () {
@@ -40,7 +41,8 @@ void main() {
 
       test('should handle failed authentication attempts', () {
         // Act - First failed attempt
-        bool result1 = auditManager.checkAuthenticationAttempt('user123', false);
+        bool result1 =
+            auditManager.checkAuthenticationAttempt('user123', false);
         expect(result1, isTrue); // Not locked yet
         expect(auditManager.isUserLockedOut('user123'), isFalse);
 
@@ -99,7 +101,8 @@ void main() {
         auditManager.endSession('user123', sessionId);
 
         // Assert - Should be able to get audit events
-        List<SecurityAuditEvent> events = auditManager.getUserAuditEvents('user123');
+        List<SecurityAuditEvent> events =
+            auditManager.getUserAuditEvents('user123');
         expect(events.length, greaterThanOrEqualTo(2)); // start and end events
       });
 
@@ -113,10 +116,10 @@ void main() {
         auditManager.startSession('user123'); // Should remove first session
 
         // Assert - Should have at most 2 sessions
-        List<SecurityAuditEvent> events = auditManager.getUserAuditEvents('user123');
-        List<SecurityAuditEvent> sessionStarts = events
-            .where((e) => e.action == 'session_start')
-            .toList();
+        List<SecurityAuditEvent> events =
+            auditManager.getUserAuditEvents('user123');
+        List<SecurityAuditEvent> sessionStarts =
+            events.where((e) => e.action == 'session_start').toList();
         expect(sessionStarts.length, equals(3)); // All starts are logged
       });
     });
@@ -168,7 +171,8 @@ void main() {
         ));
 
         // Act
-        Map<String, dynamic> riskAssessment = auditManager.getUserRiskAssessment('user123');
+        Map<String, dynamic> riskAssessment =
+            auditManager.getUserRiskAssessment('user123');
 
         // Assert
         expect(riskAssessment['riskScore'], greaterThan(0));
@@ -188,7 +192,8 @@ void main() {
           riskScore: 25,
         ));
 
-        Map<String, dynamic> initialRisk = auditManager.getUserRiskAssessment('user123');
+        Map<String, dynamic> initialRisk =
+            auditManager.getUserRiskAssessment('user123');
 
         // Act - Add another risky event
         auditManager.logSecurityEvent(SecurityAuditEvent(
@@ -201,7 +206,8 @@ void main() {
           riskScore: 30,
         ));
 
-        Map<String, dynamic> updatedRisk = auditManager.getUserRiskAssessment('user123');
+        Map<String, dynamic> updatedRisk =
+            auditManager.getUserRiskAssessment('user123');
 
         // Assert
         expect(updatedRisk['riskScore'], greaterThan(initialRisk['riskScore']));
@@ -239,7 +245,7 @@ void main() {
       test('should publish security events to event system', () async {
         // Arrange
         List<SecurityEvent> capturedEvents = [];
-        EnhancedTypedEventSystem.instance.subscribe<SecurityEvent>((event) {
+        await EventSystem.instance.subscribeTopic('security.event', (event) {
           capturedEvents.add(event);
         });
 
@@ -266,7 +272,7 @@ void main() {
       test('should publish security alerts for high-risk events', () async {
         // Arrange
         List<SecurityAlert> capturedAlerts = [];
-        EnhancedTypedEventSystem.instance.subscribe<SecurityAlert>((alert) {
+        await EventSystem.instance.subscribeTopic('security.alert', (alert) {
           capturedAlerts.add(alert);
         });
 
@@ -296,7 +302,7 @@ void main() {
 
     setUp(() {
       encryptionManager = EncryptionManager.instance;
-      encryptionManager.initialize(minKeyLength: 512); // Default safe value
+      encryptionManager.initialize(minKeyLength: 256); // AES256 key length
     });
 
     tearDown(() {
@@ -307,7 +313,7 @@ void main() {
       test('should generate encryption keys', () {
         // Act
         String keyId = encryptionManager.generateKey(
-          EncryptionAlgorithm.rsa2048,
+          EncryptionAlgorithm.aes256,
           alias: 'test_key',
           metadata: {'purpose': 'testing'},
         );
@@ -318,7 +324,7 @@ void main() {
 
         Map<String, dynamic>? keyInfo = encryptionManager.getKeyInfo(keyId);
         expect(keyInfo, isNotNull);
-        expect(keyInfo!['algorithm'], equals('rsa2048'));
+        expect(keyInfo!['algorithm'], equals('aes256'));
       });
 
       test('should import existing keys', () {
@@ -327,7 +333,7 @@ void main() {
 
         // Act
         String keyId = encryptionManager.importKey(
-          EncryptionAlgorithm.aes256,  // 32 bytes is correct for AES256, not RSA2048
+          EncryptionAlgorithm.aes256, // 32 bytes is correct for AES256
           keyData,
           alias: 'imported_key',
         );
@@ -340,11 +346,12 @@ void main() {
 
       test('should reject keys below minimum length', () {
         // Arrange
-        encryptionManager.initialize(minKeyLength: 4096); // Set higher than RSA2048
-        
+        encryptionManager.initialize(
+            minKeyLength: 512); // Set higher than AES256 (256 bits)
+
         // Act & Assert
         expect(
-          () => encryptionManager.generateKey(EncryptionAlgorithm.rsa2048),
+          () => encryptionManager.generateKey(EncryptionAlgorithm.aes256),
           throwsA(isA<MCPSecurityException>()),
         );
       });
@@ -352,7 +359,7 @@ void main() {
       test('should handle key aliases', () {
         // Act
         String keyId = encryptionManager.generateKey(
-          EncryptionAlgorithm.rsa2048,
+          EncryptionAlgorithm.aes256,
           alias: 'my_key',
         );
 
@@ -366,11 +373,13 @@ void main() {
     group('Data Encryption/Decryption', () {
       test('should encrypt and decrypt data correctly', () {
         // Arrange
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
         String originalData = 'This is sensitive information';
 
         // Act
-        EncryptedData encrypted = encryptionManager.encrypt(keyId, originalData);
+        EncryptedData encrypted =
+            encryptionManager.encrypt(keyId, originalData);
         String decrypted = encryptionManager.decrypt(encrypted);
 
         // Assert
@@ -382,7 +391,8 @@ void main() {
 
       test('should handle encryption with parameters', () {
         // Arrange
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
         Map<String, dynamic> parameters = {
           'version': '1.0',
           'format': 'text',
@@ -410,7 +420,7 @@ void main() {
       test('should fail with expired key', () async {
         // Arrange
         String keyId = encryptionManager.generateKey(
-          EncryptionAlgorithm.rsa2048,
+          EncryptionAlgorithm.aes256,
           expiresIn: Duration(milliseconds: 1),
         );
 
@@ -426,7 +436,8 @@ void main() {
 
       test('should verify data integrity with checksums', () {
         // Arrange
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
         EncryptedData encrypted = encryptionManager.encrypt(keyId, 'test data');
 
         // Tamper with data
@@ -444,7 +455,7 @@ void main() {
       test('should rotate keys successfully', () {
         // Arrange
         String originalKeyId = encryptionManager.generateKey(
-          EncryptionAlgorithm.rsa2048,
+          EncryptionAlgorithm.aes256,
           alias: 'rotating_key',
         );
 
@@ -453,13 +464,15 @@ void main() {
 
         // Assert
         expect(newKeyId, isNot(equals(originalKeyId)));
-        
+
         // Original key should be expired
-        Map<String, dynamic>? originalKeyInfo = encryptionManager.getKeyInfo(originalKeyId);
+        Map<String, dynamic>? originalKeyInfo =
+            encryptionManager.getKeyInfo(originalKeyId);
         expect(originalKeyInfo!['expiresAt'], isNotNull);
-        
+
         // Alias should point to new key
-        Map<String, dynamic>? aliasKeyInfo = encryptionManager.getKeyInfo('rotating_key');
+        Map<String, dynamic>? aliasKeyInfo =
+            encryptionManager.getKeyInfo('rotating_key');
         expect(aliasKeyInfo!['keyId'], equals(newKeyId));
       });
     });
@@ -467,8 +480,8 @@ void main() {
     group('Key Lifecycle Management', () {
       test('should list all keys', () {
         // Arrange
-        encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
-        encryptionManager.generateKey(EncryptionAlgorithm.rsa4096);
+        encryptionManager.generateKey(EncryptionAlgorithm.aes256);
+        encryptionManager.generateKey(EncryptionAlgorithm.aes256);
 
         // Act
         List<Map<String, dynamic>> keys = encryptionManager.listKeys();
@@ -482,7 +495,7 @@ void main() {
       test('should identify expired keys', () async {
         // Arrange
         encryptionManager.generateKey(
-          EncryptionAlgorithm.rsa2048,
+          EncryptionAlgorithm.aes256,
           expiresIn: Duration(milliseconds: 1),
         );
 
@@ -499,7 +512,7 @@ void main() {
       test('should cleanup expired keys', () async {
         // Arrange
         String expiredKeyId = encryptionManager.generateKey(
-          EncryptionAlgorithm.rsa2048,
+          EncryptionAlgorithm.aes256,
           expiresIn: Duration(milliseconds: 1),
         );
 
@@ -516,7 +529,8 @@ void main() {
 
       test('should prevent deletion of active keys without force', () {
         // Arrange
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
 
         // Act & Assert
         expect(
@@ -533,11 +547,14 @@ void main() {
     group('Security Reporting', () {
       test('should generate encryption security reports', () {
         // Arrange
-        encryptionManager.generateKey(EncryptionAlgorithm.rsa2048, alias: 'key1');
-        encryptionManager.generateKey(EncryptionAlgorithm.rsa4096, alias: 'key2');
+        encryptionManager.generateKey(EncryptionAlgorithm.aes256,
+            alias: 'key1');
+        encryptionManager.generateKey(EncryptionAlgorithm.aes256,
+            alias: 'key2');
 
         // Act
-        Map<String, dynamic> report = encryptionManager.generateSecurityReport();
+        Map<String, dynamic> report =
+            encryptionManager.generateSecurityReport();
 
         // Assert
         expect(report['generatedAt'], isNotNull);
@@ -552,9 +569,11 @@ void main() {
     group('Serialization', () {
       test('should serialize and deserialize encrypted data', () {
         // Arrange
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
         String originalData = 'Test serialization data';
-        EncryptedData encrypted = encryptionManager.encrypt(keyId, originalData);
+        EncryptedData encrypted =
+            encryptionManager.encrypt(keyId, originalData);
 
         // Act - Serialize
         Map<String, dynamic> serialized = encrypted.toJson();
@@ -577,7 +596,8 @@ void main() {
     group('Error Handling', () {
       test('should handle encryption errors gracefully', () {
         // Arrange
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
 
         // Act & Assert - Invalid data types should be handled
         expect(
@@ -588,9 +608,11 @@ void main() {
 
       test('should audit security events', () {
         // Arrange
-        String keyId = encryptionManager.generateKey(EncryptionAlgorithm.rsa2048);
+        String keyId =
+            encryptionManager.generateKey(EncryptionAlgorithm.aes256);
         SecurityAuditManager auditManager = SecurityAuditManager.instance;
-        List<SecurityAuditEvent> initialEvents = auditManager.getAllAuditEvents();
+        List<SecurityAuditEvent> initialEvents =
+            auditManager.getAllAuditEvents();
 
         // Act
         encryptionManager.encrypt(keyId, 'test data');
@@ -598,10 +620,9 @@ void main() {
         // Assert - Should have logged encryption event
         List<SecurityAuditEvent> finalEvents = auditManager.getAllAuditEvents();
         expect(finalEvents.length, greaterThan(initialEvents.length));
-        
-        SecurityAuditEvent? encryptionEvent = finalEvents
-            .where((e) => e.action == 'data_encrypted')
-            .firstOrNull;
+
+        SecurityAuditEvent? encryptionEvent =
+            finalEvents.where((e) => e.action == 'data_encrypted').firstOrNull;
         expect(encryptionEvent, isNotNull);
       });
     });

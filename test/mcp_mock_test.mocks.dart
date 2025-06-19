@@ -7,13 +7,15 @@ import 'dart:async' as _i3;
 
 import 'package:flutter_mcp/src/config/background_config.dart' as _i4;
 import 'package:flutter_mcp/src/config/notification_config.dart' as _i6;
-import 'package:flutter_mcp/src/config/tray_config.dart' as _i8;
+import 'package:flutter_mcp/src/config/tray_config.dart' as _i9;
 import 'package:flutter_mcp/src/platform/background/background_service.dart'
     as _i2;
 import 'package:flutter_mcp/src/platform/notification/notification_manager.dart'
     as _i5;
-import 'package:flutter_mcp/src/platform/storage/secure_storage.dart' as _i9;
-import 'package:flutter_mcp/src/platform/tray/tray_manager.dart' as _i7;
+import 'package:flutter_mcp/src/platform/notification/notification_models.dart'
+    as _i7;
+import 'package:flutter_mcp/src/platform/storage/secure_storage.dart' as _i10;
+import 'package:flutter_mcp/src/platform/tray/tray_manager.dart' as _i8;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -100,6 +102,16 @@ class MockNotificationManager extends _i1.Mock
     required String? body,
     String? icon,
     String? id = 'mcp_notification',
+    Map<String, dynamic>? data,
+    List<_i7.NotificationAction>? actions,
+    String? channelId,
+    _i7.NotificationPriority? priority = _i7.NotificationPriority.normal,
+    bool? showProgress = false,
+    int? progress,
+    int? maxProgress,
+    String? group,
+    String? image,
+    bool? ongoing = false,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -110,11 +122,83 @@ class MockNotificationManager extends _i1.Mock
             #body: body,
             #icon: icon,
             #id: id,
+            #data: data,
+            #actions: actions,
+            #channelId: channelId,
+            #priority: priority,
+            #showProgress: showProgress,
+            #progress: progress,
+            #maxProgress: maxProgress,
+            #group: group,
+            #image: image,
+            #ongoing: ongoing,
           },
         ),
         returnValue: _i3.Future<void>.value(),
         returnValueForMissingStub: _i3.Future<void>.value(),
       ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<bool> requestPermission() => (super.noSuchMethod(
+        Invocation.method(
+          #requestPermission,
+          [],
+        ),
+        returnValue: _i3.Future<bool>.value(false),
+      ) as _i3.Future<bool>);
+
+  @override
+  _i3.Future<void> cancelNotification(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #cancelNotification,
+          [id],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> cancelAllNotifications() => (super.noSuchMethod(
+        Invocation.method(
+          #cancelAllNotifications,
+          [],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> updateNotification({
+    required String? id,
+    String? title,
+    String? body,
+    int? progress,
+    Map<String, dynamic>? data,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateNotification,
+          [],
+          {
+            #id: id,
+            #title: title,
+            #body: body,
+            #progress: progress,
+            #data: data,
+          },
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
+
+  @override
+  List<_i7.NotificationInfo> getActiveNotifications() => (super.noSuchMethod(
+        Invocation.method(
+          #getActiveNotifications,
+          [],
+        ),
+        returnValue: <_i7.NotificationInfo>[],
+      ) as List<_i7.NotificationInfo>);
 
   @override
   _i3.Future<void> hideNotification(String? id) => (super.noSuchMethod(
@@ -125,18 +209,28 @@ class MockNotificationManager extends _i1.Mock
         returnValue: _i3.Future<void>.value(),
         returnValueForMissingStub: _i3.Future<void>.value(),
       ) as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> dispose() => (super.noSuchMethod(
+        Invocation.method(
+          #dispose,
+          [],
+        ),
+        returnValue: _i3.Future<void>.value(),
+        returnValueForMissingStub: _i3.Future<void>.value(),
+      ) as _i3.Future<void>);
 }
 
 /// A class which mocks [TrayManager].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockTrayManager extends _i1.Mock implements _i7.TrayManager {
+class MockTrayManager extends _i1.Mock implements _i8.TrayManager {
   MockTrayManager() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i3.Future<void> initialize(_i8.TrayConfig? config) => (super.noSuchMethod(
+  _i3.Future<void> initialize(_i9.TrayConfig? config) => (super.noSuchMethod(
         Invocation.method(
           #initialize,
           [config],
@@ -166,7 +260,7 @@ class MockTrayManager extends _i1.Mock implements _i7.TrayManager {
       ) as _i3.Future<void>);
 
   @override
-  _i3.Future<void> setContextMenu(List<_i7.TrayMenuItem>? items) =>
+  _i3.Future<void> setContextMenu(List<_i8.TrayMenuItem>? items) =>
       (super.noSuchMethod(
         Invocation.method(
           #setContextMenu,
@@ -191,7 +285,7 @@ class MockTrayManager extends _i1.Mock implements _i7.TrayManager {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockSecureStorageManager extends _i1.Mock
-    implements _i9.SecureStorageManager {
+    implements _i10.SecureStorageManager {
   MockSecureStorageManager() {
     _i1.throwOnMissingStub(this);
   }

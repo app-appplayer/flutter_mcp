@@ -22,32 +22,38 @@ void main() {
 
       expect(exception.message, 'Test error message');
       expect(exception.originalError, originalError);
-      expect(exception.toString(), 'MCPException: Test error message (Original error: FormatException: Original format error)');
+      expect(exception.toString(),
+          'MCPException: Test error message (Original error: FormatException: Original format error)');
     });
 
     test('Specialized exceptions', () {
       // Test various specialized exceptions
       final initException = MCPInitializationException('Init failed');
-      expect(initException.toString(), contains('Initialization error: Init failed'));
+      expect(initException.toString(),
+          contains('Initialization error: Init failed'));
 
       final platformException = MCPPlatformNotSupportedException('background');
-      expect(platformException.toString(), contains('Platform does not support the feature: background'));
+      expect(platformException.toString(),
+          contains('Platform does not support the feature: background'));
       expect(platformException.feature, 'background');
 
       final configException = MCPConfigurationException('Invalid config');
-      expect(configException.toString(), contains('Configuration error: Invalid config'));
+      expect(configException.toString(),
+          contains('Configuration error: Invalid config'));
 
       final networkException = MCPNetworkException(
         'Connection failed',
         statusCode: 404,
         responseBody: 'Not found',
       );
-      expect(networkException.toString(), contains('Network error: Connection failed'));
+      expect(networkException.toString(),
+          contains('Network error: Connection failed'));
       expect(networkException.statusCode, 404);
       expect(networkException.responseBody, 'Not found');
 
       final authException = MCPAuthenticationException('Invalid API key');
-      expect(authException.toString(), 'MCPException: Authentication error: Invalid API key');
+      expect(authException.toString(),
+          'MCPException: Authentication error: Invalid API key');
     });
 
     test('Operation failed exception', () {
@@ -60,13 +66,16 @@ void main() {
 
       expect(opException.message, 'Operation X failed');
       expect(opException.innerError, innerError);
-      expect(opException.toString(), contains('MCPOperationFailedException: Operation X failed'));
-      expect(opException.toString(), contains('Inner error: TimeoutException: Connection timed out'));
+      expect(opException.toString(),
+          contains('MCPOperationFailedException: Operation X failed'));
+      expect(opException.toString(),
+          contains('Inner error: TimeoutException: Connection timed out'));
     });
 
     test('Timeout exception', () {
       final timeout = Duration(seconds: 30);
-      final timeoutException = MCPTimeoutException('Request timed out', timeout);
+      final timeoutException =
+          MCPTimeoutException('Request timed out', timeout);
 
       expect(timeoutException.message, 'Request timed out');
       expect(timeoutException.timeout, timeout);
@@ -83,10 +92,13 @@ void main() {
         validationErrors,
       );
 
-      expect(validationException.message, 'Validation error: Validation failed');
+      expect(
+          validationException.message, 'Validation error: Validation failed');
       expect(validationException.validationErrors, validationErrors);
-      expect(validationException.toString(), contains('username: Username is required'));
-      expect(validationException.toString(), contains('password: Password must be at least 8 characters'));
+      expect(validationException.toString(),
+          contains('username: Username is required'));
+      expect(validationException.toString(),
+          contains('password: Password must be at least 8 characters'));
     });
   });
 
@@ -95,7 +107,7 @@ void main() {
       int attempts = 0;
 
       final result = await ErrorRecovery.tryWithRetry<String>(
-            () async {
+        () async {
           attempts++;
           if (attempts == 1) {
             throw Exception('First attempt failed');
@@ -115,7 +127,7 @@ void main() {
 
       try {
         await ErrorRecovery.tryWithRetry<String>(
-              () async {
+          () async {
             attempts++;
             throw Exception('Always fails');
           },
@@ -133,8 +145,8 @@ void main() {
       int attempts = 0;
 
       expect(
-            () => ErrorRecovery.tryWithRetry<String>(
-              () async {
+        () => ErrorRecovery.tryWithRetry<String>(
+          () async {
             attempts++;
             throw FormatException('Non-retryable error');
           },
@@ -151,7 +163,7 @@ void main() {
 
     test('Try with timeout success', () async {
       final result = await ErrorRecovery.tryWithTimeout<String>(
-            () async {
+        () async {
           await Future.delayed(Duration(milliseconds: 10));
           return 'Success';
         },
@@ -163,8 +175,8 @@ void main() {
 
     test('Try with timeout failure', () async {
       expect(
-            () => ErrorRecovery.tryWithTimeout<String>(
-              () async {
+        () => ErrorRecovery.tryWithTimeout<String>(
+          () async {
             // Delay longer than timeout
             await Future.delayed(Duration(milliseconds: 50));
             return 'Success';
@@ -177,8 +189,8 @@ void main() {
 
     test('Try with fallback to alternative implementation', () async {
       final result = await ErrorRecovery.tryWithFallback<String>(
-            () async => throw Exception('Primary implementation failed'),
-            () async => 'Fallback success',
+        () async => throw Exception('Primary implementation failed'),
+        () async => 'Fallback success',
       );
 
       expect(result, 'Fallback success');
@@ -186,9 +198,9 @@ void main() {
 
     test('Try with fallback where both fail', () async {
       expect(
-            () => ErrorRecovery.tryWithFallback<String>(
-              () async => throw Exception('Primary implementation failed'),
-              () async => throw Exception('Fallback implementation also failed'),
+        () => ErrorRecovery.tryWithFallback<String>(
+          () async => throw Exception('Primary implementation failed'),
+          () async => throw Exception('Fallback implementation also failed'),
         ),
         throwsA(isA<MCPOperationFailedException>()),
       );
@@ -206,17 +218,17 @@ void main() {
       expect(breaker.state, CircuitBreakerState.closed);
     });
 
-    test('Transitions to open after reaching failure threshold', () {
+    test('Transitions to open after reaching failure threshold', () async {
       final breaker = CircuitBreaker(
         name: 'testBreaker',
         failureThreshold: 2,
         resetTimeout: Duration(seconds: 1),
       );
 
-      breaker.recordFailure('error');
+      await breaker.recordFailure('error');
       expect(breaker.state, CircuitBreakerState.closed);
 
-      breaker.recordFailure('error');
+      await breaker.recordFailure('error');
       expect(breaker.state, CircuitBreakerState.open);
     });
 
@@ -227,16 +239,17 @@ void main() {
         resetTimeout: Duration(seconds: 1),
       );
 
-      breaker.recordFailure('error');
+      await breaker.recordFailure('error');
       expect(breaker.state, CircuitBreakerState.open);
 
       expect(
-            () async => await breaker.execute(() async => 'Should fail'),
+        () async => await breaker.execute(() async => 'Should fail'),
         throwsA(isA<CircuitBreakerOpenException>()),
       );
     });
 
-    test('Transitions to half-open after timeout, then closed on success', () async {
+    test('Transitions to half-open after timeout, then closed on success',
+        () async {
       final breaker = CircuitBreaker(
         name: 'testBreaker',
         failureThreshold: 1,
@@ -244,7 +257,7 @@ void main() {
         halfOpenSuccessThreshold: 1,
       );
 
-      breaker.recordFailure('error');
+      await breaker.recordFailure('error');
       expect(breaker.state, CircuitBreakerState.open);
 
       await Future.delayed(Duration(milliseconds: 150));
@@ -262,7 +275,7 @@ void main() {
         halfOpenSuccessThreshold: 1,
       );
 
-      breaker.recordFailure('error');
+      await breaker.recordFailure('error');
       expect(breaker.state, CircuitBreakerState.open);
 
       await Future.delayed(Duration(milliseconds: 150));

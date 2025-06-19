@@ -45,7 +45,7 @@ void main() {
 
         // Act
         monitor.configureAggregation('test.metric', config);
-        
+
         // Record some metrics
         for (int i = 0; i < 5; i++) {
           final metric = CounterMetric(
@@ -63,16 +63,20 @@ void main() {
 
       test('should perform different aggregation types', () {
         // Test average aggregation
-        monitor.configureAggregation('avg.metric', AggregationConfig(
-          window: Duration(seconds: 10),
-          type: AggregationType.average,
-        ));
+        monitor.configureAggregation(
+            'avg.metric',
+            AggregationConfig(
+              window: Duration(seconds: 10),
+              type: AggregationType.average,
+            ));
 
         // Test max aggregation
-        monitor.configureAggregation('max.metric', AggregationConfig(
-          window: Duration(seconds: 10),
-          type: AggregationType.max,
-        ));
+        monitor.configureAggregation(
+            'max.metric',
+            AggregationConfig(
+              window: Duration(seconds: 10),
+              type: AggregationType.max,
+            ));
 
         // Record metrics
         for (int i = 1; i <= 5; i++) {
@@ -93,7 +97,7 @@ void main() {
         // Assert
         final avgValue = monitor.getAggregatedValue('avg.metric');
         final maxValue = monitor.getAggregatedValue('max.metric');
-        
+
         expect(avgValue, equals(30.0)); // (10+20+30+40+50)/5
         expect(maxValue, equals(50.0)); // max value
       });
@@ -103,7 +107,7 @@ void main() {
       test('should configure thresholds for metrics', () async {
         // Arrange
         final violations = <ThresholdViolation>[];
-        
+
         final config = ThresholdConfig(
           warningLevel: 80.0,
           criticalLevel: 95.0,
@@ -114,7 +118,7 @@ void main() {
 
         // Act
         monitor.configureThreshold('cpu.usage', config);
-        
+
         // Record metric that violates threshold
         monitor.recordTypedMetric(ResourceUsageMetric(
           name: 'cpu.usage',
@@ -137,7 +141,7 @@ void main() {
       test('should detect critical threshold violations', () async {
         // Arrange
         final violations = <ThresholdViolation>[];
-        
+
         final config = ThresholdConfig(
           warningLevel: 80.0,
           criticalLevel: 95.0,
@@ -148,7 +152,7 @@ void main() {
 
         // Act
         monitor.configureThreshold('memory.usage', config);
-        
+
         // Record metric that violates critical threshold
         monitor.recordTypedMetric(ResourceUsageMetric(
           name: 'memory.usage',
@@ -194,7 +198,8 @@ void main() {
         ));
 
         // Assert - should detect but not throw
-        expect(() => monitor.getMetricStatistics('anomaly.test'), returnsNormally);
+        expect(
+            () => monitor.getMetricStatistics('anomaly.test'), returnsNormally);
       });
 
       test('should disable auto detection', () {
@@ -205,11 +210,13 @@ void main() {
         monitor.disableAutoDetection();
 
         // Assert - detection should be disabled
-        expect(() => monitor.recordTypedMetric(CounterMetric(
-          name: 'test.metric',
-          value: 1000.0,
-          unit: 'ms',
-        )), returnsNormally);
+        expect(
+            () => monitor.recordTypedMetric(CounterMetric(
+                  name: 'test.metric',
+                  value: 1000.0,
+                  unit: 'ms',
+                )),
+            returnsNormally);
       });
     });
 
@@ -217,7 +224,7 @@ void main() {
       test('should get metric statistics', () {
         // Arrange
         final metricName = 'stats.metric';
-        
+
         // Act - Record multiple values
         for (int i = 1; i <= 10; i++) {
           monitor.recordTypedMetric(CounterMetric(
@@ -264,7 +271,7 @@ void main() {
           resourceType: ResourceType.cpu,
           unit: '%',
         ));
-        
+
         monitor.recordTypedMetric(ResourceUsageMetric(
           name: 'memory.usage',
           value: 60.0,

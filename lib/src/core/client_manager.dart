@@ -32,7 +32,7 @@ class MCPClientManager extends BaseManager {
       client: client,
       transport: transport,
     );
-    
+
     // Report health status
     reportHealthy('Client registered: $id');
   }
@@ -83,26 +83,28 @@ class MCPClientManager extends BaseManager {
       ...baseStatus,
       'total': _clients.length,
       'connected': _clients.values.where((c) => c.client.isConnected).length,
-      'disconnected': _clients.values.where((c) => !c.client.isConnected).length,
+      'disconnected':
+          _clients.values.where((c) => !c.client.isConnected).length,
       'clients': _clients.map((key, value) => MapEntry(key, {
-        'connected': value.client.isConnected,
-        'name': value.client.name,
-        'version': value.client.version,
-      })),
+            'connected': value.client.isConnected,
+            'name': value.client.name,
+            'version': value.client.version,
+          })),
     };
   }
-  
+
   @override
   Future<MCPHealthCheckResult> performHealthCheck() async {
     final baseHealth = await super.performHealthCheck();
     if (baseHealth.status == MCPHealthStatus.unhealthy) {
       return baseHealth;
     }
-    
+
     // Check specific health metrics
-    final connectedCount = _clients.values.where((c) => c.client.isConnected).length;
+    final connectedCount =
+        _clients.values.where((c) => c.client.isConnected).length;
     final totalCount = _clients.length;
-    
+
     if (totalCount == 0) {
       return MCPHealthCheckResult(
         status: MCPHealthStatus.healthy,
@@ -110,9 +112,9 @@ class MCPClientManager extends BaseManager {
         details: getStatus(),
       );
     }
-    
+
     final connectionRate = connectedCount / totalCount;
-    
+
     if (connectionRate == 0) {
       return MCPHealthCheckResult(
         status: MCPHealthStatus.unhealthy,
@@ -126,7 +128,7 @@ class MCPClientManager extends BaseManager {
         details: getStatus(),
       );
     }
-    
+
     return MCPHealthCheckResult(
       status: MCPHealthStatus.healthy,
       message: '$connectedCount/$totalCount clients connected',

@@ -16,10 +16,7 @@ void main() {
           'name': 'Log Task',
           'intervalMinutes': 5,
           'taskType': 'log',
-          'taskConfig': {
-            'message': 'Test log message',
-            'level': 'info'
-          }
+          'taskConfig': {'message': 'Test log message', 'level': 'info'}
         },
         {
           'id': 'health_check',
@@ -61,20 +58,20 @@ void main() {
 
       expect(jobs, isNotNull);
       expect(jobs!.length, equals(4));
-      
+
       // Test log task
       expect(jobs[0].id, equals('log_task'));
       expect(jobs[0].name, equals('Log Task'));
       expect(jobs[0].interval, equals(Duration(minutes: 5)));
-      
+
       // Test health check task
       expect(jobs[1].id, equals('health_check'));
       expect(jobs[1].interval, equals(Duration(minutes: 15)));
-      
+
       // Test cleanup task
       expect(jobs[2].id, equals('cleanup_task'));
       expect(jobs[2].interval, equals(Duration(hours: 6)));
-      
+
       // Test custom task
       expect(jobs[3].id, equals('custom_task'));
       expect(jobs[3].interval, equals(Duration(minutes: 30)));
@@ -85,10 +82,7 @@ void main() {
         {
           'id': 'test_log',
           'taskType': 'log',
-          'taskConfig': {
-            'message': 'Test execution',
-            'level': 'debug'
-          }
+          'taskConfig': {'message': 'Test execution', 'level': 'debug'}
         }
       ];
 
@@ -102,7 +96,7 @@ void main() {
 
       expect(jobs, isNotNull);
       expect(jobs!.length, equals(1));
-      
+
       // Execute task - should not throw
       expect(() => jobs[0].task(), returnsNormally);
     });
@@ -127,7 +121,7 @@ void main() {
 
       expect(jobs, isNotNull);
       expect(jobs!.length, equals(1));
-      
+
       // Execute task - should handle missing taskType gracefully
       expect(() => jobs[0].task(), returnsNormally);
     });
@@ -207,9 +201,7 @@ void main() {
         {
           'id': 'memory_test',
           'taskType': 'memory_check',
-          'taskConfig': {
-            'thresholdMB': 512
-          }
+          'taskConfig': {'thresholdMB': 512}
         }
       ];
 
@@ -230,10 +222,7 @@ void main() {
         {
           'id': 'performance_test',
           'taskType': 'performance_report',
-          'taskConfig': {
-            'includeMemory': true,
-            'includeNetwork': false
-          }
+          'taskConfig': {'includeMemory': true, 'includeNetwork': false}
         }
       ];
 
@@ -256,10 +245,7 @@ void main() {
           'taskType': 'custom',
           'taskConfig': {
             'command': 'test_command',
-            'parameters': {
-              'param1': 'value1',
-              'param2': 42
-            }
+            'parameters': {'param1': 'value1', 'param2': 42}
           }
         }
       ];
@@ -281,9 +267,7 @@ void main() {
         {
           'id': 'unknown_test',
           'taskType': 'unknown_task_type',
-          'taskConfig': {
-            'someConfig': 'value'
-          }
+          'taskConfig': {'someConfig': 'value'}
         }
       ];
 

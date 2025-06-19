@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/utils/performance_monitor.dart' as perf;
 import 'package:flutter_mcp/src/utils/memory_manager.dart';
-import 'package:flutter_mcp/src/utils/event_system.dart';
+import 'package:flutter_mcp/src/events/event_system.dart';
 import 'package:flutter_mcp/src/utils/resource_manager.dart';
 import 'package:flutter_mcp/flutter_mcp.dart'; // For MCPHealthStatus and MCPHealthCheckResult
 import 'package:flutter_mcp/src/core/batch_manager.dart';
@@ -13,16 +13,16 @@ void main() {
     group('Performance Monitoring', () {
       test('should track operations with timer', () async {
         final monitor = perf.PerformanceMonitor.instance;
-        
+
         // Start a timer
         final timerId = monitor.startTimer('test-operation');
         await Future.delayed(Duration(milliseconds: 100));
         monitor.stopTimer(timerId, success: true);
-        
+
         // Increment counter
         monitor.incrementCounter('test-counter');
         monitor.incrementCounter('test-counter');
-        
+
         // Get metrics summary
         final summary = monitor.getMetricsSummary();
         // Check if metrics exist (they might be null if not recorded)
@@ -32,7 +32,7 @@ void main() {
           expect(operationMetrics['count'], greaterThan(0));
           expect(operationMetrics['avgDurationMs'], greaterThan(50));
         }
-        
+
         if (summary['test-counter'] != null) {
           expect(summary['test-counter'], isA<Map>());
           final counterMetrics = summary['test-counter'] as Map;
@@ -44,18 +44,18 @@ void main() {
     group('Memory Management', () {
       test('should track memory usage', () {
         final memoryManager = MemoryManager.instance;
-        
+
         // Initialize memory manager if needed
         memoryManager.initialize();
-        
+
         // Check current memory usage (might be 0 in test environment)
         final currentMemory = memoryManager.currentMemoryUsageMB;
         expect(currentMemory, greaterThanOrEqualTo(0));
-        
+
         // Get peak memory usage
         final peakMemory = memoryManager.peakMemoryUsageMB;
         expect(peakMemory, greaterThanOrEqualTo(currentMemory));
-        
+
         // In test environment, memory values might be 0 or very small
         // Accept any non-negative value as valid
         if (currentMemory == 0) {
@@ -71,7 +71,7 @@ void main() {
           chunkSize: 10,
           processItem: (item) async => item * 2,
         );
-        
+
         expect(results.length, 100);
         expect(results[0], 0);
         expect(results[99], 198);
@@ -82,18 +82,19 @@ void main() {
       test('should handle pub/sub events', () async {
         var eventReceived = false;
         String? eventData;
-        
-        EventSystem.instance.subscribe<String>('test.event', (data) {
+
+        await EventSystem.instance.subscribeTopic('test.event', (data) {
           eventReceived = true;
           eventData = data;
         });
-        
+
         // Publish an event
-        EventSystem.instance.publish('test.event', 'Hello from test');
-        
+        await EventSystem.instance
+            .publishTopic('test.event', 'Hello from test');
+
         // Wait a bit for event propagation
         await Future.delayed(Duration(milliseconds: 50));
-        
+
         expect(eventReceived, true);
         expect(eventData, 'Hello from test');
       });
@@ -102,17 +103,17 @@ void main() {
     group('Resource Management', () {
       test('should manage resource cleanup', () async {
         var resourceDisposed = false;
-        
+
         final resourceManager = ResourceManager.instance;
         resourceManager.registerCallback(
           'test-resource',
           () async => resourceDisposed = true,
           priority: 1,
         );
-        
+
         // Dispose the resource by key
         await resourceManager.dispose('test-resource');
-        
+
         expect(resourceDisposed, true);
       });
     });
@@ -124,7 +125,7 @@ void main() {
           status: MCPHealthStatus.healthy,
           message: 'Component is operational',
         );
-        
+
         expect(result.status, MCPHealthStatus.healthy);
         expect(result.message, 'Component is operational');
         expect(result.timestamp, isNotNull);
@@ -142,17 +143,17 @@ void main() {
     group('Batch Processing', () {
       test('should process requests in batches', () async {
         final batchManager = MCPBatchManager.instance;
-        
+
         // Create test requests
         final requests = List.generate(10, (i) => () async => 'Result $i');
-        
+
         // Process batch
         final results = await batchManager.processBatch<String>(
           llmId: 'test-llm',
           requests: requests,
           operationName: 'test-batch',
         );
-        
+
         expect(results.length, 10);
         expect(results[0], 'Result 0');
         expect(results[9], 'Result 9');
@@ -160,7 +161,7 @@ void main() {
 
       test('should get batch statistics', () {
         final batchManager = MCPBatchManager.instance;
-        
+
         final stats = batchManager.getStatistics('test-llm');
         expect(stats['error'], contains('No batch processor'));
       });
@@ -169,7 +170,7 @@ void main() {
     group('Diagnostic Utilities', () {
       test('should collect system diagnostics', () {
         final diagnostics = DiagnosticUtils.collectSystemDiagnostics(null);
-        
+
         expect(diagnostics['timestamp'], isA<String>());
         expect(diagnostics['platformInfo'], isA<Map>());
         expect(diagnostics['resources'], isA<Map>());
@@ -178,11 +179,11 @@ void main() {
 
       test('should run comprehensive diagnostics', () async {
         final diagnostics = await DiagnosticUtils.runDiagnostics(null);
-        
+
         expect(diagnostics['timestamp'], isA<String>());
         expect(diagnostics['version'], '1.0.0');
         expect(diagnostics['diagnosticResults'], isA<Map>());
-        
+
         final results = diagnostics['diagnosticResults'] as Map;
         expect(results['connectivity'], isA<Map>());
         expect(results['performance'], isA<Map>());
@@ -192,7 +193,10 @@ void main() {
 
     group('Input Validation', () {
       test('should validate API keys', () {
-        expect(InputValidator.isValidApiKey('sk-1234567890abcdefghijklmnopqrstuvwxyz'), true);
+        expect(
+            InputValidator.isValidApiKey(
+                'sk-1234567890abcdefghijklmnopqrstuvwxyz'),
+            true);
         expect(InputValidator.isValidApiKey('short'), false);
         expect(InputValidator.isValidApiKey(null), false);
       });
@@ -204,7 +208,8 @@ void main() {
       });
 
       test('should sanitize strings', () {
-        final result = InputValidator.sanitizeString('<script>alert("xss")</script>Hello');
+        final result =
+            InputValidator.sanitizeString('<script>alert("xss")</script>Hello');
         // The sanitizer removes script tags but may leave some content
         expect(result.contains('<script>'), false);
         expect(result.contains('</script>'), false);
@@ -212,16 +217,20 @@ void main() {
       });
 
       test('should validate required fields', () {
-        expect(() => InputValidator.validateRequired({
-          'name': 'Test App',
-          'version': '1.0.0',
-          'port': 8080,
-        }), returnsNormally);
-        
-        expect(() => InputValidator.validateRequired({
-          'name': '',
-          'version': null,
-        }), throwsException);
+        expect(
+            () => InputValidator.validateRequired({
+                  'name': 'Test App',
+                  'version': '1.0.0',
+                  'port': 8080,
+                }),
+            returnsNormally);
+
+        expect(
+            () => InputValidator.validateRequired({
+                  'name': '',
+                  'version': null,
+                }),
+            throwsException);
       });
     });
 
@@ -229,7 +238,7 @@ void main() {
       test('should handle multiple timers concurrently', () async {
         final futures = <Future>[];
         final monitor = perf.PerformanceMonitor.instance;
-        
+
         for (int i = 0; i < 10; i++) {
           futures.add(Future(() async {
             final timerId = monitor.startTimer('concurrent-op-$i');
@@ -237,12 +246,12 @@ void main() {
             monitor.stopTimer(timerId, success: true);
           }));
         }
-        
+
         await Future.wait(futures);
-        
+
         // Give time for metrics to be recorded
         await Future.delayed(Duration(milliseconds: 100));
-        
+
         // Check that at least some operations were tracked
         final summary = monitor.getMetricsSummary();
         int trackedCount = 0;

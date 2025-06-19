@@ -1,0 +1,355 @@
+import 'dart:async';
+import 'package:synchronized/synchronized.dart';
+import '../utils/logger.dart';
+import '../utils/subscription_manager.dart';
+
+/// Event priority levels
+enum EventPriority { low, normal, high, critical }
+
+/// Base event class
+abstract class Event {
+  final DateTime timestamp;
+  final Map<String, dynamic> metadata;
+
+  Event({DateTime? timestamp, Map<String, dynamic>? metadata})
+      : timestamp = timestamp ?? DateTime.now(),
+        metadata = metadata ?? {};
+}
+
+/// Event handler configuration
+class EventHandlerConfig {
+  final EventPriority priority;
+  final bool Function(Event)? filter;
+  final Duration? debounceTime;
+  final Duration? throttleTime;
+  final int? maxRetries;
+  final Duration? timeout;
+
+  const EventHandlerConfig({
+    this.priority = EventPriority.normal,
+    this.filter,
+    this.debounceTime,
+    this.throttleTime,
+    this.maxRetries,
+    this.timeout,
+  });
+}
+
+/// Event handler
+class EventHandler<T extends Event> {
+  final void Function(T) handler;
+  final EventHandlerConfig config;
+  final String? id;
+  
+  Timer? _debounceTimer;
+  DateTime? _lastThrottleTime;
+  bool _isDisposed = false;
+
+  EventHandler({
+    required this.handler,
+    EventHandlerConfig? config,
+    this.id,
+  }) : config = config ?? const EventHandlerConfig();
+
+  void handle(T event) {
+    if (_isDisposed) return;
+
+    // Apply filter
+    if (config.filter != null && !config.filter!(event)) {
+      return;
+    }
+
+    // Apply debounce
+    if (config.debounceTime != null) {
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(config.debounceTime!, () {
+        if (!_isDisposed) _executeHandler(event);
+      });
+      return;
+    }
+
+    // Apply throttle
+    if (config.throttleTime != null) {
+      final now = DateTime.now();
+      if (_lastThrottleTime != null &&
+          now.difference(_lastThrottleTime!).compareTo(config.throttleTime!) < 0) {
+        return;
+      }
+      _lastThrottleTime = now;
+    }
+
+    _executeHandler(event);
+  }
+
+  void _executeHandler(T event) {
+    if (config.timeout != null) {
+      Future(() => handler(event))
+          .timeout(config.timeout!)
+          .catchError((error) {
+        Logger('EventSystem').warning('Handler timeout: $error');
+      });
+    } else {
+      try {
+        handler(event);
+      } catch (e) {
+        Logger('EventSystem').severe('Handler error: $e');
+      }
+    }
+  }
+
+  void dispose() {
+    _isDisposed = true;
+    _debounceTimer?.cancel();
+  }
+}
+
+/// Main event system implementation
+class EventSystem {
+  static final EventSystem _instance = EventSystem._internal();
+  static EventSystem get instance => _instance;
+
+  final _logger = Logger('EventSystem');
+  final _lock = Lock();
+  final _subscriptionManager = SubscriptionManager.instance;
+  
+  // Type-based event handlers
+  final Map<Type, List<EventHandler>> _handlers = {};
+  
+  // Topic-based event handlers (for backward compatibility)
+  final Map<String, StreamController<dynamic>> _topicControllers = {};
+  final Map<String, List<StreamSubscription>> _topicSubscriptions = {};
+  
+  // Manual cleanup functions
+  final Map<String, void Function()> _cleanupFunctions = {};
+
+  // Event statistics
+  final Map<Type, int> _eventCounts = {};
+  final Map<String, int> _topicCounts = {};
+
+  EventSystem._internal();
+
+  /// Subscribe to events of a specific type
+  String subscribe<T extends Event>(
+    void Function(T) handler, {
+    EventHandlerConfig? config,
+    String? subscriptionId,
+  }) {
+    final eventHandler = EventHandler<T>(
+      handler: handler,
+      config: config,
+      id: subscriptionId,
+    );
+
+    _handlers[T] ??= [];
+    _handlers[T]!.add(eventHandler);
+
+    final id = subscriptionId ?? 'sub_${DateTime.now().microsecondsSinceEpoch}';
+    
+    // Store cleanup function for manual management
+    _cleanupFunctions[id] = () {
+      eventHandler.dispose();
+      _handlers[T]?.remove(eventHandler);
+    };
+
+    _logger.fine('Subscribed to ${T.toString()} with id: $id');
+    return id;
+  }
+
+  /// Subscribe to a topic (for backward compatibility)
+  String subscribeTopic(
+    String topic,
+    void Function(dynamic) handler, {
+    bool Function(dynamic)? filter,
+    String? subscriptionId,
+  }) {
+    _topicControllers[topic] ??= StreamController<dynamic>.broadcast();
+    
+    Stream<dynamic> stream = _topicControllers[topic]!.stream;
+    if (filter != null) {
+      stream = stream.where(filter);
+    }
+
+    final subscription = stream.listen(
+      handler,
+      onError: (error) => _logger.warning('Topic handler error: $error'),
+    );
+
+    _topicSubscriptions[topic] ??= [];
+    _topicSubscriptions[topic]!.add(subscription);
+
+    final id = subscriptionId ?? 'topic_${DateTime.now().microsecondsSinceEpoch}';
+    
+    // Store cleanup function for manual management
+    _cleanupFunctions[id] = () {
+      subscription.cancel();
+      _topicSubscriptions[topic]?.remove(subscription);
+    };
+
+    _logger.fine('Subscribed to topic "$topic" with id: $id');
+    return id;
+  }
+
+  /// Publish an event
+  Future<void> publish<T extends Event>(T event) async {
+    await _lock.synchronized(() async {
+      // Update statistics
+      _eventCounts[T] = (_eventCounts[T] ?? 0) + 1;
+
+      // Get handlers sorted by priority
+      final handlers = _handlers[T] ?? [];
+      final sortedHandlers = List<EventHandler>.from(handlers)
+        ..sort((a, b) => b.config.priority.index.compareTo(a.config.priority.index));
+
+      // Execute handlers
+      for (final handler in sortedHandlers) {
+        try {
+          handler.handle(event);
+        } catch (e) {
+          _logger.severe('Error handling event ${T.toString()}: $e');
+        }
+      }
+
+      _logger.fine('Published event: ${T.toString()}');
+    });
+  }
+
+  /// Publish to a topic (for backward compatibility)
+  Future<void> publishTopic(String topic, dynamic data) async {
+    await _lock.synchronized(() async {
+      _topicCounts[topic] = (_topicCounts[topic] ?? 0) + 1;
+
+      if (_topicControllers.containsKey(topic)) {
+        _topicControllers[topic]!.add(data);
+        _logger.fine('Published to topic "$topic"');
+      }
+    });
+  }
+
+  /// Unsubscribe from events
+  Future<void> unsubscribe(String subscriptionId) async {
+    await _lock.synchronized(() async {
+      final cleanup = _cleanupFunctions[subscriptionId];
+      if (cleanup != null) {
+        cleanup();
+        _cleanupFunctions.remove(subscriptionId);
+      }
+      _logger.fine('Unsubscribed: $subscriptionId');
+    });
+  }
+
+  /// Clear all subscriptions for a specific event type
+  Future<void> clearEventSubscriptions<T extends Event>() async {
+    await _lock.synchronized(() async {
+      final handlers = _handlers[T];
+      if (handlers != null) {
+        for (final handler in handlers) {
+          handler.dispose();
+        }
+        _handlers.remove(T);
+      }
+      _logger.fine('Cleared all subscriptions for ${T.toString()}');
+    });
+  }
+
+  /// Clear all subscriptions for a topic
+  Future<void> clearTopicSubscriptions(String topic) async {
+    await _lock.synchronized(() async {
+      final subscriptions = _topicSubscriptions[topic];
+      if (subscriptions != null) {
+        for (final sub in subscriptions) {
+          await sub.cancel();
+        }
+        _topicSubscriptions.remove(topic);
+      }
+      
+      await _topicControllers[topic]?.close();
+      _topicControllers.remove(topic);
+      
+      _logger.fine('Cleared all subscriptions for topic "$topic"');
+    });
+  }
+
+  /// Get event statistics
+  Map<String, dynamic> getStatistics() {
+    return {
+      'eventCounts': Map<String, int>.fromEntries(
+        _eventCounts.entries.map((e) => MapEntry(e.key.toString(), e.value)),
+      ),
+      'topicCounts': Map<String, int>.from(_topicCounts),
+      'activeHandlers': _handlers.map((type, handlers) => 
+        MapEntry(type.toString(), handlers.length)),
+      'activeTopics': _topicControllers.keys.toList(),
+    };
+  }
+
+  /// Pause event processing
+  Future<void> pause() async {
+    await _lock.synchronized(() async {
+      for (final subscriptions in _topicSubscriptions.values) {
+        for (final sub in subscriptions) {
+          sub.pause();
+        }
+      }
+      _logger.info('Event system paused');
+    });
+  }
+
+  /// Resume event processing
+  Future<void> resume() async {
+    await _lock.synchronized(() async {
+      for (final subscriptions in _topicSubscriptions.values) {
+        for (final sub in subscriptions) {
+          sub.resume();
+        }
+      }
+      _logger.info('Event system resumed');
+    });
+  }
+
+  /// Clear all subscriptions and reset
+  Future<void> reset() async {
+    await _lock.synchronized(() async {
+      // Dispose all handlers
+      for (final handlers in _handlers.values) {
+        for (final handler in handlers) {
+          handler.dispose();
+        }
+      }
+      _handlers.clear();
+
+      // Cancel all topic subscriptions
+      for (final subscriptions in _topicSubscriptions.values) {
+        for (final sub in subscriptions) {
+          await sub.cancel();
+        }
+      }
+      _topicSubscriptions.clear();
+
+      // Close all controllers
+      for (final controller in _topicControllers.values) {
+        await controller.close();
+      }
+      _topicControllers.clear();
+
+      // Clear statistics
+      _eventCounts.clear();
+      _topicCounts.clear();
+
+      // Clear cleanup functions
+      _cleanupFunctions.clear();
+
+      _logger.info('Event system reset');
+    });
+  }
+
+  /// Dispose the event system
+  Future<void> dispose() async {
+    await reset();
+    _logger.info('Event system disposed');
+  }
+}
+
+/// Convenience extensions for event publishing
+extension EventPublisher on Event {
+  Future<void> publish() => EventSystem.instance.publish(this);
+}

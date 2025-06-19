@@ -8,7 +8,7 @@ class ResourceAllocation {
   final int memorySizeMB;
   final DateTime allocatedAt;
   final String? description;
-  
+
   ResourceAllocation({
     required this.id,
     required this.memorySizeMB,
@@ -30,7 +30,7 @@ class ResourceManager {
 
   /// Resource cleanup priority groups
   final Map<int, Set<String>> _priorityGroups = {};
-  
+
   /// Memory allocations
   final Map<String, ResourceAllocation> _memoryAllocations = {};
 
@@ -44,11 +44,11 @@ class ResourceManager {
   int _totalResourcesRegistered = 0;
   int _totalResourcesDisposed = 0;
   int _failedDisposals = 0;
-  
+
   // Singleton instance
   static ResourceManager? _instance;
   static ResourceManager get instance => _instance ??= ResourceManager._();
-  
+
   ResourceManager._();
 
   /// Register a resource for cleanup
@@ -59,18 +59,19 @@ class ResourceManager {
   /// [priority] determines cleanup order (lower values are cleaned up later)
   /// [dependencies] is a list of keys for resources this resource depends on
   void register<T>(
-      String key,
-      T resource,
-      Future<void> Function(T) disposeFunction, {
-        int priority = defaultPriority,
-        List<String>? dependencies,
-        String? tag,
-      }) {
+    String key,
+    T resource,
+    Future<void> Function(T) disposeFunction, {
+    int priority = defaultPriority,
+    List<String>? dependencies,
+    String? tag,
+  }) {
     _logger.fine('Registering resource: $key');
 
     // Dispose any existing resource with the same key
     if (_resources.containsKey(key)) {
-      _logger.fine('Resource with key $key already exists, disposing previous resource');
+      _logger.fine(
+          'Resource with key $key already exists, disposing previous resource');
       _resources[key]!.dispose().catchError((error) {
         _logger.severe('Error disposing previous resource: $key', error);
       });
@@ -102,16 +103,16 @@ class ResourceManager {
 
   /// Register a stream subscription for cleanup
   void registerSubscription(
-      String key,
-      StreamSubscription subscription, {
-        int priority = defaultPriority,
-        List<String>? dependencies,
-        String? tag,
-      }) {
+    String key,
+    StreamSubscription subscription, {
+    int priority = defaultPriority,
+    List<String>? dependencies,
+    String? tag,
+  }) {
     register<StreamSubscription>(
       key,
       subscription,
-          (sub) => sub.cancel(),
+      (sub) => sub.cancel(),
       priority: priority,
       dependencies: dependencies,
       tag: tag,
@@ -120,16 +121,16 @@ class ResourceManager {
 
   /// Register a callback to be executed during cleanup
   void registerCallback(
-      String key,
-      Future<void> Function() callback, {
-        int priority = defaultPriority,
-        List<String>? dependencies,
-        String? tag,
-      }) {
+    String key,
+    Future<void> Function() callback, {
+    int priority = defaultPriority,
+    List<String>? dependencies,
+    String? tag,
+  }) {
     register<Future<void> Function()>(
       key,
       callback,
-          (cb) => cb(),
+      (cb) => cb(),
       priority: priority,
       dependencies: dependencies,
       tag: tag,
@@ -169,7 +170,8 @@ class ResourceManager {
 
     // Check for circular dependencies
     if (_wouldCreateCircularDependency(resource, dependsOn)) {
-      _logger.severe('Cannot add dependency: Would create circular dependency between $resource and $dependsOn');
+      _logger.severe(
+          'Cannot add dependency: Would create circular dependency between $resource and $dependsOn');
       return;
     }
 
@@ -278,7 +280,8 @@ class ResourceManager {
     try {
       // Check dependents first
       if (_dependents.containsKey(key) && _dependents[key]!.isNotEmpty) {
-        _logger.fine('Resource $key has dependents: ${_dependents[key]!.join(", ")}');
+        _logger.fine(
+            'Resource $key has dependents: ${_dependents[key]!.join(", ")}');
 
         // Dispose dependents first
         for (final dependent in List<String>.from(_dependents[key]!)) {
@@ -315,7 +318,8 @@ class ResourceManager {
 
     try {
       // Sort priority groups (higher numbers disposed first)
-      final priorities = _priorityGroups.keys.toList()..sort((a, b) => b.compareTo(a));
+      final priorities = _priorityGroups.keys.toList()
+        ..sort((a, b) => b.compareTo(a));
 
       // Dispose by priority groups
       for (final priority in priorities) {
@@ -379,13 +383,13 @@ class ResourceManager {
   ///
   /// Register resources with the same tag to group them
   void registerWithTag<T>(
-      String key,
-      T resource,
-      Future<void> Function(T) disposeFunction,
-      String tag, {
-        int priority = defaultPriority,
-        List<String>? dependencies,
-      }) {
+    String key,
+    T resource,
+    Future<void> Function(T) disposeFunction,
+    String tag, {
+    int priority = defaultPriority,
+    List<String>? dependencies,
+  }) {
     register(
       key,
       resource,
@@ -418,7 +422,8 @@ class ResourceManager {
     }
 
     if (errors.isNotEmpty) {
-      throw MCPException('Errors occurred while disposing resources with tag $tag: $errors');
+      throw MCPException(
+          'Errors occurred while disposing resources with tag $tag: $errors');
     }
   }
 
@@ -435,19 +440,19 @@ class ResourceManager {
     if (_memoryAllocations.containsKey(id)) {
       throw StateError('Memory allocation with id "$id" already exists');
     }
-    
+
     final allocation = ResourceAllocation(
       id: id,
       memorySizeMB: memorySizeMB,
       allocatedAt: DateTime.now(),
     );
-    
+
     _memoryAllocations[id] = allocation;
     _logger.info('Allocated ${memorySizeMB}MB memory for: $id');
-    
+
     return allocation;
   }
-  
+
   /// Release allocated memory
   Future<void> releaseMemory(String id) async {
     if (_memoryAllocations.containsKey(id)) {
@@ -455,18 +460,18 @@ class ResourceManager {
       _logger.info('Released ${allocation?.memorySizeMB}MB memory for: $id');
     }
   }
-  
+
   /// Get current memory allocation
   ResourceAllocation? getMemoryAllocation(String id) {
     return _memoryAllocations[id];
   }
-  
+
   /// Get total allocated memory
   int getTotalAllocatedMemoryMB() {
     return _memoryAllocations.values
         .fold(0, (sum, allocation) => sum + allocation.memorySizeMB);
   }
-  
+
   /// Get resource statistics
   Map<String, dynamic> getStatistics() {
     return {
@@ -474,12 +479,13 @@ class ResourceManager {
       'totalDisposed': _totalResourcesDisposed,
       'currentCount': _resources.length,
       'failedDisposals': _failedDisposals,
-      'priorityGroups': _priorityGroups.map((k, v) => MapEntry(k.toString(), v.length)),
+      'priorityGroups':
+          _priorityGroups.map((k, v) => MapEntry(k.toString(), v.length)),
       'resourcesByType': _getResourceCountByType(),
       'memoryAllocations': _memoryAllocations.map((k, v) => MapEntry(k, {
-        'sizeMB': v.memorySizeMB,
-        'allocatedAt': v.allocatedAt.toIso8601String(),
-      })),
+            'sizeMB': v.memorySizeMB,
+            'allocatedAt': v.allocatedAt.toIso8601String(),
+          })),
       'totalAllocatedMemoryMB': getTotalAllocatedMemoryMB(),
     };
   }

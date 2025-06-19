@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_mcp/src/notifications/enhanced_notification_manager.dart';
+import 'package:flutter_mcp/src/notifications/enhanced_notification_manager.dart'
+    hide NotificationAction;
 import 'package:flutter_mcp/src/platform/notification/notification_manager.dart';
+import 'package:flutter_mcp/src/platform/notification/notification_models.dart';
 
 class MockNotificationManager implements NotificationManager {
   final List<Map<String, dynamic>> shownNotifications = [];
@@ -17,18 +19,65 @@ class MockNotificationManager implements NotificationManager {
     required String body,
     String? icon,
     String id = 'mcp_notification',
+    Map<String, dynamic>? data,
+    List<NotificationAction>? actions,
+    String? channelId,
+    NotificationPriority priority = NotificationPriority.normal,
+    bool showProgress = false,
+    int? progress,
+    int? maxProgress,
+    String? group,
+    String? image,
+    bool ongoing = false,
   }) async {
     shownNotifications.add({
       'title': title,
       'body': body,
       'icon': icon,
       'id': id,
+      'data': data,
     });
   }
 
   @override
   Future<void> hideNotification(String id) async {
     // Mock implementation
+  }
+
+  @override
+  Future<bool> requestPermission() async {
+    return true;
+  }
+
+  @override
+  Future<void> cancelNotification(String id) async {
+    // Mock implementation
+  }
+
+  @override
+  Future<void> cancelAllNotifications() async {
+    shownNotifications.clear();
+  }
+
+  @override
+  Future<void> updateNotification({
+    required String id,
+    String? title,
+    String? body,
+    int? progress,
+    Map<String, dynamic>? data,
+  }) async {
+    // Mock implementation
+  }
+
+  @override
+  List<NotificationInfo> getActiveNotifications() {
+    return [];
+  }
+
+  @override
+  Future<void> dispose() async {
+    shownNotifications.clear();
   }
 }
 
@@ -75,18 +124,20 @@ void main() {
         id: 'reply',
         title: 'Reply',
         icon: 'reply_icon',
-        requiresUnlock: true,
+        requiresInput: true,
+        inputPlaceholder: 'Type your reply...',
       );
 
       expect(action.id, equals('reply'));
       expect(action.title, equals('Reply'));
       expect(action.icon, equals('reply_icon'));
-      expect(action.requiresUnlock, isTrue);
+      expect(action.requiresInput, isTrue);
+      expect(action.inputPlaceholder, equals('Type your reply...'));
 
       final map = action.toMap();
       expect(map['id'], equals('reply'));
       expect(map['title'], equals('Reply'));
-      expect(map['requiresUnlock'], isTrue);
+      expect(map['requiresInput'], isTrue);
     });
 
     test('Should create notification messages', () {
@@ -135,8 +186,8 @@ void main() {
         groupManager.addToGroup('group1', 'notification2');
 
         expect(groupManager.getGroupCount('group1'), equals(2));
-        expect(groupManager.getGroupNotifications('group1'), 
-               containsAll(['notification1', 'notification2']));
+        expect(groupManager.getGroupNotifications('group1'),
+            containsAll(['notification1', 'notification2']));
       });
 
       test('Should determine when to show group summary', () {
@@ -154,8 +205,8 @@ void main() {
         groupManager.removeFromGroup('group1', 'notification1');
 
         expect(groupManager.getGroupCount('group1'), equals(1));
-        expect(groupManager.getGroupNotifications('group1'), 
-               equals(['notification2']));
+        expect(groupManager.getGroupNotifications('group1'),
+            equals(['notification2']));
       });
 
       test('Should clear groups when count reaches zero', () {

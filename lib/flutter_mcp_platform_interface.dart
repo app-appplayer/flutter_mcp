@@ -34,17 +34,20 @@ abstract class FlutterMcpPlatform extends PlatformInterface {
 
   /// Start background service
   Future<bool> startBackgroundService() {
-    throw UnimplementedError('startBackgroundService() has not been implemented.');
+    throw UnimplementedError(
+        'startBackgroundService() has not been implemented.');
   }
 
   /// Stop background service
   Future<bool> stopBackgroundService() {
-    throw UnimplementedError('stopBackgroundService() has not been implemented.');
+    throw UnimplementedError(
+        'stopBackgroundService() has not been implemented.');
   }
 
   /// Check if background service is running
   bool get isBackgroundServiceRunning {
-    throw UnimplementedError('isBackgroundServiceRunning has not been implemented.');
+    throw UnimplementedError(
+        'isBackgroundServiceRunning has not been implemented.');
   }
 
   /// Show notification
@@ -89,6 +92,7 @@ abstract class FlutterMcpPlatform extends PlatformInterface {
 
   /// Cancel all notifications
   Future<void> cancelAllNotifications() {
-    throw UnimplementedError('cancelAllNotifications() has not been implemented.');
+    throw UnimplementedError(
+        'cancelAllNotifications() has not been implemented.');
   }
 }

@@ -1,9 +1,5 @@
 /// Health status enumeration
-enum MCPHealthStatus {
-  healthy,
-  degraded,
-  unhealthy
-}
+enum MCPHealthStatus { healthy, degraded, unhealthy }
 
 /// Health check result
 class MCPHealthCheckResult {
@@ -20,11 +16,11 @@ class MCPHealthCheckResult {
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-    'status': status.name,
-    'message': message,
-    'details': details,
-    'timestamp': timestamp.toIso8601String(),
-  };
+        'status': status.name,
+        'message': message,
+        'details': details,
+        'timestamp': timestamp.toIso8601String(),
+      };
 
   factory MCPHealthCheckResult.fromJson(Map<String, dynamic> json) {
     return MCPHealthCheckResult(

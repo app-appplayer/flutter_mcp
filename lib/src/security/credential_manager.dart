@@ -23,7 +23,8 @@ class CredentialManager {
   }
 
   /// Initialize credential manager with storage
-  static Future<CredentialManager> initialize(SecureStorageManager storage) async {
+  static Future<CredentialManager> initialize(
+      SecureStorageManager storage) async {
     if (_instance != null) {
       return _instance!;
     }
@@ -44,7 +45,8 @@ class CredentialManager {
   }
 
   /// Store a credential
-  Future<void> storeCredential(String key, String value, {Map<String, dynamic>? metadata}) async {
+  Future<void> storeCredential(String key, String value,
+      {Map<String, dynamic>? metadata}) async {
     _logger.fine('Storing credential: [REDACTED]');
 
     try {
@@ -102,8 +104,10 @@ class CredentialManager {
 
       return jsonDecode(json) as Map<String, dynamic>;
     } catch (e, stackTrace) {
-      _logger.severe('Failed to get credential with metadata: $key', e, stackTrace);
-      throw MCPSecurityException('Failed to get credential with metadata', e, stackTrace);
+      _logger.severe(
+          'Failed to get credential with metadata: $key', e, stackTrace);
+      throw MCPSecurityException(
+          'Failed to get credential with metadata', e, stackTrace);
     }
   }
 
@@ -126,8 +130,10 @@ class CredentialManager {
       final storageKey = _getStorageKey(key);
       return await _storage.containsKey(storageKey);
     } catch (e, stackTrace) {
-      _logger.severe('Failed to check if credential exists: $key', e, stackTrace);
-      throw MCPSecurityException('Failed to check if credential exists', e, stackTrace);
+      _logger.severe(
+          'Failed to check if credential exists: $key', e, stackTrace);
+      throw MCPSecurityException(
+          'Failed to check if credential exists', e, stackTrace);
     }
   }
 
@@ -136,18 +142,19 @@ class CredentialManager {
     try {
       // Get all keys from storage
       final allKeys = await _storage.getAllKeys();
-      
+
       // Filter those that start with _keyPrefix and remove the prefix
       final credentialKeys = allKeys
           .where((key) => key.startsWith(_keyPrefix))
           .map((key) => key.substring(_keyPrefix.length))
           .toList();
-      
+
       _logger.fine('Found ${credentialKeys.length} credential keys');
       return credentialKeys;
     } catch (e, stackTrace) {
       _logger.severe('Failed to list credential keys', e, stackTrace);
-      throw MCPSecurityException('Failed to list credential keys', e, stackTrace);
+      throw MCPSecurityException(
+          'Failed to list credential keys', e, stackTrace);
     }
   }
 
@@ -162,7 +169,8 @@ class CredentialManager {
       }
     } catch (e, stackTrace) {
       _logger.severe('Failed to clear all credentials', e, stackTrace);
-      throw MCPSecurityException('Failed to clear all credentials', e, stackTrace);
+      throw MCPSecurityException(
+          'Failed to clear all credentials', e, stackTrace);
     }
   }
 
@@ -174,6 +182,7 @@ class CredentialManager {
 
 /// Security-related exception
 class MCPSecurityException extends MCPException {
-  MCPSecurityException(String message, [dynamic originalError, StackTrace? stackTrace])
+  MCPSecurityException(String message,
+      [dynamic originalError, StackTrace? stackTrace])
       : super('Security error: $message', originalError, stackTrace);
 }

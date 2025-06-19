@@ -21,8 +21,10 @@ void main() {
     // Mock platform services behavior
     when(mockPlatformServices.initialize(any)).thenAnswer((_) async {});
     when(mockPlatformServices.isBackgroundServiceRunning).thenReturn(false);
-    when(mockPlatformServices.startBackgroundService()).thenAnswer((_) async => true);
-    when(mockPlatformServices.stopBackgroundService()).thenAnswer((_) async => true);
+    when(mockPlatformServices.startBackgroundService())
+        .thenAnswer((_) async => true);
+    when(mockPlatformServices.stopBackgroundService())
+        .thenAnswer((_) async => true);
     when(mockPlatformServices.showNotification(
       title: anyNamed('title'),
       body: anyNamed('body'),
@@ -30,7 +32,8 @@ void main() {
       id: anyNamed('id'),
     )).thenAnswer((_) async {});
     when(mockPlatformServices.secureStore(any, any)).thenAnswer((_) async {});
-    when(mockPlatformServices.secureRead(any)).thenAnswer((_) async => 'mock-stored-value');
+    when(mockPlatformServices.secureRead(any))
+        .thenAnswer((_) async => 'mock-stored-value');
   });
 
   group('FlutterMCP Initialization Tests', () {
@@ -151,7 +154,8 @@ void main() {
       final value = await flutterMcp.secureRead('test_key');
 
       // Verify storage operations
-      verify(mockPlatformServices.secureStore('test_key', 'test_value')).called(1);
+      verify(mockPlatformServices.secureStore('test_key', 'test_value'))
+          .called(1);
       verify(mockPlatformServices.secureRead('test_key')).called(1);
       expect(value, 'mock-stored-value');
 
@@ -298,7 +302,8 @@ void main() {
 
       // Verify integration
       final status = flutterMcp.getSystemStatus();
-      expect(status['serversStatus']['servers'][serverId]['hasLlmServer'], true);
+      expect(
+          status['serversStatus']['servers'][serverId]['hasLlmServer'], true);
 
       // Clean up
       await flutterMcp.shutdown();
@@ -458,12 +463,13 @@ class TestFlutterMCP {
   }
 
   /// Chat with LLM
-  Future<llm.LlmResponse> chat(String llmId,
-      String message, {
-        bool enableTools = false,
-        Map<String, dynamic> parameters = const {},
-        bool useCache = true,
-      }) async {
+  Future<llm.LlmResponse> chat(
+    String llmId,
+    String message, {
+    bool enableTools = false,
+    Map<String, dynamic> parameters = const {},
+    bool useCache = true,
+  }) async {
     final llmClient = _llmClients[llmId];
     if (llmClient == null) {
       throw Exception('LLM client not found: $llmId');
@@ -491,8 +497,7 @@ class TestFlutterMCP {
       'backgroundServiceRunning': _platformServices.isBackgroundServiceRunning,
       'clientsStatus': {
         'total': _clients.length,
-        'clients': _clients.map((key, value) =>
-            MapEntry(key, {
+        'clients': _clients.map((key, value) => MapEntry(key, {
               'connected': value.connected,
               'name': value.name,
               'version': value.version,
@@ -500,8 +505,7 @@ class TestFlutterMCP {
       },
       'serversStatus': {
         'total': _servers.length,
-        'servers': _servers.map((key, value) =>
-            MapEntry(key, {
+        'servers': _servers.map((key, value) => MapEntry(key, {
               'name': value.name,
               'version': value.version,
               'hasLlmServer': value.hasLlmServer,
@@ -509,8 +513,7 @@ class TestFlutterMCP {
       },
       'llmsStatus': {
         'total': _llmClients.length,
-        'llms': _llmClients.map((key, value) =>
-            MapEntry(key, {
+        'llms': _llmClients.map((key, value) => MapEntry(key, {
               'provider': value.providerName,
               'connectedClients': value.integratedClientIds.length,
             })),
@@ -536,7 +539,7 @@ class TestFlutterMCP {
     _clients.clear();
     _llmClients.clear();
   }
-  
+
   /// Execute a tiered memory cleanup for testing
   Future<void> performTieredMemoryCleanup(int severityLevel) async {
     // This is a stub method for testing purposes
@@ -544,7 +547,8 @@ class TestFlutterMCP {
   }
 
   /// Register a test resource
-  Future<void> registerTestResource(String key, dynamic value, {int priority = 100}) async {
+  Future<void> registerTestResource(String key, dynamic value,
+      {int priority = 100}) async {
     // This is a stub method for testing purposes
     // In production, this would register a resource with the ResourceManager
   }
@@ -591,9 +595,8 @@ class TestFlutterMCP {
     }
 
     _serverCounter++;
-    final serverId = 'server_${DateTime
-        .now()
-        .millisecondsSinceEpoch}_$_serverCounter';
+    final serverId =
+        'server_${DateTime.now().millisecondsSinceEpoch}_$_serverCounter';
 
     final server = MockServer(name, version, capabilities);
     _servers[serverId] = server;
@@ -618,9 +621,8 @@ class TestFlutterMCP {
     }
 
     _clientCounter++;
-    final clientId = 'client_${DateTime
-        .now()
-        .millisecondsSinceEpoch}_$_clientCounter';
+    final clientId =
+        'client_${DateTime.now().millisecondsSinceEpoch}_$_clientCounter';
 
     final client = MockClient(name, version);
     _clients[clientId] = client;
@@ -639,16 +641,16 @@ class TestFlutterMCP {
   }
 
   /// Create a test LLM
-  Future<String> createTestLlm(String providerName,
-      LlmConfiguration config,) async {
+  Future<String> createTestLlm(
+    String providerName,
+    LlmConfiguration config,
+  ) async {
     if (!_initialized) {
       throw Exception('FlutterMCP is not initialized');
     }
 
     _llmCounter++;
-    final llmId = 'llm_${DateTime
-        .now()
-        .millisecondsSinceEpoch}_$_llmCounter';
+    final llmId = 'llm_${DateTime.now().millisecondsSinceEpoch}_$_llmCounter';
 
     final llmClient = MockLlmClient(
       providerName,

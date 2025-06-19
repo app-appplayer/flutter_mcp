@@ -56,7 +56,8 @@ class MCPLocalization {
     Map<String, Map<String, String>>? translations,
   }) async {
     if (supportedLocales != null && supportedLocales.isNotEmpty) {
-      _logger.fine('Setting supported locales: ${supportedLocales.map((l) => l.toString()).join(', ')}');
+      _logger.fine(
+          'Setting supported locales: ${supportedLocales.map((l) => l.toString()).join(', ')}');
       _supportedLocales.clear();
       _supportedLocales.addAll(supportedLocales);
     }
@@ -89,7 +90,8 @@ class MCPLocalization {
       await setLocale(_currentLocale);
     }
 
-    _logger.fine('Localization initialized with ${_supportedLocales.length} locales');
+    _logger.fine(
+        'Localization initialized with ${_supportedLocales.length} locales');
   }
 
   /// Set the current locale
@@ -99,7 +101,8 @@ class MCPLocalization {
     // Find best matching locale
     final bestLocale = _findBestMatchingLocale(locale);
     if (bestLocale == null) {
-      _logger.warning('No matching locale found for $locale, using fallback: $_fallbackLocale');
+      _logger.warning(
+          'No matching locale found for $locale, using fallback: $_fallbackLocale');
       _currentLocale = _fallbackLocale;
     } else {
       _currentLocale = bestLocale;
@@ -183,12 +186,14 @@ class MCPLocalization {
       }
     } catch (e, stackTrace) {
       _logger.severe('Failed to load translations from assets', e, stackTrace);
-      throw MCPConfigurationException('Failed to load translations: ${e.toString()}', e, stackTrace);
+      throw MCPConfigurationException(
+          'Failed to load translations: ${e.toString()}', e, stackTrace);
     }
   }
 
   /// Load translations for a specific locale
-  Future<void> _loadTranslationsForLocale(Locale locale, [String? basePath]) async {
+  Future<void> _loadTranslationsForLocale(Locale locale,
+      [String? basePath]) async {
     final localeKey = _getLocaleKey(locale);
     _logger.fine('Loading translations for locale: $localeKey');
 
@@ -218,12 +223,14 @@ class MCPLocalization {
       _logger.fine('Loaded ${stringMap.length} translations for $localeKey');
     } catch (e, stackTrace) {
       // Log but don't fail - just use fallback locale
-      _logger.warning('Failed to load translations for locale: $localeKey', e, stackTrace);
+      _logger.warning(
+          'Failed to load translations for locale: $localeKey', e, stackTrace);
     }
   }
 
   /// Flatten a nested map into dot notation
-  void _flattenMap(String prefix, Map<String, dynamic> map, Map<String, String> result) {
+  void _flattenMap(
+      String prefix, Map<String, dynamic> map, Map<String, String> result) {
     map.forEach((key, value) {
       final String newKey = prefix.isEmpty ? key : '$prefix.$key';
 
@@ -304,9 +311,8 @@ class _MCPLocalizationDelegate extends LocalizationsDelegate<MCPLocalization> {
   @override
   bool isSupported(Locale locale) {
     return MCPLocalization.instance.supportedLocales.contains(locale) ||
-        MCPLocalization.instance.supportedLocales.any(
-                (supportedLocale) => supportedLocale.languageCode == locale.languageCode
-        );
+        MCPLocalization.instance.supportedLocales.any((supportedLocale) =>
+            supportedLocale.languageCode == locale.languageCode);
   }
 
   @override

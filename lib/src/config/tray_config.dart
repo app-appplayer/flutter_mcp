@@ -16,11 +16,11 @@ class TrayConfig {
     this.tooltip,
     this.menuItems,
   });
-  
+
   /// Convert to JSON
   Map<String, dynamic> toJson() => {
-    'iconPath': iconPath,
-    'tooltip': tooltip,
-    'menuItems': menuItems?.map((item) => item.toJson()).toList(),
-  };
+        'iconPath': iconPath,
+        'tooltip': tooltip,
+        'menuItems': menuItems?.map((item) => item.toJson()).toList(),
+      };
 }

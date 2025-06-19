@@ -59,7 +59,8 @@ class MCPJob {
   }
 
   /// Create a periodic job
-  factory MCPJob.every(Duration interval, {
+  factory MCPJob.every(
+    Duration interval, {
     required Function() task,
     String? name,
     String? description,
@@ -73,7 +74,8 @@ class MCPJob {
   }
 
   /// Create a one-time job
-  factory MCPJob.once(Duration delay, {
+  factory MCPJob.once(
+    Duration delay, {
     required Function() task,
     String? name,
     String? description,
@@ -88,7 +90,8 @@ class MCPJob {
   }
 
   /// Create a delayed job with callback
-  factory MCPJob.delayed(Duration delay, {
+  factory MCPJob.delayed(
+    Duration delay, {
     required Function() task,
     Function()? onComplete,
     String? name,
@@ -108,12 +111,12 @@ class MCPJob {
 
   /// Create a job with conditional execution
   factory MCPJob.conditional(
-      Duration interval, {
-        required Function() task,
-        required bool Function() condition,
-        String? name,
-        String? description,
-      }) {
+    Duration interval, {
+    required Function() task,
+    required bool Function() condition,
+    String? name,
+    String? description,
+  }) {
     return MCPJob(
       interval: interval,
       task: () {

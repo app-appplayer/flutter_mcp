@@ -9,7 +9,7 @@ import 'tray_manager.dart';
 class MacOSTrayManager implements TrayManager {
   static const MethodChannel _channel = MethodChannel('flutter_mcp');
   static const EventChannel _eventChannel = EventChannel('flutter_mcp/events');
-  
+
   final Logger _logger = Logger('flutter_mcp.macos_tray');
   StreamSubscription? _eventSubscription;
 
@@ -70,13 +70,15 @@ class MacOSTrayManager implements TrayManager {
   void _handleEvent(Map<String, dynamic> event) {
     final type = event['type'] as String?;
     final dataRaw = event['data'];
-    final data = dataRaw is Map ? Map<String, dynamic>.from(dataRaw) : <String, dynamic>{};
-    
+    final data = dataRaw is Map
+        ? Map<String, dynamic>.from(dataRaw)
+        : <String, dynamic>{};
+
     _logger.fine('Received tray event: $type');
-    
+
     if (type == 'trayEvent') {
       final action = data['action'] as String?;
-      
+
       switch (action) {
         case 'menuItemClicked':
           final itemId = data['itemId'] as String?;
@@ -84,13 +86,13 @@ class MacOSTrayManager implements TrayManager {
             _menuItems[itemId]?.onTap?.call();
           }
           break;
-        
+
         case 'trayIconClicked':
           for (final listener in _eventListeners) {
             listener.onTrayMouseDown?.call();
           }
           break;
-        
+
         case 'trayIconRightClicked':
           for (final listener in _eventListeners) {
             listener.onTrayRightMouseDown?.call();
@@ -141,10 +143,10 @@ class MacOSTrayManager implements TrayManager {
 
       // Convert to native menu items format
       final List<Map<String, dynamic>> nativeItems = [];
-      
+
       for (int i = 0; i < items.length; i++) {
         final item = items[i];
-        
+
         if (item.isSeparator) {
           nativeItems.add({
             'isSeparator': true,
@@ -153,7 +155,7 @@ class MacOSTrayManager implements TrayManager {
           // Generate ID for this item
           final itemId = 'item_${_menuItemIdCounter++}';
           _menuItems[itemId] = item;
-          
+
           nativeItems.add({
             'id': itemId,
             'label': item.label ?? '',
@@ -183,7 +185,7 @@ class MacOSTrayManager implements TrayManager {
     try {
       // Hide the tray icon
       await _channel.invokeMethod('hideTrayIcon');
-      
+
       // Cancel event subscription
       _eventSubscription?.cancel();
 
@@ -223,7 +225,8 @@ class MacOSTrayManager implements TrayManager {
   }
 
   /// Update a single menu item
-  Future<void> updateMenuItem(String id, {String? label, bool? disabled}) async {
+  Future<void> updateMenuItem(String id,
+      {String? label, bool? disabled}) async {
     if (!_menuItems.containsKey(id)) {
       _logger.warning('Menu item with ID $id not found');
       return;

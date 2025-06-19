@@ -25,11 +25,13 @@ class LlmPluginIntegrator {
   LlmPluginIntegrator(this._pluginRegistry);
 
   /// Register an mcp_llm plugin with flutter_mcp plugin system
-  Future<bool> registerLlmPlugin(llm.LlmPlugin llmPlugin, [Map<String, dynamic>? config]) async {
+  Future<bool> registerLlmPlugin(llm.LlmPlugin llmPlugin,
+      [Map<String, dynamic>? config]) async {
     final String llmPluginName = llmPlugin.name;
 
     try {
-      _logger.fine('Registering mcp_llm plugin as flutter_mcp plugin: $llmPluginName');
+      _logger.fine(
+          'Registering mcp_llm plugin as flutter_mcp plugin: $llmPluginName');
 
       // Create appropriate adapter based on plugin type
       MCPPlugin mcpPlugin;
@@ -43,8 +45,7 @@ class LlmPluginIntegrator {
       } else {
         throw MCPValidationException(
             'Unsupported LLM plugin type: ${llmPlugin.runtimeType}',
-            {'plugin_type': llmPlugin.runtimeType.toString()}
-        );
+            {'plugin_type': llmPlugin.runtimeType.toString()});
       }
 
       // Register the adapter with the plugin registry
@@ -57,19 +58,19 @@ class LlmPluginIntegrator {
       _llmToMcpPluginMap[llmPluginName] = mcpPlugin.name;
       _mcpToLlmPluginMap[mcpPlugin.name] = llmPluginName;
 
-      _logger.info('Successfully registered mcp_llm plugin $llmPluginName as flutter_mcp plugin ${mcpPlugin.name}');
+      _logger.info(
+          'Successfully registered mcp_llm plugin $llmPluginName as flutter_mcp plugin ${mcpPlugin.name}');
       return true;
     } catch (e, stackTrace) {
-      _logger.severe('Failed to register mcp_llm plugin: $llmPluginName', e, stackTrace);
+      _logger.severe(
+          'Failed to register mcp_llm plugin: $llmPluginName', e, stackTrace);
       return false;
     }
   }
 
   /// Register multiple mcp_llm plugins at once
-  Future<Map<String, bool>> registerLlmPlugins(
-      List<llm.LlmPlugin> llmPlugins,
-      [Map<String, Map<String, dynamic>>? configs]
-      ) async {
+  Future<Map<String, bool>> registerLlmPlugins(List<llm.LlmPlugin> llmPlugins,
+      [Map<String, Map<String, dynamic>>? configs]) async {
     final results = <String, bool>{};
 
     for (final plugin in llmPlugins) {
@@ -82,9 +83,7 @@ class LlmPluginIntegrator {
 
   /// Register mcp_llm plugins from an LLM client
   Future<Map<String, bool>> registerPluginsFromLlmClient(
-      String llmClientId,
-      llm.LlmClient llmClient
-      ) async {
+      String llmClientId, llm.LlmClient llmClient) async {
     try {
       final pluginManager = llmClient.pluginManager;
 
@@ -107,24 +106,23 @@ class LlmPluginIntegrator {
       // Register all plugins
       final results = await registerLlmPlugins(allPlugins);
 
-      _logger.info('Registered ${results.values.where((v) => v).length}/${allPlugins.length} plugins from LLM client $llmClientId');
+      _logger.info(
+          'Registered ${results.values.where((v) => v).length}/${allPlugins.length} plugins from LLM client $llmClientId');
 
       return results;
     } catch (e, stackTrace) {
-      _logger.severe('Failed to register plugins from LLM client $llmClientId', e, stackTrace);
+      _logger.severe('Failed to register plugins from LLM client $llmClientId',
+          e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register plugins from LLM client $llmClientId',
           e,
-          stackTrace
-      );
+          stackTrace);
     }
   }
 
   /// Register mcp_llm plugins from an LLM server
   Future<Map<String, bool>> registerPluginsFromLlmServer(
-      String llmServerId,
-      llm.LlmServer llmServer
-      ) async {
+      String llmServerId, llm.LlmServer llmServer) async {
     try {
       final pluginManager = llmServer.pluginManager;
 
@@ -147,30 +145,29 @@ class LlmPluginIntegrator {
       // Register all plugins
       final results = await registerLlmPlugins(allPlugins);
 
-      _logger.info('Registered ${results.values.where((v) => v).length}/${allPlugins.length} plugins from LLM server $llmServerId');
+      _logger.info(
+          'Registered ${results.values.where((v) => v).length}/${allPlugins.length} plugins from LLM server $llmServerId');
 
       return results;
     } catch (e, stackTrace) {
-      _logger.severe('Failed to register plugins from LLM server $llmServerId', e, stackTrace);
+      _logger.severe('Failed to register plugins from LLM server $llmServerId',
+          e, stackTrace);
       throw MCPOperationFailedException(
           'Failed to register plugins from LLM server $llmServerId',
           e,
-          stackTrace
-      );
+          stackTrace);
     }
   }
 
   /// Register mcp_llm core plugins with flutter_mcp
   Future<Map<String, bool>> registerCoreLlmPlugins(
-      llm.LlmInterface llmProvider,
-      llm.RetrievalManager? retrievalManager,
-      {
-        bool includeCompletionPlugin = true,
-        bool includeStreamingPlugin = true,
-        bool includeEmbeddingPlugin = true,
-        bool includeRetrievalPlugins = true,
-      }
-      ) async {
+    llm.LlmInterface llmProvider,
+    llm.RetrievalManager? retrievalManager, {
+    bool includeCompletionPlugin = true,
+    bool includeStreamingPlugin = true,
+    bool includeEmbeddingPlugin = true,
+    bool includeRetrievalPlugins = true,
+  }) async {
     try {
       // Create performance monitor just for the plugin creation
       final performanceMonitor = llm.PerformanceMonitor();
@@ -183,22 +180,21 @@ class LlmPluginIntegrator {
         includeCompletionPlugin: includeCompletionPlugin,
         includeStreamingPlugin: includeStreamingPlugin,
         includeEmbeddingPlugin: includeEmbeddingPlugin,
-        includeRetrievalPlugins: includeRetrievalPlugins && retrievalManager != null,
+        includeRetrievalPlugins:
+            includeRetrievalPlugins && retrievalManager != null,
       );
 
       // Register all plugins
       final results = await registerLlmPlugins(plugins);
 
-      _logger.info('Registered ${results.values.where((v) => v).length}/${plugins.length} core LLM plugins');
+      _logger.info(
+          'Registered ${results.values.where((v) => v).length}/${plugins.length} core LLM plugins');
 
       return results;
     } catch (e, stackTrace) {
       _logger.severe('Failed to register core LLM plugins', e, stackTrace);
       throw MCPOperationFailedException(
-          'Failed to register core LLM plugins',
-          e,
-          stackTrace
-      );
+          'Failed to register core LLM plugins', e, stackTrace);
     }
   }
 
@@ -213,7 +209,8 @@ class LlmPluginIntegrator {
   }
 
   /// Register flutter_mcp plugins to an mcp_llm plugin manager
-  Future<void> _registerMcpPluginsToLlmManager(llm.PluginManager llmPluginManager) async {
+  Future<void> _registerMcpPluginsToLlmManager(
+      llm.PluginManager llmPluginManager) async {
     // Get all tool plugins from flutter_mcp
     final toolPlugins = _pluginRegistry.getPluginsByType<MCPToolPlugin>();
 
@@ -228,11 +225,13 @@ class LlmPluginIntegrator {
       // Register with mcp_llm plugin manager
       await llmPluginManager.registerPlugin(adapter);
 
-      _logger.fine('Registered flutter_mcp tool plugin ${toolPlugin.name} with LLM plugin manager');
+      _logger.fine(
+          'Registered flutter_mcp tool plugin ${toolPlugin.name} with LLM plugin manager');
     }
 
     // Get all resource plugins from flutter_mcp
-    final resourcePlugins = _pluginRegistry.getPluginsByType<MCPResourcePlugin>();
+    final resourcePlugins =
+        _pluginRegistry.getPluginsByType<MCPResourcePlugin>();
 
     // Create and register adapters for each resource plugin
     for (final resourcePlugin in resourcePlugins) {
@@ -245,7 +244,8 @@ class LlmPluginIntegrator {
       // Register with mcp_llm plugin manager
       await llmPluginManager.registerPlugin(adapter);
 
-      _logger.fine('Registered flutter_mcp resource plugin ${resourcePlugin.name} with LLM plugin manager');
+      _logger.fine(
+          'Registered flutter_mcp resource plugin ${resourcePlugin.name} with LLM plugin manager');
     }
 
     // Get all prompt plugins from flutter_mcp
@@ -262,7 +262,8 @@ class LlmPluginIntegrator {
       // Register with mcp_llm plugin manager
       await llmPluginManager.registerPlugin(adapter);
 
-      _logger.fine('Registered flutter_mcp prompt plugin ${promptPlugin.name} with LLM plugin manager');
+      _logger.fine(
+          'Registered flutter_mcp prompt plugin ${promptPlugin.name} with LLM plugin manager');
     }
   }
 
@@ -293,7 +294,8 @@ class LlmPluginIntegrator {
       // Get MCP plugin name
       final mcpPluginName = _llmToMcpPluginMap[llmPluginName];
       if (mcpPluginName == null) {
-        _logger.warning('No MCP plugin mapping found for LLM plugin: $llmPluginName');
+        _logger.warning(
+            'No MCP plugin mapping found for LLM plugin: $llmPluginName');
         return false;
       }
 
@@ -308,7 +310,8 @@ class LlmPluginIntegrator {
       _logger.info('Successfully unregistered LLM plugin: $llmPluginName');
       return true;
     } catch (e, stackTrace) {
-      _logger.severe('Failed to unregister LLM plugin: $llmPluginName', e, stackTrace);
+      _logger.severe(
+          'Failed to unregister LLM plugin: $llmPluginName', e, stackTrace);
       return false;
     }
   }
@@ -374,7 +377,8 @@ class McpToolPluginAdapter implements llm.ToolPlugin {
       // Convert to LlmCallToolResult
       return _convertToLlmCallToolResult(result);
     } catch (e, stackTrace) {
-      _logger.severe('Error executing MCP tool plugin ${_mcpToolPlugin.name}', e, stackTrace);
+      _logger.severe('Error executing MCP tool plugin ${_mcpToolPlugin.name}',
+          e, stackTrace);
       return llm.LlmCallToolResult(
         [llm.LlmTextContent(text: 'Error: ${e.toString()}')],
         isError: true,
@@ -383,7 +387,8 @@ class McpToolPluginAdapter implements llm.ToolPlugin {
   }
 
   /// Convert from MCP result to LLM CallToolResult
-  llm.LlmCallToolResult _convertToLlmCallToolResult(Map<String, dynamic> mcpResult) {
+  llm.LlmCallToolResult _convertToLlmCallToolResult(
+      Map<String, dynamic> mcpResult) {
     // Extract result as text if possible
     String resultText = '';
 
@@ -449,7 +454,8 @@ class McpResourcePluginAdapter implements llm.ResourcePlugin {
   }
 
   @override
-  Future<llm.LlmReadResourceResult> read(Map<String, dynamic> parameters) async {
+  Future<llm.LlmReadResourceResult> read(
+      Map<String, dynamic> parameters) async {
     try {
       final result = await _mcpResourcePlugin.getResource(
         parameters['uri'] as String? ?? getResourceDefinition().uri,
@@ -459,7 +465,10 @@ class McpResourcePluginAdapter implements llm.ResourcePlugin {
       // Convert to LlmReadResourceResult
       return _convertToLlmReadResourceResult(result);
     } catch (e, stackTrace) {
-      _logger.severe('Error reading from MCP resource plugin ${_mcpResourcePlugin.name}', e, stackTrace);
+      _logger.severe(
+          'Error reading from MCP resource plugin ${_mcpResourcePlugin.name}',
+          e,
+          stackTrace);
       return llm.LlmReadResourceResult(
         content: 'Error: ${e.toString()}',
         mimeType: 'text/plain',
@@ -469,7 +478,8 @@ class McpResourcePluginAdapter implements llm.ResourcePlugin {
   }
 
   /// Convert from MCP result to LLM ReadResourceResult
-  llm.LlmReadResourceResult _convertToLlmReadResourceResult(Map<String, dynamic> mcpResult) {
+  llm.LlmReadResourceResult _convertToLlmReadResourceResult(
+      Map<String, dynamic> mcpResult) {
     // Extract content and mime type
     final content = mcpResult['content'] as String? ?? '';
     final mimeType = mcpResult['mimeType'] as String? ?? 'text/plain';
@@ -484,7 +494,8 @@ class McpResourcePluginAdapter implements llm.ResourcePlugin {
         if (contentItem is Map<String, dynamic>) {
           // Parse content item based on type
           if (contentItem['type'] == 'text') {
-            contents.add(llm.LlmTextContent(text: contentItem['text'] as String));
+            contents
+                .add(llm.LlmTextContent(text: contentItem['text'] as String));
           } else if (contentItem['type'] == 'image') {
             contents.add(llm.LlmImageContent(
               url: contentItem['url'] as String,
@@ -571,7 +582,10 @@ class McpPromptPluginAdapter implements llm.PromptPlugin {
       // Convert to LlmGetPromptResult
       return _convertToLlmGetPromptResult(result);
     } catch (e, stackTrace) {
-      _logger.severe('Error executing MCP prompt plugin ${_mcpPromptPlugin.name}', e, stackTrace);
+      _logger.severe(
+          'Error executing MCP prompt plugin ${_mcpPromptPlugin.name}',
+          e,
+          stackTrace);
       return llm.LlmGetPromptResult(
         description: 'Error: ${e.toString()}',
         messages: [llm.LlmMessage.system('Error: ${e.toString()}')],
@@ -580,7 +594,8 @@ class McpPromptPluginAdapter implements llm.PromptPlugin {
   }
 
   /// Convert from MCP result to LLM GetPromptResult
-  llm.LlmGetPromptResult _convertToLlmGetPromptResult(Map<String, dynamic> mcpResult) {
+  llm.LlmGetPromptResult _convertToLlmGetPromptResult(
+      Map<String, dynamic> mcpResult) {
     // Extract description
     final description = mcpResult['description'] as String? ?? '';
 

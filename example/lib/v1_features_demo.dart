@@ -13,33 +13,34 @@ class V1FeaturesDemo extends StatefulWidget {
 class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
   // Results
   final List<String> _logs = [];
-  
+
   // Health subscription
   StreamSubscription<MCPHealthCheckResult>? _healthSubscription;
   MCPHealthStatus? _currentHealthStatus;
-  
+
   @override
   void initState() {
     super.initState();
     _subscribeToHealth();
     _checkInitialStatus();
   }
-  
+
   @override
   void dispose() {
     _healthSubscription?.cancel();
     super.dispose();
   }
-  
+
   void _addLog(String message) {
     setState(() {
-      _logs.add('[${DateTime.now().toLocal().toString().substring(11, 19)}] $message');
+      _logs.add(
+          '[${DateTime.now().toLocal().toString().substring(11, 19)}] $message');
       if (_logs.length > 100) {
         _logs.removeAt(0);
       }
     });
   }
-  
+
   void _subscribeToHealth() {
     try {
       _healthSubscription = FlutterMCP.instance.healthStream.listen(
@@ -57,17 +58,18 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
       _addLog('Failed to subscribe to health: $e');
     }
   }
-  
+
   void _checkInitialStatus() {
     try {
       final status = FlutterMCP.instance.getSystemStatus();
       _addLog('System initialized: ${status['initialized'] ?? false}');
-      _addLog('Performance monitoring: ${status['performanceMonitoringEnabled'] ?? false}');
+      _addLog(
+          'Performance monitoring: ${status['performanceMonitoringEnabled'] ?? false}');
     } catch (e) {
       _addLog('Failed to get status: $e');
     }
   }
-  
+
   // 1. System Health Check
   Future<void> _checkSystemHealth() async {
     _addLog('Checking system health...');
@@ -75,7 +77,7 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
       final health = await FlutterMCP.instance.getSystemHealth();
       _addLog('Health status: ${health['status'] ?? 'unknown'}');
       _addLog('Health message: ${health['message'] ?? 'N/A'}');
-      
+
       if (health['components'] != null) {
         final components = health['components'] as Map;
         _addLog('Components: ${components.keys.join(', ')}');
@@ -84,12 +86,12 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
       _addLog('❌ Health check failed: $e');
     }
   }
-  
+
   // 2. Batch Processing Demo
   Future<void> _demoBatchProcessing() async {
     _addLog('\n--- Batch Processing Demo ---');
     _addLog('Creating 10 simulated requests...');
-    
+
     try {
       // Check if we have any LLM configured
       final status = FlutterMCP.instance.getSystemStatus();
@@ -97,43 +99,46 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
         _addLog('❌ No LLM configured. Start services in main screen first.');
         return;
       }
-      
+
       // Create simple test requests
-      final requests = List.generate(10, (i) => () async {
-        await Future.delayed(Duration(milliseconds: 50 + (i * 10)));
-        return 'Result ${i + 1}';
-      });
-      
+      final requests = List.generate(
+          10,
+          (i) => () async {
+                await Future.delayed(Duration(milliseconds: 50 + (i * 10)));
+                return 'Result ${i + 1}';
+              });
+
       final stopwatch = Stopwatch()..start();
-      
+
       // Process batch - use the first available LLM
       final llmIds = FlutterMCP.instance.llmManager.getAllLlmIds();
       if (llmIds.isEmpty) {
         _addLog('❌ No LLM available');
         return;
       }
-      
+
       final results = await FlutterMCP.instance.processBatch(
         llmId: llmIds.first,
         requests: requests,
       );
-      
+
       stopwatch.stop();
-      
+
       _addLog('✅ Batch completed in ${stopwatch.elapsedMilliseconds}ms');
       _addLog('Results: ${results.length} items processed');
-      
+
       // Get batch statistics
       final stats = FlutterMCP.instance.getBatchStatistics();
       _addLog('Total batches: ${stats['totalBatches'] ?? 0}');
-      _addLog('Success rate: ${(stats['successRate'] ?? 0).toStringAsFixed(1)}%');
-      _addLog('Avg processing time: ${(stats['averageProcessingTimeMs'] ?? 0).toStringAsFixed(0)}ms');
-      
+      _addLog(
+          'Success rate: ${(stats['successRate'] ?? 0).toStringAsFixed(1)}%');
+      _addLog(
+          'Avg processing time: ${(stats['averageProcessingTimeMs'] ?? 0).toStringAsFixed(0)}ms');
     } catch (e) {
       _addLog('❌ Batch processing failed: $e');
     }
   }
-  
+
   // 3. Performance Metrics
   Future<void> _showPerformanceMetrics() async {
     _addLog('\n--- Performance Metrics ---');
@@ -141,23 +146,24 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
       // Get performance metrics from system status
       final status = FlutterMCP.instance.getSystemStatus();
       final metrics = status['performanceMetrics'] ?? {};
-      
+
       if (metrics.isEmpty) {
         _addLog('No metrics available');
         return;
       }
-      
+
       // Operations
       if (metrics['operations'] != null) {
         final ops = metrics['operations'] as Map;
         _addLog('Operations tracked: ${ops.length}');
         ops.forEach((key, value) {
           if (value is Map) {
-            _addLog('  $key: ${value['count'] ?? 0} calls, avg ${value['avgDuration'] ?? 0}ms');
+            _addLog(
+                '  $key: ${value['count'] ?? 0} calls, avg ${value['avgDuration'] ?? 0}ms');
           }
         });
       }
-      
+
       // Resources
       if (metrics['resources'] != null) {
         final resources = metrics['resources'] as Map;
@@ -165,41 +171,40 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
           _addLog('  $key: $value');
         });
       }
-      
     } catch (e) {
       _addLog('❌ Failed to get metrics: $e');
     }
   }
-  
+
   // 4. Memory Management Demo
   Future<void> _checkMemoryUsage() async {
     _addLog('\n--- Memory Management ---');
     try {
       final status = FlutterMCP.instance.getSystemStatus();
-      
+
       if (status['performanceMetrics'] != null &&
           status['performanceMetrics']['resources'] != null) {
-        final memory = status['performanceMetrics']['resources']['memory.usageMB'];
+        final memory =
+            status['performanceMetrics']['resources']['memory.usageMB'];
         if (memory != null) {
           _addLog('Current memory: ${memory['current']}MB');
           _addLog('Peak memory: ${memory['peak'] ?? 'N/A'}MB');
         }
       }
-      
+
       // Trigger garbage collection
       _addLog('Triggering cleanup...');
       // In a real scenario, high memory would trigger automatic cleanup
-      
     } catch (e) {
       _addLog('❌ Memory check failed: $e');
     }
   }
-  
+
   // 5. OAuth Demo (Simulated)
   Future<void> _demoOAuth() async {
     _addLog('\n--- OAuth 2.1 Demo ---');
     _addLog('Note: This is a simulated demo');
-    
+
     try {
       // Check if we have any LLM configured
       final llmIds = FlutterMCP.instance.llmManager.getAllLlmIds();
@@ -207,7 +212,7 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
         _addLog('❌ No LLM configured. Start services first.');
         return;
       }
-      
+
       _addLog('Initializing OAuth configuration...');
       await FlutterMCP.instance.initializeOAuth(
         llmId: llmIds.first,
@@ -219,22 +224,21 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
           scopes: ['read', 'write'],
         ),
       );
-      
+
       _addLog('✅ OAuth configured');
       _addLog('In production: User would be redirected to auth URL');
       _addLog('Token would be stored securely');
       _addLog('Headers would include: Authorization: Bearer [token]');
-      
     } catch (e) {
       _addLog('❌ OAuth demo failed: $e');
     }
   }
-  
+
   Widget _buildHealthIndicator() {
     Color color;
     IconData icon;
     String text;
-    
+
     switch (_currentHealthStatus) {
       case MCPHealthStatus.healthy:
         color = Colors.green;
@@ -256,7 +260,7 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
         icon = Icons.help;
         text = 'Unknown';
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -269,12 +273,13 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
         children: [
           Icon(icon, color: color, size: 16),
           const SizedBox(width: 4),
-          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          Text(text,
+              style: TextStyle(color: color, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -340,11 +345,16 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 12,
-                      color: log.contains('❌') ? Colors.red :
-                             log.contains('✅') ? Colors.green :
-                             log.contains('---') ? Colors.blue :
-                             Colors.black87,
-                      fontWeight: log.contains('---') ? FontWeight.bold : FontWeight.normal,
+                      color: log.contains('❌')
+                          ? Colors.red
+                          : log.contains('✅')
+                              ? Colors.green
+                              : log.contains('---')
+                                  ? Colors.blue
+                                  : Colors.black87,
+                      fontWeight: log.contains('---')
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   );
                 },

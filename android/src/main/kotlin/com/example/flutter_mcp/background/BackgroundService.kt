@@ -9,13 +9,12 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.example.flutter_mcp.R
 import com.example.flutter_mcp.utils.Constants
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.embedding.engine.loader.FlutterLoader
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.FlutterCallbackInformation
-import io.flutter.view.FlutterMain
 
 class BackgroundService : Service() {
     private var backgroundEngine: FlutterEngine? = null
@@ -70,12 +69,18 @@ class BackgroundService : Service() {
         }
         
         val callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle)
-        val dartBundlePath = FlutterMain.findAppBundlePath()
+        if (callbackInfo == null) {
+            return
+        }
+        
+        val flutterLoader = FlutterLoader()
+        flutterLoader.startInitialization(this)
+        flutterLoader.ensureInitializationComplete(this, null)
         
         backgroundEngine?.dartExecutor?.executeDartCallback(
             DartExecutor.DartCallback(
                 assets,
-                dartBundlePath,
+                flutterLoader.findAppBundlePath(),
                 callbackInfo
             )
         )
@@ -136,7 +141,7 @@ class BackgroundService : Service() {
         return NotificationCompat.Builder(this, Constants.NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Flutter MCP")
             .setContentText("Background service is running")
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(android.R.drawable.ic_dialog_info) // Use system icon for now
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()

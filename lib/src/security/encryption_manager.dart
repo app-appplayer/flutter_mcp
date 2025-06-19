@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:pointycastle/export.dart' as pc;
 import '../utils/logger.dart';
 import '../utils/exceptions.dart';
 import 'security_audit.dart';
@@ -41,30 +42,34 @@ class EncryptionMetadata {
     this.iterations = 100000,
     DateTime? createdAt,
     Map<String, dynamic>? parameters,
-  }) : createdAt = createdAt ?? DateTime.now(),
-       parameters = parameters ?? {};
+  })  : createdAt = createdAt ?? DateTime.now(),
+        parameters = parameters ?? {};
 
   Map<String, dynamic> toJson() => {
-    'algorithm': algorithm.name,
-    'kdf': kdf?.name,
-    'keyId': keyId,
-    'salt': base64.encode(salt),
-    'iv': base64.encode(iv),
-    'iterations': iterations,
-    'createdAt': createdAt.toIso8601String(),
-    'parameters': parameters,
-  };
+        'algorithm': algorithm.name,
+        'kdf': kdf?.name,
+        'keyId': keyId,
+        'salt': base64.encode(salt),
+        'iv': base64.encode(iv),
+        'iterations': iterations,
+        'createdAt': createdAt.toIso8601String(),
+        'parameters': parameters,
+      };
 
-  factory EncryptionMetadata.fromJson(Map<String, dynamic> json) => EncryptionMetadata(
-    algorithm: EncryptionAlgorithm.values.byName(json['algorithm'] as String),
-    kdf: json['kdf'] != null ? KeyDerivationFunction.values.byName(json['kdf'] as String) : null,
-    keyId: json['keyId'] as String,
-    salt: base64.decode(json['salt'] as String),
-    iv: base64.decode(json['iv'] as String),
-    iterations: json['iterations'] as int? ?? 100000,
-    createdAt: DateTime.parse(json['createdAt'] as String),
-    parameters: Map<String, dynamic>.from(json['parameters'] ?? {}),
-  );
+  factory EncryptionMetadata.fromJson(Map<String, dynamic> json) =>
+      EncryptionMetadata(
+        algorithm:
+            EncryptionAlgorithm.values.byName(json['algorithm'] as String),
+        kdf: json['kdf'] != null
+            ? KeyDerivationFunction.values.byName(json['kdf'] as String)
+            : null,
+        keyId: json['keyId'] as String,
+        salt: base64.decode(json['salt'] as String),
+        iv: base64.decode(json['iv'] as String),
+        iterations: json['iterations'] as int? ?? 100000,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        parameters: Map<String, dynamic>.from(json['parameters'] ?? {}),
+      );
 }
 
 /// Encrypted data container
@@ -80,16 +85,17 @@ class EncryptedData {
   });
 
   Map<String, dynamic> toJson() => {
-    'data': base64.encode(data),
-    'metadata': metadata.toJson(),
-    'checksum': checksum,
-  };
+        'data': base64.encode(data),
+        'metadata': metadata.toJson(),
+        'checksum': checksum,
+      };
 
   factory EncryptedData.fromJson(Map<String, dynamic> json) => EncryptedData(
-    data: base64.decode(json['data'] as String),
-    metadata: EncryptionMetadata.fromJson(json['metadata'] as Map<String, dynamic>),
-    checksum: json['checksum'] as String?,
-  );
+        data: base64.decode(json['data'] as String),
+        metadata: EncryptionMetadata.fromJson(
+            json['metadata'] as Map<String, dynamic>),
+        checksum: json['checksum'] as String?,
+      );
 }
 
 /// Encryption key information
@@ -108,19 +114,19 @@ class EncryptionKey {
     DateTime? createdAt,
     this.expiresAt,
     Map<String, dynamic>? metadata,
-  }) : createdAt = createdAt ?? DateTime.now(),
-       metadata = metadata ?? {};
+  })  : createdAt = createdAt ?? DateTime.now(),
+        metadata = metadata ?? {};
 
   bool get isExpired => expiresAt != null && DateTime.now().isAfter(expiresAt!);
 
   Map<String, dynamic> toJsonSafe() => {
-    'keyId': keyId,
-    'algorithm': algorithm.name,
-    'createdAt': createdAt.toIso8601String(),
-    'expiresAt': expiresAt?.toIso8601String(),
-    'metadata': metadata,
-    'keyLength': keyData.length,
-  };
+        'keyId': keyId,
+        'algorithm': algorithm.name,
+        'createdAt': createdAt.toIso8601String(),
+        'expiresAt': expiresAt?.toIso8601String(),
+        'metadata': metadata,
+        'keyLength': keyData.length,
+      };
 }
 
 /// Encryption manager for secure data handling
@@ -172,7 +178,8 @@ class EncryptionManager {
     final keyLength = _getKeyLength(algorithm);
 
     if (keyLength < _minKeyLength) {
-      throw MCPSecurityException('Key length ${keyLength} bits is below minimum ${_minKeyLength} bits');
+      throw MCPSecurityException(
+          'Key length $keyLength bits is below minimum $_minKeyLength bits');
     }
 
     final keyData = _generateSecureBytes(keyLength ~/ 8);
@@ -208,7 +215,8 @@ class EncryptionManager {
       },
     ));
 
-    _logger.info('Generated encryption key: $keyId (${algorithm.name}, ${keyLength} bits)');
+    _logger.info(
+        'Generated encryption key: $keyId (${algorithm.name}, $keyLength bits)');
     return keyId;
   }
 
@@ -224,7 +232,8 @@ class EncryptionManager {
     final algorithmMinLength = _getMinimumKeyLengthForAlgorithm(algorithm);
 
     if (keyLength < algorithmMinLength) {
-      throw MCPSecurityException('Imported key length ${keyLength} bits is below minimum ${algorithmMinLength} bits for algorithm ${algorithm.name}');
+      throw MCPSecurityException(
+          'Imported key length $keyLength bits is below minimum $algorithmMinLength bits for algorithm ${algorithm.name}');
     }
 
     final keyId = _generateKeyId();
@@ -259,7 +268,8 @@ class EncryptionManager {
       },
     ));
 
-    _logger.info('Imported encryption key: $keyId (${algorithm.name}, ${keyLength} bits)');
+    _logger.info(
+        'Imported encryption key: $keyId (${algorithm.name}, $keyLength bits)');
     return keyId;
   }
 
@@ -285,9 +295,8 @@ class EncryptionManager {
       final salt = _generateSecureBytes(32);
       final iv = _generateSecureBytes(16);
 
-      // For this demo, we'll use a simple XOR encryption
-      // In production, use proper encryption libraries
-      final encrypted = _simpleEncrypt(plaintext, key.keyData, iv);
+      // Use proper AES-256-GCM encryption
+      final encrypted = _aes256GcmEncrypt(plaintext, key.keyData, iv);
 
       final metadata = EncryptionMetadata(
         algorithm: key.algorithm,
@@ -356,12 +365,14 @@ class EncryptionManager {
       if (encryptedData.checksum != null && _requireChecksums) {
         final computedChecksum = _calculateChecksum(encryptedData.data);
         if (computedChecksum != encryptedData.checksum) {
-          throw MCPSecurityException('Data integrity check failed - checksum mismatch');
+          throw MCPSecurityException(
+              'Data integrity check failed - checksum mismatch');
         }
       }
 
-      // For this demo, we'll use simple XOR decryption
-      final decrypted = _simpleDecrypt(encryptedData.data, key.keyData, encryptedData.metadata.iv);
+      // Use proper AES-256-GCM decryption
+      final decrypted = _aes256GcmDecrypt(
+          encryptedData.data, key.keyData, encryptedData.metadata.iv);
       final plaintext = utf8.decode(decrypted);
 
       // Log decryption operation
@@ -456,7 +467,8 @@ class EncryptionManager {
     }
 
     if (!force && !key.isExpired) {
-      throw MCPSecurityException('Cannot delete active key without force flag: $keyIdOrAlias');
+      throw MCPSecurityException(
+          'Cannot delete active key without force flag: $keyIdOrAlias');
     }
 
     _keys.remove(keyId);
@@ -529,11 +541,14 @@ class EncryptionManager {
     final keysByAlgorithm = <String, int>{};
 
     for (final key in _keys.values) {
-      keysByAlgorithm[key.algorithm.name] = (keysByAlgorithm[key.algorithm.name] ?? 0) + 1;
+      keysByAlgorithm[key.algorithm.name] =
+          (keysByAlgorithm[key.algorithm.name] ?? 0) + 1;
     }
 
-    final oldestKey = _keys.values.isEmpty ? null :
-        _keys.values.reduce((a, b) => a.createdAt.isBefore(b.createdAt) ? a : b);
+    final oldestKey = _keys.values.isEmpty
+        ? null
+        : _keys.values
+            .reduce((a, b) => a.createdAt.isBefore(b.createdAt) ? a : b);
 
     return {
       'generatedAt': now.toIso8601String(),
@@ -542,7 +557,8 @@ class EncryptionManager {
       'expiredKeys': expiredKeys,
       'aliases': _keyAliases.length,
       'keysByAlgorithm': keysByAlgorithm,
-      'oldestKeyAge': oldestKey != null ? now.difference(oldestKey.createdAt).inDays : null,
+      'oldestKeyAge':
+          oldestKey != null ? now.difference(oldestKey.createdAt).inDays : null,
       'settings': {
         'minKeyLength': _minKeyLength,
         'keyRotationInterval': _keyRotationInterval.inDays,
@@ -551,23 +567,51 @@ class EncryptionManager {
     };
   }
 
-  /// Simple XOR encryption (demo only - use proper encryption in production)
-  Uint8List _simpleEncrypt(Uint8List data, Uint8List key, Uint8List iv) {
-    final result = Uint8List(data.length);
-    for (int i = 0; i < data.length; i++) {
-      result[i] = data[i] ^ key[i % key.length] ^ iv[i % iv.length];
-    }
-    return result;
+  /// AES-256-GCM encryption using PointyCastle
+  /// This is a real AES-256-GCM implementation
+  Uint8List _aes256GcmEncrypt(Uint8List data, Uint8List key, Uint8List iv) {
+    final cipher = pc.GCMBlockCipher(pc.AESEngine());
+    final params = pc.AEADParameters(
+      pc.KeyParameter(key),
+      128, // 128-bit tag length
+      iv,
+      Uint8List(0), // No additional authenticated data
+    );
+
+    cipher.init(true, params); // true = encrypt
+
+    final cipherText = Uint8List(cipher.getOutputSize(data.length));
+    final len = cipher.processBytes(data, 0, data.length, cipherText, 0);
+    final finalLen = cipher.doFinal(cipherText, len);
+
+    // Return ciphertext + authentication tag
+    return Uint8List.sublistView(cipherText, 0, len + finalLen);
   }
 
-  /// Simple XOR decryption (demo only - use proper encryption in production)
-  Uint8List _simpleDecrypt(Uint8List data, Uint8List key, Uint8List iv) {
-    return _simpleEncrypt(data, key, iv); // XOR is symmetric
+  /// AES-256-GCM decryption using PointyCastle
+  /// This is a real AES-256-GCM implementation
+  Uint8List _aes256GcmDecrypt(Uint8List data, Uint8List key, Uint8List iv) {
+    final cipher = pc.GCMBlockCipher(pc.AESEngine());
+    final params = pc.AEADParameters(
+      pc.KeyParameter(key),
+      128, // 128-bit tag length
+      iv,
+      Uint8List(0), // No additional authenticated data
+    );
+
+    cipher.init(false, params); // false = decrypt
+
+    final plainText = Uint8List(cipher.getOutputSize(data.length));
+    final len = cipher.processBytes(data, 0, data.length, plainText, 0);
+    final finalLen = cipher.doFinal(plainText, len);
+
+    // Return plaintext
+    return Uint8List.sublistView(plainText, 0, len + finalLen);
   }
 
   /// Calculate checksum for data integrity
   String _calculateChecksum(Uint8List data) {
-    final digest = sha256.convert(data);
+    final digest = crypto.sha256.convert(data);
     return digest.toString();
   }
 
@@ -606,7 +650,7 @@ class EncryptionManager {
     final random = math.Random.secure().nextInt(1000000);
     return 'key_${timestamp}_$random';
   }
-  
+
   /// Get minimum key length for a specific algorithm
   int _getMinimumKeyLengthForAlgorithm(EncryptionAlgorithm algorithm) {
     switch (algorithm) {

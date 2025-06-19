@@ -33,13 +33,13 @@ Future<void> initMCP() async {
         autoStart: false,
         enablePerformanceMonitoring: true, // v1.0.0 feature
         highMemoryThresholdMB: 512, // v1.0.0 memory management
-        
+
         // Native platform features
         useBackgroundService: true,
         useNotification: true,
         useTray: _isDesktopPlatform(),
         secure: true,
-        
+
         // Background configuration
         background: BackgroundConfig(
           notificationChannelId: 'mcp_demo_background',
@@ -48,7 +48,7 @@ Future<void> initMCP() async {
           intervalMs: 60000, // 1 minute
           keepAlive: true,
         ),
-        
+
         // Notification configuration
         notification: NotificationConfig(
           channelId: 'mcp_demo_notifications',
@@ -58,7 +58,7 @@ Future<void> initMCP() async {
           enableVibration: true,
           priority: NotificationPriority.high,
         ),
-        
+
         // Tray configuration (desktop only)
         tray: TrayConfig(
           iconPath: 'assets/icons/tray_icon.png',
@@ -83,9 +83,15 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 bool _isDesktopPlatform() {
   try {
     // Check if running on desktop using Platform class
-    return Theme.of(navigatorKey.currentContext ?? NavigatorState().context).platform == TargetPlatform.macOS ||
-           Theme.of(navigatorKey.currentContext ?? NavigatorState().context).platform == TargetPlatform.windows ||
-           Theme.of(navigatorKey.currentContext ?? NavigatorState().context).platform == TargetPlatform.linux;
+    return Theme.of(navigatorKey.currentContext ?? NavigatorState().context)
+                .platform ==
+            TargetPlatform.macOS ||
+        Theme.of(navigatorKey.currentContext ?? NavigatorState().context)
+                .platform ==
+            TargetPlatform.windows ||
+        Theme.of(navigatorKey.currentContext ?? NavigatorState().context)
+                .platform ==
+            TargetPlatform.linux;
   } catch (e) {
     return false;
   }
@@ -117,40 +123,40 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final Logger _logger = Logger('flutter_mcp.home_page');
-  
+
   // Service IDs
   String? _serverId;
   String? _clientId;
   String? _llmId;
   String? _llmServerId;
-  
+
   // State
   bool _isRunning = false;
   String _status = 'Ready';
-  
+
   // Platform Services State
   bool _backgroundServiceRunning = false;
   bool _notificationPermissionGranted = false;
   bool _trayIconVisible = false;
-  
+
   // Chat
   final TextEditingController _messageController = TextEditingController();
   final List<ChatMessage> _messages = [];
-  
+
   // API key
   final TextEditingController _apiKeyController = TextEditingController();
   String _selectedProvider = 'openai';
-  
+
   // Health monitoring
   StreamSubscription? _healthSubscription;
-  
+
   @override
   void initState() {
     super.initState();
     _loadApiKey();
     _subscribeToHealth();
   }
-  
+
   @override
   void dispose() {
     _messageController.dispose();
@@ -158,7 +164,7 @@ class _HomePageState extends State<HomePage> {
     _healthSubscription?.cancel();
     super.dispose();
   }
-  
+
   void _subscribeToHealth() {
     try {
       _healthSubscription = FlutterMCP.instance.healthStream.listen(
@@ -174,11 +180,11 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       _logger.debug('Health monitoring setup failed: $e');
     }
-    
+
     // Check platform service status
     _checkPlatformServices();
   }
-  
+
   Future<void> _checkPlatformServices() async {
     try {
       // Check platform service status
@@ -190,7 +196,7 @@ class _HomePageState extends State<HomePage> {
       _logger.debug('Platform service check failed: $e');
     }
   }
-  
+
   Future<void> _loadApiKey() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -202,7 +208,7 @@ class _HomePageState extends State<HomePage> {
       _updateStatus('Failed to load settings');
     }
   }
-  
+
   Future<void> _saveApiKey() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -213,17 +219,17 @@ class _HomePageState extends State<HomePage> {
       _updateStatus('Failed to save settings');
     }
   }
-  
+
   void _updateStatus(String status) {
     setState(() {
       _status = status;
     });
   }
-  
+
   Future<void> _startServices() async {
     setState(() => _isRunning = true);
     _updateStatus('Starting services...');
-    
+
     try {
       // Create server
       _serverId = await FlutterMCP.instance.createServer(
@@ -236,19 +242,21 @@ class _HomePageState extends State<HomePage> {
           sampling: true,
         ),
       );
-      
+
       // Create LLM if API key provided
       if (_apiKeyController.text.isNotEmpty) {
         final result = await FlutterMCP.instance.createLlmServer(
           providerName: _selectedProvider,
           config: LlmConfiguration(
             apiKey: _apiKeyController.text,
-            model: _selectedProvider == 'openai' ? 'gpt-3.5-turbo' : 'claude-3-sonnet-20240229',
+            model: _selectedProvider == 'openai'
+                ? 'gpt-3.5-turbo'
+                : 'claude-3-sonnet-20240229',
           ),
         );
         _llmId = result.$1;
         _llmServerId = result.$2;
-        
+
         // Connect server to LLM
         if (_serverId != null && _llmServerId != null) {
           await FlutterMCP.instance.addMcpServerToLlmServer(
@@ -257,7 +265,7 @@ class _HomePageState extends State<HomePage> {
           );
         }
       }
-      
+
       // Create client
       _clientId = await FlutterMCP.instance.createClient(
         name: 'Demo Client',
@@ -265,16 +273,16 @@ class _HomePageState extends State<HomePage> {
         capabilities: const ClientCapabilities(),
         transportCommand: 'echo',
       );
-      
+
       // Connect services
       if (_serverId != null) {
         FlutterMCP.instance.connectServer(_serverId!);
       }
-      
+
       if (_clientId != null) {
         await FlutterMCP.instance.connectClient(_clientId!);
       }
-      
+
       _updateStatus('✅ Services running');
     } catch (e) {
       _logger.error('Failed to start services: $e');
@@ -282,37 +290,37 @@ class _HomePageState extends State<HomePage> {
       setState(() => _isRunning = false);
     }
   }
-  
+
   Future<void> _stopServices() async {
     setState(() => _isRunning = false);
     _updateStatus('Stopping services...');
-    
+
     setState(() {
       _serverId = null;
       _clientId = null;
       _llmId = null;
       _llmServerId = null;
     });
-    
+
     _updateStatus('Services stopped');
   }
-  
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _llmId == null) return;
-    
+
     setState(() {
       _messages.add(ChatMessage(text: text, isUser: true));
       _messageController.clear();
     });
-    
+
     try {
       final response = await FlutterMCP.instance.chat(
         _llmId!,
         text,
         enableTools: true,
       );
-      
+
       setState(() {
         _messages.add(ChatMessage(text: response.text, isUser: false));
       });
@@ -326,15 +334,15 @@ class _HomePageState extends State<HomePage> {
       });
     }
   }
-  
+
   Future<void> _showStatus() async {
     try {
       final status = FlutterMCP.instance.getSystemStatus();
       final health = await FlutterMCP.instance.getSystemHealth();
       final batchStats = FlutterMCP.instance.getBatchStatistics();
-      
+
       if (!mounted) return;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -349,13 +357,16 @@ class _HomePageState extends State<HomePage> {
                 Text('Servers: ${status['servers'] ?? 0}'),
                 Text('LLMs: ${status['llms'] ?? 0}'),
                 const Divider(),
-                const Text('Health Status:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Health Status:',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 Text('Status: ${health['status'] ?? 'unknown'}'),
                 Text('Message: ${health['message'] ?? 'N/A'}'),
                 const Divider(),
-                const Text('Batch Processing:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Batch Processing:',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 Text('Total: ${batchStats['totalBatches'] ?? 0}'),
-                Text('Success Rate: ${(batchStats['successRate'] ?? 0).toStringAsFixed(1)}%'),
+                Text(
+                    'Success Rate: ${(batchStats['successRate'] ?? 0).toStringAsFixed(1)}%'),
               ],
             ),
           ),
@@ -371,15 +382,15 @@ class _HomePageState extends State<HomePage> {
       _updateStatus('Failed to get status');
     }
   }
-  
+
   Future<void> _testBatchProcessing() async {
     if (_llmId == null) {
       _updateStatus('Start services with API key first');
       return;
     }
-    
+
     _updateStatus('Testing batch processing...');
-    
+
     try {
       final results = await FlutterMCP.instance.processBatch(
         llmId: _llmId!,
@@ -389,18 +400,19 @@ class _HomePageState extends State<HomePage> {
           () async => 'Color of sky?',
         ],
       );
-      
+
       _updateStatus('✅ Batch completed: ${results.length} results');
     } catch (e) {
       _updateStatus('❌ Batch failed: $e');
     }
   }
-  
+
   // Native Platform Feature Methods
-  
+
   Future<void> _startBackgroundService() async {
     try {
-      final started = await FlutterMCP.instance.platformServices.startBackgroundService();
+      final started =
+          await FlutterMCP.instance.platformServices.startBackgroundService();
       if (started) {
         setState(() {
           _backgroundServiceRunning = true;
@@ -413,10 +425,11 @@ class _HomePageState extends State<HomePage> {
       _updateStatus('❌ Background service error: $e');
     }
   }
-  
+
   Future<void> _stopBackgroundService() async {
     try {
-      final stopped = await FlutterMCP.instance.platformServices.stopBackgroundService();
+      final stopped =
+          await FlutterMCP.instance.platformServices.stopBackgroundService();
       if (stopped) {
         setState(() {
           _backgroundServiceRunning = false;
@@ -429,7 +442,7 @@ class _HomePageState extends State<HomePage> {
       _updateStatus('❌ Background service error: $e');
     }
   }
-  
+
   Future<void> _showTestNotification() async {
     try {
       // Request permission first if not granted
@@ -439,24 +452,27 @@ class _HomePageState extends State<HomePage> {
           _notificationPermissionGranted = true;
         });
       }
-      
+
       await FlutterMCP.instance.platformServices.showNotification(
         title: 'MCP Demo Notification',
-        body: 'This is a test notification from Flutter MCP using native channels!',
+        body:
+            'This is a test notification from Flutter MCP using native channels!',
         id: 'test_notification_${DateTime.now().millisecondsSinceEpoch}',
       );
-      
+
       _updateStatus('✅ Notification shown');
     } catch (e) {
       _updateStatus('❌ Notification error: $e');
     }
   }
-  
+
   Future<void> _showTrayIcon() async {
     try {
-      await FlutterMCP.instance.platformServices.setTrayIcon('assets/icons/tray_icon.png');
-      await FlutterMCP.instance.platformServices.setTrayTooltip('MCP Demo - Click for menu');
-      
+      await FlutterMCP.instance.platformServices
+          .setTrayIcon('assets/icons/tray_icon.png');
+      await FlutterMCP.instance.platformServices
+          .setTrayTooltip('MCP Demo - Click for menu');
+
       // Update tray menu with actions
       await FlutterMCP.instance.platformServices.setTrayMenu([
         TrayMenuItem(
@@ -479,7 +495,7 @@ class _HomePageState extends State<HomePage> {
           },
         ),
       ]);
-      
+
       setState(() {
         _trayIconVisible = true;
       });
@@ -488,7 +504,7 @@ class _HomePageState extends State<HomePage> {
       _updateStatus('❌ Tray icon error: $e');
     }
   }
-  
+
   Future<void> _hideTrayIcon() async {
     try {
       // For now, we'll just update the state
@@ -501,17 +517,19 @@ class _HomePageState extends State<HomePage> {
       _updateStatus('❌ Tray icon error: $e');
     }
   }
-  
+
   Future<void> _testSecureStorage() async {
     try {
       // Store test data
-      await FlutterMCP.instance.platformServices.secureStore('test_key', 'This is a secure value!');
-      
+      await FlutterMCP.instance.platformServices
+          .secureStore('test_key', 'This is a secure value!');
+
       // Read it back
-      final value = await FlutterMCP.instance.platformServices.secureRead('test_key');
-      
+      final value =
+          await FlutterMCP.instance.platformServices.secureRead('test_key');
+
       if (!mounted) return;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -544,13 +562,13 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       );
-      
+
       _updateStatus('✅ Secure storage test completed');
     } catch (e) {
       _updateStatus('❌ Secure storage error: $e');
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -568,7 +586,8 @@ class _HomePageState extends State<HomePage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const NativeFeaturesDemo()),
+                MaterialPageRoute(
+                    builder: (context) => const NativeFeaturesDemo()),
               );
             },
             tooltip: 'Native Features',
@@ -605,7 +624,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          
+
           // Configuration
           ExpansionTile(
             title: const Text('Configuration'),
@@ -622,13 +641,15 @@ class _HomePageState extends State<HomePage> {
                         Radio<String>(
                           value: 'openai',
                           groupValue: _selectedProvider,
-                          onChanged: (value) => setState(() => _selectedProvider = value!),
+                          onChanged: (value) =>
+                              setState(() => _selectedProvider = value!),
                         ),
                         const Text('OpenAI'),
                         Radio<String>(
                           value: 'claude',
                           groupValue: _selectedProvider,
-                          onChanged: (value) => setState(() => _selectedProvider = value!),
+                          onChanged: (value) =>
+                              setState(() => _selectedProvider = value!),
                         ),
                         const Text('Claude'),
                       ],
@@ -653,9 +674,11 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
-                          onPressed: _isRunning ? _stopServices : _startServices,
+                          onPressed:
+                              _isRunning ? _stopServices : _startServices,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _isRunning ? Colors.red : Colors.green,
+                            backgroundColor:
+                                _isRunning ? Colors.red : Colors.green,
                             foregroundColor: Colors.white,
                           ),
                           child: Text(_isRunning ? 'Stop' : 'Start'),
@@ -667,7 +690,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-          
+
           // Native Platform Features
           ExpansionTile(
             title: const Text('Native Platform Features'),
@@ -679,29 +702,34 @@ class _HomePageState extends State<HomePage> {
                     // Background Service
                     ListTile(
                       title: const Text('Background Service'),
-                      subtitle: Text(_backgroundServiceRunning ? 'Running' : 'Stopped'),
+                      subtitle: Text(
+                          _backgroundServiceRunning ? 'Running' : 'Stopped'),
                       trailing: Switch(
                         value: _backgroundServiceRunning,
-                        onChanged: _isRunning ? (value) async {
-                          if (value) {
-                            await _startBackgroundService();
-                          } else {
-                            await _stopBackgroundService();
-                          }
-                        } : null,
+                        onChanged: _isRunning
+                            ? (value) async {
+                                if (value) {
+                                  await _startBackgroundService();
+                                } else {
+                                  await _stopBackgroundService();
+                                }
+                              }
+                            : null,
                       ),
                     ),
-                    
+
                     // Notifications
                     ListTile(
                       title: const Text('Test Notification'),
-                      subtitle: Text(_notificationPermissionGranted ? 'Permission granted' : 'Permission needed'),
+                      subtitle: Text(_notificationPermissionGranted
+                          ? 'Permission granted'
+                          : 'Permission needed'),
                       trailing: ElevatedButton(
                         onPressed: _isRunning ? _showTestNotification : null,
                         child: const Text('Show'),
                       ),
                     ),
-                    
+
                     // System Tray (Desktop only)
                     if (_isDesktopPlatform()) ...[
                       ListTile(
@@ -709,17 +737,19 @@ class _HomePageState extends State<HomePage> {
                         subtitle: Text(_trayIconVisible ? 'Visible' : 'Hidden'),
                         trailing: Switch(
                           value: _trayIconVisible,
-                          onChanged: _isRunning ? (value) async {
-                            if (value) {
-                              await _showTrayIcon();
-                            } else {
-                              await _hideTrayIcon();
-                            }
-                          } : null,
+                          onChanged: _isRunning
+                              ? (value) async {
+                                  if (value) {
+                                    await _showTrayIcon();
+                                  } else {
+                                    await _hideTrayIcon();
+                                  }
+                                }
+                              : null,
                         ),
                       ),
                     ],
-                    
+
                     // Secure Storage Demo
                     ListTile(
                       title: const Text('Secure Storage'),
@@ -734,7 +764,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-          
+
           // Chat Interface
           Expanded(
             child: Column(
@@ -747,7 +777,9 @@ class _HomePageState extends State<HomePage> {
                     itemBuilder: (context, index) {
                       final msg = _messages[index];
                       return Align(
-                        alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment: msg.isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           padding: const EdgeInsets.all(12),
@@ -755,8 +787,11 @@ class _HomePageState extends State<HomePage> {
                             maxWidth: MediaQuery.of(context).size.width * 0.7,
                           ),
                           decoration: BoxDecoration(
-                            color: msg.isError ? Colors.red[100] :
-                                   msg.isUser ? Colors.blue[100] : Colors.grey[200],
+                            color: msg.isError
+                                ? Colors.red[100]
+                                : msg.isUser
+                                    ? Colors.blue[100]
+                                    : Colors.grey[200],
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(msg.text),
@@ -765,7 +800,7 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                 ),
-                
+
                 // Input
                 Container(
                   padding: const EdgeInsets.all(8),
@@ -781,7 +816,8 @@ class _HomePageState extends State<HomePage> {
                           decoration: const InputDecoration(
                             hintText: 'Type a message...',
                             border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
                           ),
                           enabled: _isRunning && _llmId != null,
                           onSubmitted: (_) => _sendMessage(),
@@ -790,7 +826,8 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.send),
-                        onPressed: _isRunning && _llmId != null ? _sendMessage : null,
+                        onPressed:
+                            _isRunning && _llmId != null ? _sendMessage : null,
                         color: Theme.of(context).primaryColor,
                       ),
                     ],
@@ -809,7 +846,7 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final bool isError;
-  
+
   ChatMessage({
     required this.text,
     required this.isUser,

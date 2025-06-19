@@ -129,6 +129,13 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private func configureBackgroundService(call: FlutterMethodCall, result: @escaping FlutterResult) {
         if let config = call.arguments as? [String: Any] {
             // Store configuration
+            UserDefaults.standard.set(config, forKey: "background_service_config")
+            
+            // Store Flutter callback handle if provided
+            if let callbackHandle = config["callbackHandle"] as? Int64 {
+                UserDefaults.standard.set(callbackHandle, forKey: "flutter_callback_handle")
+                backgroundTaskManager.setupFlutterEngine(callbackHandle: callbackHandle)
+            }
         }
         result(nil)
     }

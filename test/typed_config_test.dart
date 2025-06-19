@@ -6,7 +6,7 @@ void main() {
   group('Typed Configuration Tests', () {
     test('should create MemoryConfig from map', () {
       print('=== MemoryConfig FromMap Test ===');
-      
+
       final map = {
         'monitoringIntervalSeconds': 60,
         'maxReadings': 200,
@@ -18,9 +18,9 @@ void main() {
         'enableCaching': false,
         'maxCacheSize': 500,
       };
-      
+
       final config = MemoryConfig.fromMap(map);
-      
+
       expect(config.monitoringInterval, equals(Duration(seconds: 60)));
       expect(config.maxReadings, equals(200));
       expect(config.initialSimulationMB, equals(100));
@@ -30,13 +30,13 @@ void main() {
       expect(config.enableMonitoring, equals(false));
       expect(config.enableCaching, equals(false));
       expect(config.maxCacheSize, equals(500));
-      
+
       print('MemoryConfig creation and parsing successful');
     });
 
     test('should create LoggingConfig with enum values', () {
       print('=== LoggingConfig Enum Test ===');
-      
+
       final map = {
         'level': 'warning',
         'enableConsole': false,
@@ -48,9 +48,9 @@ void main() {
         'remoteLogEndpoint': 'https://logs.example.com',
         'excludeLoggers': ['debug_logger', 'test_logger'],
       };
-      
+
       final config = LoggingConfig.fromMap(map);
-      
+
       expect(config.level, equals(LogLevel.warning));
       expect(config.enableConsole, equals(false));
       expect(config.enableFile, equals(true));
@@ -60,13 +60,13 @@ void main() {
       expect(config.enableRemoteLogging, equals(true));
       expect(config.remoteLogEndpoint, equals('https://logs.example.com'));
       expect(config.excludeLoggers, equals(['debug_logger', 'test_logger']));
-      
+
       print('LoggingConfig enum and collection parsing successful');
     });
 
     test('should handle complex nested TrayConfig', () {
       print('=== Nested TrayConfig Test ===');
-      
+
       final map = {
         'enabled': true,
         'iconPath': '/app/icons/tray.png',
@@ -105,31 +105,31 @@ void main() {
           },
         ],
       };
-      
+
       final config = TrayPlatformConfig.fromMap(map);
-      
+
       expect(config.enabled, equals(true));
       expect(config.iconPath, equals('/app/icons/tray.png'));
       expect(config.tooltip, equals('MCP Application'));
       expect(config.showOnStartup, equals(true));
       expect(config.minimizeToTray, equals(true));
-      
+
       expect(config.menuItems.length, equals(3));
       expect(config.menuItems[0].id, equals('show'));
       expect(config.menuItems[0].label, equals('Show Window'));
       expect(config.menuItems[0].action, equals('show_window'));
-      
+
       // Test nested menu items
       expect(config.menuItems[1].subItems.length, equals(1));
       expect(config.menuItems[1].subItems[0].id, equals('general'));
       expect(config.menuItems[1].subItems[0].label, equals('General'));
-      
+
       print('Nested TrayConfig parsing successful');
     });
 
     test('should create TypedAppConfig from complete map', () {
       print('=== Complete TypedAppConfig Test ===');
-      
+
       final completeMap = {
         'memory': {
           'monitoringIntervalSeconds': 45,
@@ -171,49 +171,51 @@ void main() {
           },
         },
       };
-      
+
       final config = TypedAppConfig.fromMap(completeMap);
-      
+
       // Test memory config
       expect(config.memory.monitoringInterval, equals(Duration(seconds: 45)));
       expect(config.memory.maxReadings, equals(150));
       expect(config.memory.enableMonitoring, equals(true));
-      
+
       // Test logging config
       expect(config.logging.level, equals(LogLevel.info));
       expect(config.logging.enableConsole, equals(true));
       expect(config.logging.enableFile, equals(false));
-      
+
       // Test performance config
       expect(config.performance.monitoring.enabled, equals(true));
       expect(config.performance.sampleInterval, equals(Duration(seconds: 10)));
       expect(config.performance.maxSamples, equals(500));
-      
+
       // Test security config
       expect(config.security.enableHttps, equals(true));
       expect(config.security.validateCertificates, equals(true));
       expect(config.security.tokenExpiration, equals(Duration(hours: 12)));
-      
+
       // Test platform configs
       expect(config.platform.notification.enabled, equals(true));
       expect(config.platform.notification.enableSound, equals(false));
-      expect(config.platform.notification.priority, equals(NotificationPriority.medium));
-      
+      expect(config.platform.notification.priority,
+          equals(NotificationPriority.medium));
+
       expect(config.platform.background.enabled, equals(true));
-      expect(config.platform.background.interval, equals(Duration(minutes: 30)));
+      expect(
+          config.platform.background.interval, equals(Duration(minutes: 30)));
       expect(config.platform.background.maxConcurrentTasks, equals(5));
-      
+
       expect(config.platform.tray.enabled, equals(false));
-      
+
       expect(config.platform.storage.enableSecureStorage, equals(true));
       expect(config.platform.storage.maxCacheSize, equals(52428800));
-      
+
       print('Complete TypedAppConfig creation and validation successful');
     });
 
     test('should handle round-trip serialization', () {
       print('=== Round-trip Serialization Test ===');
-      
+
       final originalConfig = TypedAppConfig(
         appInfo: AppInfo(name: 'Test App', version: '1.0.0'),
         features: FeatureFlags(),
@@ -252,59 +254,59 @@ void main() {
           ),
         ),
       );
-      
+
       // Convert to map and back
       final map = originalConfig.toMap();
       final restoredConfig = TypedAppConfig.fromMap(map);
-      
+
       // Verify memory config
-      expect(restoredConfig.memory.monitoringInterval, 
-             equals(originalConfig.memory.monitoringInterval));
-      expect(restoredConfig.memory.maxReadings, 
-             equals(originalConfig.memory.maxReadings));
-      expect(restoredConfig.memory.enableMonitoring, 
-             equals(originalConfig.memory.enableMonitoring));
-      
+      expect(restoredConfig.memory.monitoringInterval,
+          equals(originalConfig.memory.monitoringInterval));
+      expect(restoredConfig.memory.maxReadings,
+          equals(originalConfig.memory.maxReadings));
+      expect(restoredConfig.memory.enableMonitoring,
+          equals(originalConfig.memory.enableMonitoring));
+
       // Verify logging config
-      expect(restoredConfig.logging.level, 
-             equals(originalConfig.logging.level));
-      expect(restoredConfig.logging.excludeLoggers, 
-             equals(originalConfig.logging.excludeLoggers));
-      
+      expect(
+          restoredConfig.logging.level, equals(originalConfig.logging.level));
+      expect(restoredConfig.logging.excludeLoggers,
+          equals(originalConfig.logging.excludeLoggers));
+
       // Verify performance config
-      expect(restoredConfig.performance.monitoring.enabled, 
-             equals(originalConfig.performance.monitoring.enabled));
-      expect(restoredConfig.performance.cpuThreshold, 
-             equals(originalConfig.performance.cpuThreshold));
-      expect(restoredConfig.performance.enabledMetrics, 
-             equals(originalConfig.performance.enabledMetrics));
-      
+      expect(restoredConfig.performance.monitoring.enabled,
+          equals(originalConfig.performance.monitoring.enabled));
+      expect(restoredConfig.performance.cpuThreshold,
+          equals(originalConfig.performance.cpuThreshold));
+      expect(restoredConfig.performance.enabledMetrics,
+          equals(originalConfig.performance.enabledMetrics));
+
       // Verify security config
-      expect(restoredConfig.security.enableHttps, 
-             equals(originalConfig.security.enableHttps));
-      expect(restoredConfig.security.allowedOrigins, 
-             equals(originalConfig.security.allowedOrigins));
-      
+      expect(restoredConfig.security.enableHttps,
+          equals(originalConfig.security.enableHttps));
+      expect(restoredConfig.security.allowedOrigins,
+          equals(originalConfig.security.allowedOrigins));
+
       print('Round-trip serialization successful');
     });
 
     test('should integrate with AppConfig', () async {
       print('=== AppConfig Integration Test ===');
-      
+
       // Test with default configuration from AppConfig
       final appConfig = AppConfig.instance;
-      
+
       // Test typed config retrieval with defaults
       final memoryConfig = appConfig.getMemoryConfig();
       expect(memoryConfig.monitoringInterval.inSeconds, greaterThan(0));
       expect(memoryConfig.maxReadings, greaterThan(0));
       expect(memoryConfig.initialSimulationMB, greaterThan(0));
-      
+
       final loggingConfig = appConfig.getLoggingConfig();
       expect(loggingConfig.level, isNotNull);
       expect(loggingConfig.enableConsole, isA<bool>());
       expect(loggingConfig.enableFile, isA<bool>());
-      
+
       // Test complete typed config
       final typedConfig = appConfig.getTypedConfig();
       expect(typedConfig.memory, isNotNull);
@@ -312,34 +314,35 @@ void main() {
       expect(typedConfig.performance, isNotNull);
       expect(typedConfig.security, isNotNull);
       expect(typedConfig.platform, isNotNull);
-      
+
       print('AppConfig integration test successful');
     });
 
     test('should handle default values correctly', () {
       print('=== Default Values Test ===');
-      
+
       // Create configs with empty maps (should use defaults)
       final memoryConfig = MemoryConfig.fromMap({});
       final loggingConfig = LoggingConfig.fromMap({});
       final performanceConfig = PerformanceConfig.fromMap({});
-      
+
       // Verify defaults
       expect(memoryConfig.monitoringInterval, equals(Duration(seconds: 30)));
       expect(memoryConfig.maxReadings, equals(100));
       expect(memoryConfig.enableMonitoring, equals(true));
       expect(memoryConfig.gcProbability, equals(0.1));
-      
+
       expect(loggingConfig.level, equals(LogLevel.info));
       expect(loggingConfig.enableConsole, equals(true));
       expect(loggingConfig.enableFile, equals(false));
       expect(loggingConfig.maxLogFiles, equals(5));
-      
+
       expect(performanceConfig.monitoring.enabled, equals(true));
       expect(performanceConfig.sampleInterval, equals(Duration(seconds: 5)));
       expect(performanceConfig.cpuThreshold, equals(80.0));
-      expect(performanceConfig.enabledMetrics, equals(['memory', 'cpu', 'network']));
-      
+      expect(performanceConfig.enabledMetrics,
+          equals(['memory', 'cpu', 'network']));
+
       print('Default values test successful');
     });
   });

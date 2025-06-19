@@ -7,12 +7,12 @@ import 'background_service.dart';
 class AndroidBackgroundService implements BackgroundService {
   static const MethodChannel _channel = MethodChannel('flutter_mcp');
   static const EventChannel _eventChannel = EventChannel('flutter_mcp/events');
-  
+
   bool _isRunning = false;
   final Logger _logger = Logger('flutter_mcp.android_background');
   late BackgroundConfig _config;
   StreamSubscription? _eventSubscription;
-  
+
   // Callback functions
   Function()? _onStart;
   Function(DateTime)? _onRepeat;
@@ -26,7 +26,7 @@ class AndroidBackgroundService implements BackgroundService {
   Future<void> initialize(BackgroundConfig? config) async {
     _logger.fine('Android background service initializing');
     _config = config ?? BackgroundConfig.defaultConfig();
-    
+
     // Initialize event listener
     _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
       (dynamic event) {
@@ -38,7 +38,7 @@ class AndroidBackgroundService implements BackgroundService {
         _logger.severe('Event channel error', error);
       },
     );
-    
+
     // Initialize native service
     await _channel.invokeMethod('initialize', {
       'config': _config.toMap(),
@@ -55,7 +55,7 @@ class AndroidBackgroundService implements BackgroundService {
     _onRepeat = onRepeat;
     _onDestroy = onDestroy;
     _onEvent = onEvent;
-    
+
     await _channel.invokeMethod('configureBackgroundService', {
       'intervalMs': _config.intervalMs,
       'channelId': _config.notificationChannelId,
@@ -70,9 +70,9 @@ class AndroidBackgroundService implements BackgroundService {
   void _handleEvent(Map<String, dynamic> event) {
     final type = event['type'] as String?;
     final data = event['data'] as Map<String, dynamic>? ?? {};
-    
+
     _logger.fine('Received event: $type');
-    
+
     switch (type) {
       case 'backgroundEvent':
         final eventType = data['type'] as String?;
@@ -81,17 +81,18 @@ class AndroidBackgroundService implements BackgroundService {
         } else if (eventType == 'periodic') {
           final timestamp = data['timestamp'] as int?;
           if (timestamp != null) {
-            _onRepeat?.call(DateTime.fromMillisecondsSinceEpoch(timestamp ~/ 1000));
+            _onRepeat
+                ?.call(DateTime.fromMillisecondsSinceEpoch(timestamp ~/ 1000));
           }
         } else if (eventType == 'destroy') {
           _onDestroy?.call();
         }
         break;
-      
+
       case 'backgroundTaskResult':
         _onEvent?.call(data);
         break;
-      
+
       default:
         _logger.fine('Unknown event type: $type');
     }
@@ -102,7 +103,8 @@ class AndroidBackgroundService implements BackgroundService {
     _logger.fine('Android background service starting');
 
     try {
-      final result = await _channel.invokeMethod<bool>('startBackgroundService');
+      final result =
+          await _channel.invokeMethod<bool>('startBackgroundService');
       _isRunning = result ?? false;
       _logger.fine('Service started: $_isRunning');
       return _isRunning;
@@ -127,13 +129,14 @@ class AndroidBackgroundService implements BackgroundService {
     }
   }
 
-  Future<void> scheduleTask(String taskId, Duration delay, Function() task) async {
+  Future<void> scheduleTask(
+      String taskId, Duration delay, Function() task) async {
     try {
       await _channel.invokeMethod('scheduleBackgroundTask', {
         'taskId': taskId,
         'delayMillis': delay.inMilliseconds,
       });
-      
+
       // Store task locally to execute when event is received
       _scheduledTasks[taskId] = task;
     } catch (e, stackTrace) {
@@ -146,7 +149,7 @@ class AndroidBackgroundService implements BackgroundService {
       await _channel.invokeMethod('cancelBackgroundTask', {
         'taskId': taskId,
       });
-      
+
       _scheduledTasks.remove(taskId);
     } catch (e, stackTrace) {
       _logger.severe('Failed to cancel task', e, stackTrace);

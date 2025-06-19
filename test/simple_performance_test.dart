@@ -6,7 +6,7 @@ void main() {
   test('Enhanced performance monitor basic functionality', () {
     final monitor = EnhancedPerformanceMonitor.instance;
     monitor.reset();
-    
+
     // Configure simple aggregation
     monitor.configureAggregation(
       'test_metric',
@@ -15,7 +15,7 @@ void main() {
         type: AggregationType.average,
       ),
     );
-    
+
     // Record metrics
     monitor.recordTypedMetric(
       CounterMetric(
@@ -25,7 +25,7 @@ void main() {
         unit: 'count',
       ),
     );
-    
+
     monitor.recordTypedMetric(
       CounterMetric(
         name: 'test_metric',
@@ -34,11 +34,11 @@ void main() {
         unit: 'count',
       ),
     );
-    
+
     // Check aggregated value
     final aggregated = monitor.getAggregatedValue('test_metric');
     expect(aggregated, equals(15.0)); // Average of 10 and 20
-    
+
     // Get statistics
     final stats = monitor.getMetricStatistics('test_metric');
     expect(stats, isNotNull);
@@ -46,7 +46,7 @@ void main() {
     expect(stats['average'], equals(15.0));
     expect(stats['min'], equals(10.0));
     expect(stats['max'], equals(20.0));
-    
+
     // Clean up
     monitor.dispose();
   });

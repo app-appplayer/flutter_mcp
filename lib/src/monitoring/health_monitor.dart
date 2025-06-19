@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter_mcp/src/utils/event_system.dart';
+import '../events/event_system.dart';
 import '../utils/logger.dart';
 import '../types/health_types.dart';
 
@@ -45,20 +45,21 @@ class HealthMonitor {
   final Map<String, ComponentHealth> _componentHealths = {};
   final Map<String, Timer> _healthCheckTimers = {};
   final EventSystem _eventSystem = EventSystem.instance;
-  
+
   Timer? _aggregateHealthTimer;
   bool _isActive = false;
-  
+
   // Configuration
   Duration _checkInterval = const Duration(seconds: 10);
   Duration _componentTimeout = const Duration(seconds: 5);
-  
+
   /// Stream of health check results
   Stream<MCPHealthCheckResult> get healthStream {
-    _healthStreamController ??= StreamController<MCPHealthCheckResult>.broadcast();
+    _healthStreamController ??=
+        StreamController<MCPHealthCheckResult>.broadcast();
     return _healthStreamController!.stream;
   }
-  
+
   /// Get current health snapshot
   Map<String, dynamic> get currentHealth {
     final overallStatus = _calculateOverallHealth();
@@ -69,7 +70,7 @@ class HealthMonitor {
       'summary': _generateHealthSummary(),
     };
   }
-  
+
   /// Initialize the health monitor
   void initialize({
     Duration? checkInterval,
@@ -79,20 +80,22 @@ class HealthMonitor {
       _logger.warning('Health monitor already initialized');
       return;
     }
-    
+
     _checkInterval = checkInterval ?? _checkInterval;
     _componentTimeout = componentTimeout ?? _componentTimeout;
-    
+
     // Initialize stream controller if needed
-    _healthStreamController ??= StreamController<MCPHealthCheckResult>.broadcast();
-    
+    _healthStreamController ??=
+        StreamController<MCPHealthCheckResult>.broadcast();
+
     _isActive = true;
     _startAggregateHealthCheck();
     _subscribeToEvents();
-    
-    _logger.info('Health monitor initialized with check interval: $_checkInterval');
+
+    _logger.info(
+        'Health monitor initialized with check interval: $_checkInterval');
   }
-  
+
   /// Register a component for health monitoring
   void registerComponent(
     String componentId, {
@@ -103,7 +106,7 @@ class HealthMonitor {
       _logger.warning('Component already registered: $componentId');
       return;
     }
-    
+
     // Initial health status
     _componentHealths[componentId] = ComponentHealth(
       componentId: componentId,
@@ -111,7 +114,7 @@ class HealthMonitor {
       message: 'Component registered',
       lastCheck: DateTime.now(),
     );
-    
+
     // Set up periodic health check if provided
     if (healthCheck != null) {
       final interval = customCheckInterval ?? _checkInterval;
@@ -119,21 +122,21 @@ class HealthMonitor {
         await _performHealthCheck(componentId, healthCheck);
       });
     }
-    
+
     _logger.fine('Registered component for health monitoring: $componentId');
     _emitHealthUpdate();
   }
-  
+
   /// Unregister a component from health monitoring
   void unregisterComponent(String componentId) {
     _componentHealths.remove(componentId);
     _healthCheckTimers[componentId]?.cancel();
     _healthCheckTimers.remove(componentId);
-    
+
     _logger.fine('Unregistered component from health monitoring: $componentId');
     _emitHealthUpdate();
   }
-  
+
   /// Update component health status
   void updateComponentHealth(
     String componentId,
@@ -142,7 +145,7 @@ class HealthMonitor {
     Map<String, dynamic>? metadata,
   }) {
     final previousHealth = _componentHealths[componentId];
-    
+
     _componentHealths[componentId] = ComponentHealth(
       componentId: componentId,
       status: status,
@@ -150,79 +153,81 @@ class HealthMonitor {
       lastCheck: DateTime.now(),
       metadata: metadata,
     );
-    
+
     // Log status changes
     if (previousHealth?.status != status) {
-      _logger.info('Component $componentId health changed: ${previousHealth?.status.name} -> ${status.name}');
-      
+      _logger.info(
+          'Component $componentId health changed: ${previousHealth?.status.name} -> ${status.name}');
+
       // Publish health change event
-      _eventSystem.publish('health.component.changed', {
+      _eventSystem.publishTopic('health.component.changed', {
         'componentId': componentId,
         'previousStatus': previousHealth?.status.name,
         'newStatus': status.name,
         'message': message,
       });
     }
-    
+
     _emitHealthUpdate();
   }
-  
+
   /// Perform a health check for all components
   Future<Map<String, dynamic>> performFullHealthCheck() async {
     final futures = <String, Future<ComponentHealth>>{};
-    
+
     for (final componentId in _componentHealths.keys) {
       futures[componentId] = _checkComponentHealth(componentId);
     }
-    
+
     await Future.wait(futures.values);
-    
+
     return currentHealth;
   }
-  
+
   /// Check if system is healthy
   bool isHealthy() {
     final overallStatus = _calculateOverallHealth();
     return overallStatus == MCPHealthStatus.healthy;
   }
-  
+
   /// Get health history for a component
-  List<ComponentHealth> getComponentHistory(String componentId, {int limit = 100}) {
+  List<ComponentHealth> getComponentHistory(String componentId,
+      {int limit = 100}) {
     // In a real implementation, this would query from a time-series database
     // For now, return current status only
     final current = _componentHealths[componentId];
     return current != null ? [current] : [];
   }
-  
+
   /// Dispose the health monitor
   void dispose() {
     _isActive = false;
     _aggregateHealthTimer?.cancel();
-    
+
     for (final timer in _healthCheckTimers.values) {
       timer.cancel();
     }
     _healthCheckTimers.clear();
-    
-    _componentHealths.clear();  // Clear component health data
-    
+
+    _componentHealths.clear(); // Clear component health data
+
     _healthStreamController?.close();
-    _healthStreamController = null;  // Allow reinitialization
+    _healthStreamController = null; // Allow reinitialization
     _logger.info('Health monitor disposed');
   }
-  
+
   // Private methods
-  
+
   void _startAggregateHealthCheck() {
     _aggregateHealthTimer = Timer.periodic(_checkInterval, (_) {
       _checkStaleComponents();
       _emitHealthUpdate();
     });
   }
-  
+
   void _subscribeToEvents() {
     // Subscribe to system events that affect health
-    _eventSystem.subscribe<Map<String, dynamic>>('error.occurred', (data) {
+    _eventSystem.subscribeTopic('error.occurred', (data) {
       final componentId = data['componentId'] as String?;
       if (componentId != null) {
         updateComponentHealth(
@@ -233,8 +238,8 @@ class HealthMonitor {
         );
       }
     });
-    
-    _eventSystem.subscribe<Map<String, dynamic>>('component.recovered', (data) {
+
+    _eventSystem.subscribeTopic('component.recovered', (data) {
       final componentId = data['componentId'] as String?;
       if (componentId != null) {
         updateComponentHealth(
@@ -246,7 +251,7 @@ class HealthMonitor {
       }
     });
   }
-  
+
   Future<void> _performHealthCheck(
     String componentId,
     Future<MCPHealthCheckResult> Function() healthCheck,
@@ -268,24 +273,26 @@ class HealthMonitor {
       );
     }
   }
-  
+
   Future<ComponentHealth> _checkComponentHealth(String componentId) async {
     // Default implementation - can be overridden by registered health checks
-    return _componentHealths[componentId] ?? ComponentHealth(
-      componentId: componentId,
-      status: MCPHealthStatus.unhealthy,
-      message: 'Component not found',
-      lastCheck: DateTime.now(),
-    );
+    return _componentHealths[componentId] ??
+        ComponentHealth(
+          componentId: componentId,
+          status: MCPHealthStatus.unhealthy,
+          message: 'Component not found',
+          lastCheck: DateTime.now(),
+        );
   }
-  
+
   void _checkStaleComponents() {
     final now = DateTime.now();
     final staleThreshold = _checkInterval * 3;
-    
+
     for (final component in _componentHealths.values) {
       final timeSinceLastCheck = now.difference(component.lastCheck);
-      if (timeSinceLastCheck > staleThreshold && component.status != MCPHealthStatus.unhealthy) {
+      if (timeSinceLastCheck > staleThreshold &&
+          component.status != MCPHealthStatus.unhealthy) {
         updateComponentHealth(
           component.componentId,
           MCPHealthStatus.degraded,
@@ -294,15 +301,15 @@ class HealthMonitor {
       }
     }
   }
-  
+
   MCPHealthStatus _calculateOverallHealth() {
     if (_componentHealths.isEmpty) {
       return MCPHealthStatus.healthy;
     }
-    
+
     int unhealthyCount = 0;
     int degradedCount = 0;
-    
+
     for (final health in _componentHealths.values) {
       switch (health.status) {
         case MCPHealthStatus.unhealthy:
@@ -315,7 +322,7 @@ class HealthMonitor {
           break;
       }
     }
-    
+
     // Overall health rules
     if (unhealthyCount > 0) {
       return MCPHealthStatus.unhealthy;
@@ -326,17 +333,17 @@ class HealthMonitor {
       // Some degraded but system can function
       return MCPHealthStatus.degraded;
     }
-    
+
     return MCPHealthStatus.healthy;
   }
-  
+
   Map<String, dynamic> _generateHealthSummary() {
     final statusCounts = <MCPHealthStatus, int>{};
-    
+
     for (final health in _componentHealths.values) {
       statusCounts[health.status] = (statusCounts[health.status] ?? 0) + 1;
     }
-    
+
     return {
       'totalComponents': _componentHealths.length,
       'healthy': statusCounts[MCPHealthStatus.healthy] ?? 0,
@@ -344,21 +351,21 @@ class HealthMonitor {
       'unhealthy': statusCounts[MCPHealthStatus.unhealthy] ?? 0,
     };
   }
-  
+
   void _emitHealthUpdate() {
     if (!_isActive) return;
-    
+
     final overallStatus = _calculateOverallHealth();
     final result = MCPHealthCheckResult(
       status: overallStatus,
       message: 'System health check',
       details: currentHealth,
     );
-    
+
     _healthStreamController?.add(result);
-    
+
     // Publish overall health event
-    _eventSystem.publish('health.overall.updated', {
+    _eventSystem.publishTopic('health.overall.updated', {
       'status': overallStatus.name,
       'timestamp': DateTime.now().toIso8601String(),
       'summary': _generateHealthSummary(),
@@ -380,11 +387,11 @@ mixin HealthCheckMixin implements HealthCheckProvider {
       healthCheck: performHealthCheck,
     );
   }
-  
+
   void unregisterHealthCheck() {
     HealthMonitor.instance.unregisterComponent(componentId);
   }
-  
+
   void reportHealthy([String? message]) {
     HealthMonitor.instance.updateComponentHealth(
       componentId,
@@ -392,7 +399,7 @@ mixin HealthCheckMixin implements HealthCheckProvider {
       message,
     );
   }
-  
+
   void reportDegraded(String message) {
     HealthMonitor.instance.updateComponentHealth(
       componentId,
@@ -400,7 +407,7 @@ mixin HealthCheckMixin implements HealthCheckProvider {
       message,
     );
   }
-  
+
   void reportUnhealthy(String message) {
     HealthMonitor.instance.updateComponentHealth(
       componentId,

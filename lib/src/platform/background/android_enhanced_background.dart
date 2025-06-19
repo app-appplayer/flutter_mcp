@@ -10,19 +10,20 @@ import '../../utils/enhanced_resource_cleanup.dart';
 /// Enhanced Android background service implementation
 class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
   static const MethodChannel _channel = MethodChannel('flutter_mcp');
-  static const EventChannel _eventChannel = EventChannel('flutter_mcp/background_events');
-  
+  static const EventChannel _eventChannel =
+      EventChannel('flutter_mcp/background_events');
+
   StreamSubscription? _eventSubscription;
   final Map<String, Function()> _nativeTaskCallbacks = {};
   EnhancedBackgroundConfig? _currentConfig;
-  
+
   AndroidEnhancedBackgroundService() : super('android');
-  
+
   @override
   Future<void> platformInitialize(BackgroundConfig config) async {
     _currentConfig = config is EnhancedBackgroundConfig ? config : null;
     logger.fine('Initializing Android background service');
-    
+
     // Set up event channel for native events
     _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
       (dynamic event) {
@@ -34,7 +35,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
         logger.severe('Background event channel error', error);
       },
     );
-    
+
     // Initialize native Android service
     await _channel.invokeMethod('initializeBackgroundService', {
       'enableForegroundService': config.enableForegroundService,
@@ -51,19 +52,20 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       'wifiLock': config.wifiLock,
     });
   }
-  
+
   @override
   Future<bool> platformStart() async {
     return await EnhancedErrorHandler.instance.handleError(
       () async {
-        final result = await _channel.invokeMethod<bool>('startBackgroundService', {
+        final result =
+            await _channel.invokeMethod<bool>('startBackgroundService', {
           'isForeground': _currentConfig?.enableForegroundService ?? false,
         });
-        
+
         if (result != true) {
           throw MCPException('Failed to start Android background service');
         }
-        
+
         logger.info('Android background service started');
         return true;
       },
@@ -72,7 +74,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       fallbackValue: false,
     );
   }
-  
+
   @override
   Future<bool> platformStop() async {
     return await EnhancedErrorHandler.instance.handleError(
@@ -80,10 +82,11 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
         // Cancel event subscription
         await _eventSubscription?.cancel();
         _eventSubscription = null;
-        
+
         // Stop native service
-        final result = await _channel.invokeMethod<bool>('stopBackgroundService');
-        
+        final result =
+            await _channel.invokeMethod<bool>('stopBackgroundService');
+
         logger.info('Android background service stopped');
         return result ?? true;
       },
@@ -92,49 +95,49 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       fallbackValue: false,
     );
   }
-  
+
   /// Handle events from native Android service
   void _handleNativeEvent(Map<String, dynamic> event) {
     final type = event['type'] as String?;
     final data = event['data'] as Map<String, dynamic>? ?? {};
-    
+
     logger.fine('Received native event: $type');
-    
+
     switch (type) {
       case 'task_trigger':
         _handleTaskTrigger(data);
         break;
-        
+
       case 'periodic_trigger':
         _handlePeriodicTrigger(data);
         break;
-        
+
       case 'boot_completed':
         _handleBootCompleted(data);
         break;
-        
+
       case 'connectivity_changed':
         _handleConnectivityChanged(data);
         break;
-        
+
       case 'battery_changed':
         _handleBatteryChanged(data);
         break;
-        
+
       case 'memory_warning':
         _handleMemoryWarning(data);
         break;
-        
+
       default:
         logger.fine('Unknown native event type: $type');
     }
   }
-  
+
   /// Handle task trigger from native
   void _handleTaskTrigger(Map<String, dynamic> data) {
     final taskId = data['taskId'] as String?;
     if (taskId == null) return;
-    
+
     // Execute registered callback
     final callback = _nativeTaskCallbacks[taskId];
     if (callback != null) {
@@ -145,10 +148,9 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       );
     }
   }
-  
+
   /// Handle periodic trigger
   void _handlePeriodicTrigger(Map<String, dynamic> data) {
-    
     registerTask(
       name: 'periodic_task',
       execute: () async {
@@ -158,11 +160,11 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       priority: TaskPriority.normal,
     );
   }
-  
+
   /// Handle boot completed
   void _handleBootCompleted(Map<String, dynamic> data) {
     logger.info('Device boot completed, restarting background tasks');
-    
+
     // Re-register scheduled tasks after boot
     if (_currentConfig?.schedule != null) {
       for (final job in _currentConfig!.schedule!) {
@@ -178,14 +180,15 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       }
     }
   }
-  
+
   /// Handle connectivity changes
   void _handleConnectivityChanged(Map<String, dynamic> data) {
     final isConnected = data['connected'] as bool? ?? false;
     final connectionType = data['type'] as String?;
-    
-    logger.fine('Connectivity changed: $connectionType (connected: $isConnected)');
-    
+
+    logger.fine(
+        'Connectivity changed: $connectionType (connected: $isConnected)');
+
     // Queue network-dependent tasks if connected
     if (isConnected) {
       registerTask(
@@ -197,27 +200,27 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       );
     }
   }
-  
+
   /// Handle battery changes
   void _handleBatteryChanged(Map<String, dynamic> data) {
     final level = data['level'] as int? ?? 100;
     final isCharging = data['charging'] as bool? ?? false;
-    
+
     logger.fine('Battery changed: $level% (charging: $isCharging)');
-    
+
     // Adjust task execution based on battery
     if (level < 20 && !isCharging) {
       logger.warning('Low battery detected, reducing background activity');
       // Could pause non-critical tasks
     }
   }
-  
+
   /// Handle memory warnings
   void _handleMemoryWarning(Map<String, dynamic> data) {
     final level = data['level'] as String?;
-    
+
     logger.warning('Memory warning received: $level');
-    
+
     // Trigger cleanup
     registerTask(
       name: 'memory_cleanup',
@@ -229,7 +232,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       priority: TaskPriority.high,
     );
   }
-  
+
   /// Schedule a native Android task
   Future<void> scheduleNativeTask({
     required String taskId,
@@ -242,7 +245,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       () async {
         // Register callback
         _nativeTaskCallbacks[taskId] = callback;
-        
+
         // Schedule with native Android WorkManager
         await _channel.invokeMethod('scheduleBackgroundTask', {
           'taskId': taskId,
@@ -250,7 +253,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
           'recurring': recurring,
           'constraints': constraints ?? {},
         });
-        
+
         logger.fine('Scheduled native task: $taskId');
       },
       context: 'schedule_native_task',
@@ -258,17 +261,17 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       metadata: {'taskId': taskId},
     );
   }
-  
+
   /// Cancel a native Android task
   Future<void> cancelNativeTask(String taskId) async {
     await EnhancedErrorHandler.instance.handleError(
       () async {
         _nativeTaskCallbacks.remove(taskId);
-        
+
         await _channel.invokeMethod('cancelBackgroundTask', {
           'taskId': taskId,
         });
-        
+
         logger.fine('Cancelled native task: $taskId');
       },
       context: 'cancel_native_task',
@@ -276,7 +279,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       metadata: {'taskId': taskId},
     );
   }
-  
+
   /// Update foreground notification
   Future<void> updateNotification({
     String? title,
@@ -287,7 +290,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       logger.warning('Foreground service not enabled');
       return;
     }
-    
+
     await EnhancedErrorHandler.instance.handleError(
       () async {
         await _channel.invokeMethod('updateNotification', {
@@ -300,14 +303,13 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       component: 'background_service',
     );
   }
-  
+
   /// Request battery optimization exemption
   Future<bool> requestBatteryOptimizationExemption() async {
     return await EnhancedErrorHandler.instance.handleError(
       () async {
-        final result = await _channel.invokeMethod<bool>(
-          'requestBatteryOptimizationExemption'
-        );
+        final result = await _channel
+            .invokeMethod<bool>('requestBatteryOptimizationExemption');
         return result ?? false;
       },
       context: 'battery_optimization_exemption',
@@ -315,14 +317,13 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       fallbackValue: false,
     );
   }
-  
+
   /// Check if battery optimization is disabled
   Future<bool> isBatteryOptimizationDisabled() async {
     return await EnhancedErrorHandler.instance.handleError(
       () async {
-        final result = await _channel.invokeMethod<bool>(
-          'isBatteryOptimizationDisabled'
-        );
+        final result =
+            await _channel.invokeMethod<bool>('isBatteryOptimizationDisabled');
         return result ?? true;
       },
       context: 'check_battery_optimization',
@@ -330,7 +331,7 @@ class AndroidEnhancedBackgroundService extends EnhancedBackgroundService {
       fallbackValue: true,
     );
   }
-  
+
   @override
   Map<String, dynamic> getStatistics() {
     final stats = super.getStatistics();

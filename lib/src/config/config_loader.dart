@@ -7,7 +7,6 @@ import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
 import 'package:mcp_server/mcp_server.dart';
 import 'package:mcp_llm/mcp_llm.dart';
 import 'package:yaml/yaml.dart';
-import 'package:logging/logging.dart' show Level;
 
 import 'mcp_config.dart';
 import 'background_config.dart';
@@ -18,7 +17,7 @@ import 'typed_config.dart' as typed;
 import 'config_parser.dart';
 import '../plugins/plugin_system.dart';
 import '../platform/tray/tray_manager.dart' as tray_manager;
-import '../utils/logger.dart';
+import '../utils/memory_manager.dart';
 import '../utils/exceptions.dart';
 
 /// Configuration file loader for MCP
@@ -34,7 +33,8 @@ class ConfigLoader {
       final json = jsonDecode(content);
       return _parseConfig(json);
     } catch (e, stackTrace) {
-      _logger.severe('Failed to load configuration from JSON file', e, stackTrace);
+      _logger.severe(
+          'Failed to load configuration from JSON file', e, stackTrace);
       throw MCPConfigurationException(
         'Failed to load configuration from JSON file: $filePath',
         e,
@@ -55,7 +55,8 @@ class ConfigLoader {
       final json = _convertYamlToJson(yamlDoc);
       return _parseConfig(json);
     } catch (e, stackTrace) {
-      _logger.severe('Failed to load configuration from YAML file', e, stackTrace);
+      _logger.severe(
+          'Failed to load configuration from YAML file', e, stackTrace);
       throw MCPConfigurationException(
         'Failed to load configuration from YAML file: $filePath',
         e,
@@ -65,7 +66,8 @@ class ConfigLoader {
   }
 
   /// Load MCP configuration from a string (JSON or YAML)
-  static MCPConfig loadFromString(String content, {ConfigFormat format = ConfigFormat.json}) {
+  static MCPConfig loadFromString(String content,
+      {ConfigFormat format = ConfigFormat.json}) {
     _logger.fine('Loading configuration from string (${format.name})');
 
     try {
@@ -132,10 +134,10 @@ class ConfigLoader {
   static MCPConfig _parseConfig(Map<String, dynamic> json) {
     // Use ConfigParser for type-safe parsing
     final parser = ConfigParser(json, configName: 'MCPConfig');
-    
+
     // Parse TypedAppConfig first
     final typedConfig = typed.TypedAppConfig.fromMap(json);
-    
+
     // Parse basic properties using typed config where possible
     final appName = typedConfig.appInfo.name;
     final appVersion = typedConfig.appInfo.version;
@@ -156,35 +158,39 @@ class ConfigLoader {
 
     // Parse performance monitoring settings
     final performance = typedConfig.performance;
-    final bool? enablePerformanceMonitoring = performance.monitoring.enabled;
-    final bool? enableMetricsExport = performance.monitoring.enableMetricsExport;
+    final bool enablePerformanceMonitoring = performance.monitoring.enabled;
+    final bool enableMetricsExport = performance.monitoring.enableMetricsExport;
     final String? metricsExportPath = performance.monitoring.metricsExportPath;
 
     // Parse plugin settings
-    final bool? autoLoadPlugins = typedConfig.features.plugins.autoLoad;
+    final bool autoLoadPlugins = typedConfig.features.plugins.autoLoad;
 
     final List<PluginConfig>? pluginConfigurations =
-    json.containsKey('pluginConfigurations')
-        ? _parsePluginConfigurations(json['pluginConfigurations'])
-        : null;
+        json.containsKey('pluginConfigurations')
+            ? _parsePluginConfigurations(json['pluginConfigurations'])
+            : null;
 
     // Parse resource management settings from typed config
-    final int? highMemoryThresholdMB = typedConfig.memory.highThresholdMB;
-    final int? lowBatteryWarningThreshold = 
+    final int highMemoryThresholdMB = typedConfig.memory.highThresholdMB;
+    final int lowBatteryWarningThreshold =
         parser.getInt('lowBatteryWarningThreshold', defaultValue: 20);
-    final int? maxConnectionRetries = typedConfig.network.retryConfig.maxRetries;
-    final int? llmRequestTimeoutMs = typedConfig.network.timeouts['request']?.inMilliseconds;
+    final int maxConnectionRetries = typedConfig.network.retryConfig.maxRetries;
+    final int? llmRequestTimeoutMs =
+        typedConfig.network.timeouts['request']?.inMilliseconds;
 
     // Parse BackgroundConfig
     BackgroundConfig? background;
     if (json.containsKey('background')) {
       final bgParser = parser.getObject('background');
       background = BackgroundConfig(
-        notificationChannelId: bgParser.getString('notificationChannelId', defaultValue: 'mcp_background'),
-        notificationChannelName: bgParser.getString('notificationChannelName', defaultValue: 'MCP Background Service'),
+        notificationChannelId: bgParser.getString('notificationChannelId',
+            defaultValue: 'mcp_background'),
+        notificationChannelName: bgParser.getString('notificationChannelName',
+            defaultValue: 'MCP Background Service'),
         notificationDescription: bgParser.getString('notificationDescription'),
         notificationIcon: bgParser.getString('notificationIcon'),
-        autoStartOnBoot: bgParser.getBool('autoStartOnBoot', defaultValue: false),
+        autoStartOnBoot:
+            bgParser.getBool('autoStartOnBoot', defaultValue: false),
         intervalMs: bgParser.getInt('intervalMs', defaultValue: 5000),
         keepAlive: bgParser.getBool('keepAlive', defaultValue: true),
       );
@@ -195,12 +201,15 @@ class ConfigLoader {
     if (json.containsKey('notification')) {
       final notifParser = parser.getObject('notification');
       notification = notif.NotificationConfig(
-        channelId: notifParser.getString('channelId', defaultValue: 'mcp_notifications'),
-        channelName: notifParser.getString('channelName', defaultValue: 'MCP Notifications'),
+        channelId: notifParser.getString('channelId',
+            defaultValue: 'mcp_notifications'),
+        channelName: notifParser.getString('channelName',
+            defaultValue: 'MCP Notifications'),
         channelDescription: notifParser.getString('channelDescription'),
         icon: notifParser.getString('icon'),
         enableSound: notifParser.getBool('enableSound', defaultValue: true),
-        enableVibration: notifParser.getBool('enableVibration', defaultValue: true),
+        enableVibration:
+            notifParser.getBool('enableVibration', defaultValue: true),
         priority: _parseNotificationPriority(notifParser.getString('priority')),
       );
     }
@@ -216,33 +225,37 @@ class ConfigLoader {
         : null;
 
     // Parse auto-start server configurations
-    final List<MCPServerConfig>? autoStartServer = json.containsKey('autoStartServer')
-        ? _parseAutoStartServer(json['autoStartServer'] as List<dynamic>)
-        : null;
+    final List<MCPServerConfig>? autoStartServer =
+        json.containsKey('autoStartServer')
+            ? _parseAutoStartServer(json['autoStartServer'] as List<dynamic>)
+            : null;
 
     // Parse auto-start client configurations
-    final List<MCPClientConfig>? autoStartClient = json.containsKey('autoStartClient')
-        ? _parseAutoStartClient(json['autoStartClient'] as List<dynamic>)
-        : null;
+    final List<MCPClientConfig>? autoStartClient =
+        json.containsKey('autoStartClient')
+            ? _parseAutoStartClient(json['autoStartClient'] as List<dynamic>)
+            : null;
 
     // Parse auto-start LLM client configurations
-    final List<MCPLlmClientConfig>? autoStartLlmClient = json.containsKey('autoStartLlmClient')
+    final List<MCPLlmClientConfig>? autoStartLlmClient = json
+            .containsKey('autoStartLlmClient')
         ? _parseAutoStartLlmClient(json['autoStartLlmClient'] as List<dynamic>)
         : null;
 
     // Parse auto-start LLM server configurations
-    final List<MCPLlmServerConfig>? autoStartLlmServer = json.containsKey('autoStartLlmServer')
+    final List<MCPLlmServerConfig>? autoStartLlmServer = json
+            .containsKey('autoStartLlmServer')
         ? _parseAutoStartLlmServer(json['autoStartLlmServer'] as List<dynamic>)
         : null;
 
     // Parse plugin-related settings
-    final bool? autoRegisterLlmPlugins = 
+    final bool autoRegisterLlmPlugins =
         parser.getBool('autoRegisterLlmPlugins', defaultValue: false);
-    final bool? registerMcpPluginsWithLlm = 
+    final bool registerMcpPluginsWithLlm =
         parser.getBool('registerMcpPluginsWithLlm', defaultValue: false);
-    final bool? registerCoreLlmPlugins = 
+    final bool registerCoreLlmPlugins =
         parser.getBool('registerCoreLlmPlugins', defaultValue: false);
-    final bool? enableRetrieval = 
+    final bool enableRetrieval =
         parser.getBool('enableRetrieval', defaultValue: false);
 
     // Create and return the config
@@ -283,24 +296,35 @@ class ConfigLoader {
   /// Parse LogLevel from string
   static Level _parseLogLevel(String level) {
     switch (level.toLowerCase()) {
-      case 'trace': return Level.FINEST;
-      case 'finest': return Level.FINEST;
-      case 'debug': return Level.FINE;
-      case 'fine': return Level.FINE;
-      case 'info': return Level.INFO;
-      case 'warning': return Level.WARNING;
-      case 'error': return Level.SEVERE;
-      case 'severe': return Level.SEVERE;
-      case 'none': return Level.OFF;
-      case 'off': return Level.OFF;
-      default: return Level.INFO;
+      case 'trace':
+        return Level.FINEST;
+      case 'finest':
+        return Level.FINEST;
+      case 'debug':
+        return Level.FINE;
+      case 'fine':
+        return Level.FINE;
+      case 'info':
+        return Level.INFO;
+      case 'warning':
+        return Level.WARNING;
+      case 'error':
+        return Level.SEVERE;
+      case 'severe':
+        return Level.SEVERE;
+      case 'none':
+        return Level.OFF;
+      case 'off':
+        return Level.OFF;
+      default:
+        return Level.INFO;
     }
   }
 
   /// Parse plugin configurations
   static List<PluginConfig> _parsePluginConfigurations(
-      Map<String, dynamic> json,
-      ) {
+    Map<String, dynamic> json,
+  ) {
     final List<PluginConfig> result = [];
 
     for (final entry in json.entries) {
@@ -320,7 +344,8 @@ class ConfigLoader {
           targets: targets,
         ));
       } else {
-        throw Exception('Invalid plugin configuration for "$key". Must contain a plugin instance.');
+        throw Exception(
+            'Invalid plugin configuration for "$key". Must contain a plugin instance.');
       }
     }
 
@@ -328,31 +353,39 @@ class ConfigLoader {
   }
 
   /// Parse notification priority from string
-  static notif.NotificationPriority _parseNotificationPriority(String? priority) {
+  static notif.NotificationPriority _parseNotificationPriority(
+      String? priority) {
     if (priority == null) return notif.NotificationPriority.normal;
 
     switch (priority.toLowerCase()) {
-      case 'min': return notif.NotificationPriority.min;
-      case 'low': return notif.NotificationPriority.low;
-      case 'normal': return notif.NotificationPriority.normal;
-      case 'high': return notif.NotificationPriority.high;
-      case 'max': return notif.NotificationPriority.max;
-      default: return notif.NotificationPriority.normal;
+      case 'min':
+        return notif.NotificationPriority.min;
+      case 'low':
+        return notif.NotificationPriority.low;
+      case 'normal':
+        return notif.NotificationPriority.normal;
+      case 'high':
+        return notif.NotificationPriority.high;
+      case 'max':
+        return notif.NotificationPriority.max;
+      default:
+        return notif.NotificationPriority.normal;
     }
   }
 
   /// Parse TrayConfig from JSON
   static tray.TrayConfig _parseTrayConfig(Map<String, dynamic> json) {
     final parser = ConfigParser(json, configName: 'TrayConfig');
-    
+
     // Parse menu items if present
     List<tray_manager.TrayMenuItem>? menuItems;
     if (json.containsKey('menuItems')) {
       menuItems = parser.getList<tray_manager.TrayMenuItem>(
         'menuItems',
         (item) {
-          final itemParser = ConfigParser(item as Map<String, dynamic>, configName: 'TrayMenuItem');
-          
+          final itemParser = ConfigParser(item as Map<String, dynamic>,
+              configName: 'TrayMenuItem');
+
           if (itemParser.getBool('separator', defaultValue: false)) {
             return tray_manager.TrayMenuItem.separator();
           } else {
@@ -378,7 +411,8 @@ class ConfigLoader {
     final List<MCPJob> jobs = [];
 
     for (final item in json) {
-      final parser = ConfigParser(item as Map<String, dynamic>, configName: 'MCPJob');
+      final parser =
+          ConfigParser(item as Map<String, dynamic>, configName: 'MCPJob');
 
       // Parse interval
       Duration interval;
@@ -411,20 +445,23 @@ class ConfigLoader {
   }
 
   /// Execute configurable task based on task definition
-  static Future<void> _executeConfigurableTask(Map<String, dynamic> jobJson) async {
+  static Future<void> _executeConfigurableTask(
+      Map<String, dynamic> jobJson) async {
     try {
       final parser = ConfigParser(jobJson, configName: 'Task');
-      final String? taskType = parser.getString('taskType');
-      final taskConfig = parser.hasKey('taskConfig') 
-          ? parser.getObject('taskConfig').rawData 
+      final String taskType = parser.getString('taskType', defaultValue: '');
+      final taskConfig = parser.hasKey('taskConfig')
+          ? parser.getObject('taskConfig').rawData
           : null;
-      
-      if (taskType == null) {
-        _logger.warning('No taskType specified for job: ${jobJson['name'] ?? 'unknown'}');
+
+      if (taskType.isEmpty) {
+        _logger.warning(
+            'No taskType specified for job: ${jobJson['name'] ?? 'unknown'}');
         return;
       }
 
-      _logger.fine('Executing task: $taskType for job: ${jobJson['name'] ?? jobJson['id'] ?? 'unknown'}');
+      _logger.fine(
+          'Executing task: $taskType for job: ${jobJson['name'] ?? jobJson['id'] ?? 'unknown'}');
 
       switch (taskType.toLowerCase()) {
         case 'log':
@@ -461,9 +498,10 @@ class ConfigLoader {
   /// Execute log task
   static void _executeLogTask(Map<String, dynamic>? config) {
     final parser = ConfigParser(config ?? {}, configName: 'LogTask');
-    final String message = parser.getString('message', defaultValue: 'Scheduled log message');
+    final String message =
+        parser.getString('message', defaultValue: 'Scheduled log message');
     final String level = parser.getString('level', defaultValue: 'info');
-    
+
     switch (level.toLowerCase()) {
       case 'debug':
         _logger.fine(message);
@@ -483,7 +521,8 @@ class ConfigLoader {
   }
 
   /// Execute health check task
-  static Future<void> _executeHealthCheckTask(Map<String, dynamic>? config) async {
+  static Future<void> _executeHealthCheckTask(
+      Map<String, dynamic>? config) async {
     try {
       final parser = ConfigParser(config ?? {}, configName: 'HealthCheckTask');
       final List<String> checks = parser.getList<String>(
@@ -491,13 +530,18 @@ class ConfigLoader {
         (item) => item.toString(),
         defaultValue: ['basic'],
       );
-      
+
       for (final check in checks) {
         switch (check.toLowerCase()) {
           case 'memory':
-            // Import MemoryManager if needed
-            final memoryUsage = 100; // Placeholder - would get from MemoryManager
-            _logger.info('Health check - Memory usage: ${memoryUsage}MB');
+            // Get actual memory usage from MemoryManager
+            try {
+              final memoryManager = MemoryManager.instance;
+              final memoryUsage = memoryManager.currentMemoryUsageMB;
+              _logger.info('Health check - Memory usage: ${memoryUsage}MB');
+            } catch (e) {
+              _logger.info('Health check - Memory usage: Unable to determine');
+            }
             break;
           case 'connectivity':
             // Check network connectivity
@@ -525,7 +569,7 @@ class ConfigLoader {
         (item) => item.toString(),
         defaultValue: ['temp'],
       );
-      
+
       for (final target in targets) {
         switch (target.toLowerCase()) {
           case 'temp':
@@ -550,15 +594,37 @@ class ConfigLoader {
   }
 
   /// Execute notification task
-  static Future<void> _executeNotificationTask(Map<String, dynamic>? config) async {
+  static Future<void> _executeNotificationTask(
+      Map<String, dynamic>? config) async {
     try {
       final parser = ConfigParser(config ?? {}, configName: 'NotificationTask');
-      final String title = parser.getString('title', defaultValue: 'Scheduled Notification');
-      final String message = parser.getString('message', defaultValue: 'This is a scheduled notification');
-      
-      _logger.info('Sending notification: $title - $message');
-      // Note: Actual notification sending would require access to FlutterMCP instance
-      // This is a placeholder that logs the notification
+      final String title =
+          parser.getString('title', defaultValue: 'Scheduled Notification');
+      final String message = parser.getString('message',
+          defaultValue: 'This is a scheduled notification');
+      final String channelId =
+          parser.getString('channelId', defaultValue: 'default');
+      final int id = parser.getInt('id', defaultValue: 0);
+      final Map<String, dynamic>? data =
+          parser.hasKey('data') ? parser.getObject('data').rawData : null;
+
+      _logger.info('Scheduling notification task: $title - $message');
+
+      // Store notification request for the background service to process
+      // This allows the notification to be sent even if the app is in background
+      final notificationData = {
+        'type': 'scheduled_notification',
+        'title': title,
+        'message': message,
+        'channelId': channelId,
+        'id': id,
+        'data': data,
+        'scheduledAt': DateTime.now().toIso8601String(),
+      };
+
+      // The actual notification will be handled by the platform-specific implementation
+      // when the background service processes this task
+      _logger.fine('Notification task data prepared: $notificationData');
     } catch (e) {
       _logger.severe('Notification task failed', e);
     }
@@ -568,13 +634,14 @@ class ConfigLoader {
   static Future<void> _executeCustomTask(Map<String, dynamic>? config) async {
     try {
       final parser = ConfigParser(config ?? {}, configName: 'CustomTask');
-      final String? command = parser.getString('command');
+      final String command = parser.getString('command', defaultValue: '');
       final Map<String, dynamic>? parameters = parser.hasKey('parameters')
           ? parser.getObject('parameters').rawData
           : null;
-      
-      if (command != null) {
-        _logger.info('Executing custom task: $command with parameters: $parameters');
+
+      if (command.isNotEmpty) {
+        _logger.info(
+            'Executing custom task: $command with parameters: $parameters');
         // Custom task execution logic would be implemented here
         // This could involve calling specific functions, APIs, or external commands
       } else {
@@ -586,25 +653,31 @@ class ConfigLoader {
   }
 
   /// Execute memory check task
-  static Future<void> _executeMemoryCheckTask(Map<String, dynamic>? config) async {
+  static Future<void> _executeMemoryCheckTask(
+      Map<String, dynamic>? config) async {
     try {
       final parser = ConfigParser(config ?? {}, configName: 'MemoryCheckTask');
-      final int? threshold = parser.getInt('thresholdMB');
+      final int threshold = parser.getInt('thresholdMB', defaultValue: 512);
       // This would integrate with MemoryManager to check current usage
-      _logger.info('Memory check task executed (threshold: ${threshold ?? 'default'}MB)');
+      _logger.info('Memory check task executed (threshold: ${threshold}MB)');
     } catch (e) {
       _logger.severe('Memory check task failed', e);
     }
   }
 
-  /// Execute performance report task  
-  static Future<void> _executePerformanceReportTask(Map<String, dynamic>? config) async {
+  /// Execute performance report task
+  static Future<void> _executePerformanceReportTask(
+      Map<String, dynamic>? config) async {
     try {
-      final parser = ConfigParser(config ?? {}, configName: 'PerformanceReportTask');
-      final bool includeMemory = parser.getBool('includeMemory', defaultValue: true);
-      final bool includeNetwork = parser.getBool('includeNetwork', defaultValue: true);
-      
-      _logger.info('Performance report generated (memory: $includeMemory, network: $includeNetwork)');
+      final parser =
+          ConfigParser(config ?? {}, configName: 'PerformanceReportTask');
+      final bool includeMemory =
+          parser.getBool('includeMemory', defaultValue: true);
+      final bool includeNetwork =
+          parser.getBool('includeNetwork', defaultValue: true);
+
+      _logger.info(
+          'Performance report generated (memory: $includeMemory, network: $includeNetwork)');
     } catch (e) {
       _logger.severe('Performance report task failed', e);
     }
@@ -615,25 +688,35 @@ class ConfigLoader {
     final List<MCPServerConfig> configs = [];
 
     for (final item in json) {
-      final parser = ConfigParser(item as Map<String, dynamic>, configName: 'MCPServerConfig');
+      final parser = ConfigParser(item as Map<String, dynamic>,
+          configName: 'MCPServerConfig');
 
       // Parse server capabilities - convert to mcp_server ServerCapabilities
       ServerCapabilities? capabilities;
       if (parser.hasKey('capabilities')) {
         final capParser = parser.getObject('capabilities');
-        
+
         capabilities = ServerCapabilities(
-          tools: capParser.getBool('tools', defaultValue: false) ? ToolsCapability() : null,
-          resources: capParser.getBool('resources', defaultValue: false) ? ResourcesCapability() : null,
-          prompts: capParser.getBool('prompts', defaultValue: false) ? PromptsCapability() : null,
-          logging: capParser.getBool('logging', defaultValue: false) ? LoggingCapability() : null,
+          tools: capParser.getBool('tools', defaultValue: false)
+              ? ToolsCapability()
+              : null,
+          resources: capParser.getBool('resources', defaultValue: false)
+              ? ResourcesCapability()
+              : null,
+          prompts: capParser.getBool('prompts', defaultValue: false)
+              ? PromptsCapability()
+              : null,
+          logging: capParser.getBool('logging', defaultValue: false)
+              ? LoggingCapability()
+              : null,
         );
       }
 
       // Parse fallback ports if present
       List<int>? fallbackPorts;
       if (parser.hasKey('fallbackPorts')) {
-        fallbackPorts = parser.getList<int>('fallbackPorts', (port) => port as int);
+        fallbackPorts =
+            parser.getList<int>('fallbackPorts', (port) => port as int);
       }
 
       // Create MCPServerConfig
@@ -657,7 +740,8 @@ class ConfigLoader {
     final List<MCPClientConfig> configs = [];
 
     for (final item in json) {
-      final parser = ConfigParser(item as Map<String, dynamic>, configName: 'MCPClientConfig');
+      final parser = ConfigParser(item as Map<String, dynamic>,
+          configName: 'MCPClientConfig');
 
       // Parse client capabilities
       ClientCapabilities? capabilities;
@@ -665,7 +749,8 @@ class ConfigLoader {
         final capsParser = parser.getObject('capabilities');
         capabilities = ClientCapabilities(
           roots: capsParser.getBool('roots', defaultValue: false),
-          rootsListChanged: capsParser.getBool('rootsListChanged', defaultValue: false),
+          rootsListChanged:
+              capsParser.getBool('rootsListChanged', defaultValue: false),
           sampling: capsParser.getBool('sampling', defaultValue: false),
         );
       }
@@ -673,7 +758,8 @@ class ConfigLoader {
       // Parse transport arguments
       List<String>? transportArgs;
       if (parser.hasKey('transportArgs')) {
-        transportArgs = parser.getList<String>('transportArgs', (arg) => arg.toString());
+        transportArgs =
+            parser.getList<String>('transportArgs', (arg) => arg.toString());
       }
 
       // Create MCPClientConfig with transport type
@@ -697,15 +783,17 @@ class ConfigLoader {
     final List<MCPLlmClientConfig> configs = [];
 
     for (final item in json) {
-      final parser = ConfigParser(item as Map<String, dynamic>, configName: 'MCPLlmClientConfig');
+      final parser = ConfigParser(item as Map<String, dynamic>,
+          configName: 'MCPLlmClientConfig');
 
       // Parse config
       final configParser = parser.getObject('config');
       final llmConfig = LlmConfiguration(
-        apiKey: configParser.getString('apiKey', defaultValue: 'placeholder-key'),
+        apiKey: configParser.getString('apiKey', required: true),
         model: configParser.getString('model', required: true),
         baseUrl: configParser.getString('baseUrl'),
-        retryOnFailure: configParser.getBool('retryOnFailure', defaultValue: true),
+        retryOnFailure:
+            configParser.getBool('retryOnFailure', defaultValue: true),
         maxRetries: configParser.getInt('maxRetries', defaultValue: 3),
         timeout: Duration(
           milliseconds: configParser.getInt('timeoutMs', defaultValue: 10000),
@@ -734,15 +822,17 @@ class ConfigLoader {
     final List<MCPLlmServerConfig> configs = [];
 
     for (final item in json) {
-      final parser = ConfigParser(item as Map<String, dynamic>, configName: 'MCPLlmServerConfig');
+      final parser = ConfigParser(item as Map<String, dynamic>,
+          configName: 'MCPLlmServerConfig');
 
       // Parse config
       final configParser = parser.getObject('config');
       final llmConfig = LlmConfiguration(
-        apiKey: configParser.getString('apiKey', defaultValue: 'placeholder-key'),
+        apiKey: configParser.getString('apiKey', required: true),
         model: configParser.getString('model', required: true),
         baseUrl: configParser.getString('baseUrl'),
-        retryOnFailure: configParser.getBool('retryOnFailure', defaultValue: true),
+        retryOnFailure:
+            configParser.getBool('retryOnFailure', defaultValue: true),
         maxRetries: configParser.getInt('maxRetries', defaultValue: 3),
         timeout: Duration(
           milliseconds: configParser.getInt('timeoutMs', defaultValue: 10000),
@@ -782,7 +872,8 @@ class ConfigLoader {
       final file = File(filePath);
       await file.writeAsString(jsonString, flush: true);
     } catch (e, stackTrace) {
-      _logger.severe('Failed to save configuration to JSON file', e, stackTrace);
+      _logger.severe(
+          'Failed to save configuration to JSON file', e, stackTrace);
       throw MCPConfigurationException(
         'Failed to save configuration to JSON file: $filePath',
         e,

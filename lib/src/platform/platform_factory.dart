@@ -41,15 +41,19 @@ class PlatformFactory {
       } else if (io.Platform.isIOS) {
         _logger.fine('Creating iOS background service');
         return IOSBackgroundService();
-      } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
+      } else if (io.Platform.isMacOS ||
+          io.Platform.isWindows ||
+          io.Platform.isLinux) {
         _logger.fine('Creating desktop background service');
         return DesktopBackgroundService();
       } else {
-        _logger.warning('Unsupported platform for background service, using no-op implementation');
+        _logger.warning(
+            'Unsupported platform for background service, using no-op implementation');
         return NoOpBackgroundService();
       }
     } catch (e) {
-      _logger.warning('Error determining platform for background service: $e, using no-op implementation');
+      _logger.warning(
+          'Error determining platform for background service: $e, using no-op implementation');
       return NoOpBackgroundService();
     }
   }
@@ -68,15 +72,19 @@ class PlatformFactory {
       } else if (io.Platform.isIOS) {
         _logger.fine('Creating iOS notification manager');
         return IOSNotificationManager();
-      } else if (io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux) {
+      } else if (io.Platform.isMacOS ||
+          io.Platform.isWindows ||
+          io.Platform.isLinux) {
         _logger.fine('Creating desktop notification manager');
         return DesktopNotificationManager();
       } else {
-        _logger.warning('Unsupported platform for notification manager, using no-op implementation');
+        _logger.warning(
+            'Unsupported platform for notification manager, using no-op implementation');
         return NoOpNotificationManager();
       }
     } catch (e) {
-      _logger.warning('Error determining platform for notification manager: $e, using no-op implementation');
+      _logger.warning(
+          'Error determining platform for notification manager: $e, using no-op implementation');
       return NoOpNotificationManager();
     }
   }
@@ -99,11 +107,13 @@ class PlatformFactory {
         _logger.fine('Creating Linux tray manager');
         return LinuxTrayManager();
       } else {
-        _logger.warning('Unsupported platform for tray manager, using no-op implementation');
+        _logger.warning(
+            'Unsupported platform for tray manager, using no-op implementation');
         return NoOpTrayManager();
       }
     } catch (e) {
-      _logger.warning('Error determining platform for tray manager: $e, using no-op implementation');
+      _logger.warning(
+          'Error determining platform for tray manager: $e, using no-op implementation');
       return NoOpTrayManager();
     }
   }

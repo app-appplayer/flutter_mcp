@@ -10,15 +10,15 @@ class ErrorRecovery {
 
   /// Try an operation with automatic retries
   static Future<T> tryWithRetry<T>(
-      Future<T> Function() operation, {
-        int maxRetries = 3,
-        Duration initialDelay = const Duration(milliseconds: 500),
-        bool useExponentialBackoff = true,
-        Duration? maxDelay,
-        String? operationName,
-        bool Function(Exception)? retryIf,
-        void Function(int attempt, Exception error)? onRetry, // Added parameter
-      }) async {
+    Future<T> Function() operation, {
+    int maxRetries = 3,
+    Duration initialDelay = const Duration(milliseconds: 500),
+    bool useExponentialBackoff = true,
+    Duration? maxDelay,
+    String? operationName,
+    bool Function(Exception)? retryIf,
+    void Function(int attempt, Exception error)? onRetry, // Added parameter
+  }) async {
     final name = operationName ?? 'operation';
     int attempt = 0;
     Exception? lastException;
@@ -32,7 +32,8 @@ class ErrorRecovery {
       } catch (e, stackTrace) {
         // If we've reached max retries, rethrow
         if (attempt > maxRetries) {
-          _logger.severe('$name failed after $maxRetries attempts', e, stackTrace);
+          _logger.severe(
+              '$name failed after $maxRetries attempts', e, stackTrace);
           if (e is Exception) {
             throw MCPOperationFailedException(
               'Failed to complete $name after $maxRetries attempts',
@@ -54,7 +55,8 @@ class ErrorRecovery {
           }
 
           if (retryIf != null && !retryIf(e)) {
-            _logger.severe('$name failed with non-retryable exception', e, stackTrace);
+            _logger.severe(
+                '$name failed with non-retryable exception', e, stackTrace);
             throw MCPOperationFailedException(
               'Failed to complete $name with non-retryable exception',
               e,
@@ -63,7 +65,8 @@ class ErrorRecovery {
           }
         } else {
           // For non-Exception errors (like Error types), don't retry
-          _logger.severe('$name failed with non-Exception error', e, stackTrace);
+          _logger.severe(
+              '$name failed with non-Exception error', e, stackTrace);
           rethrow;
         }
 
@@ -77,7 +80,7 @@ class ErrorRecovery {
 
         _logger.warning(
           '$name failed, retrying in ${delay.inMilliseconds}ms '
-              '(attempt $attempt of $maxRetries)',
+          '(attempt $attempt of $maxRetries)',
           lastException,
         );
 
@@ -85,7 +88,7 @@ class ErrorRecovery {
         await Future.delayed(delay);
       }
     }
-    
+
     // This point should never be reached due to the throw statements above,
     // but adding for completeness
     throw MCPOperationFailedException(
@@ -97,10 +100,10 @@ class ErrorRecovery {
 
   /// Try an operation with fallback
   static Future<T> tryWithFallback<T>(
-      Future<T> Function() primaryOperation,
-      Future<T> Function() fallbackOperation, {
-        String? operationName,
-      }) async {
+    Future<T> Function() primaryOperation,
+    Future<T> Function() fallbackOperation, {
+    String? operationName,
+  }) async {
     final name = operationName ?? 'operation';
 
     try {
@@ -115,27 +118,25 @@ class ErrorRecovery {
         return await fallbackOperation();
       } catch (fallbackError, fallbackStackTrace) {
         _logger.error(
-          '$name fallback also failed: $fallbackError\nStack trace: $fallbackStackTrace'
-        );
+            '$name fallback also failed: $fallbackError\nStack trace: $fallbackStackTrace');
 
         throw MCPOperationFailedException.withContext(
-          'Both primary and fallback $name failed',
-          fallbackError,
-          fallbackStackTrace,
-          errorCode: 'FALLBACK_FAILED',
-          resolution: 'Check both primary and fallback implementations'
-        );
+            'Both primary and fallback $name failed',
+            fallbackError,
+            fallbackStackTrace,
+            errorCode: 'FALLBACK_FAILED',
+            resolution: 'Check both primary and fallback implementations');
       }
     }
   }
 
   /// Perform an operation with a timeout
   static Future<T> tryWithTimeout<T>(
-      Future<T> Function() operation,
-      Duration timeout, {
-        FutureOr<T> Function()? onTimeout,
-        String? operationName,
-      }) async {
+    Future<T> Function() operation,
+    Duration timeout, {
+    FutureOr<T> Function()? onTimeout,
+    String? operationName,
+  }) async {
     final name = operationName ?? 'operation';
 
     try {
@@ -144,8 +145,9 @@ class ErrorRecovery {
         onTimeout: onTimeout != null
             ? () async => await onTimeout()
             : () {
-          throw TimeoutException('$name timed out after ${timeout.inMilliseconds}ms');
-        },
+                throw TimeoutException(
+                    '$name timed out after ${timeout.inMilliseconds}ms');
+              },
       );
     } catch (e, stackTrace) {
       if (e is TimeoutException) {
@@ -167,16 +169,17 @@ class ErrorRecovery {
 
   /// Execute operation with jitter for distributed systems
   static Future<T> tryWithJitter<T>(
-      Future<T> Function() operation, {
-        Duration baseDelay = const Duration(milliseconds: 100),
-        double jitterFactor = 0.5,
-        String? operationName,
-      }) async {
+    Future<T> Function() operation, {
+    Duration baseDelay = const Duration(milliseconds: 100),
+    double jitterFactor = 0.5,
+    String? operationName,
+  }) async {
     final name = operationName ?? 'operation';
     final random = math.Random();
 
     // Apply jitter to delay
-    final jitterMs = (baseDelay.inMilliseconds * jitterFactor * random.nextDouble()).toInt();
+    final jitterMs =
+        (baseDelay.inMilliseconds * jitterFactor * random.nextDouble()).toInt();
     final delay = Duration(milliseconds: baseDelay.inMilliseconds + jitterMs);
 
     // Wait for jitter delay
@@ -196,24 +199,24 @@ class ErrorRecovery {
 
   /// Execute operation with saga pattern (compensation actions on failure)
   static Future<T> tryWithCompensation<T>(
-      Future<T> Function() operation,
-      Future<void> Function() compensationAction, {
-        String? operationName,
-      }) async {
+    Future<T> Function() operation,
+    Future<void> Function() compensationAction, {
+    String? operationName,
+  }) async {
     final name = operationName ?? 'operation';
 
     try {
       return await operation();
     } catch (e, stackTrace) {
-      _logger.severe('$name failed, executing compensation action', e, stackTrace);
+      _logger.severe(
+          '$name failed, executing compensation action', e, stackTrace);
 
       try {
         await compensationAction();
         _logger.info('Compensation action for $name completed successfully');
       } catch (compensationError, compensationStackTrace) {
         _logger.error(
-          'Compensation action for $name also failed: $compensationError\nStack trace: $compensationStackTrace'
-        );
+            'Compensation action for $name also failed: $compensationError\nStack trace: $compensationStackTrace');
       }
 
       throw MCPOperationFailedException(
@@ -226,16 +229,16 @@ class ErrorRecovery {
 
   /// Try an operation with detailed exponential backoff and retry strategy
   static Future<T> tryWithExponentialBackoff<T>(
-      Future<T> Function() operation, {
-        int maxRetries = 3,
-        Duration initialDelay = const Duration(milliseconds: 500),
-        double backoffFactor = 2.0,  // Added parameter
-        Duration? maxDelay,
-        Duration? timeout,
-        bool Function(Exception)? retryIf,
-        String? operationName,
-        void Function(int attempt, Exception e, Duration nextDelay)? onRetry,
-      }) async {
+    Future<T> Function() operation, {
+    int maxRetries = 3,
+    Duration initialDelay = const Duration(milliseconds: 500),
+    double backoffFactor = 2.0, // Added parameter
+    Duration? maxDelay,
+    Duration? timeout,
+    bool Function(Exception)? retryIf,
+    String? operationName,
+    void Function(int attempt, Exception e, Duration nextDelay)? onRetry,
+  }) async {
     final name = operationName ?? 'operation';
     int attempt = 0;
     Exception? lastException;
@@ -246,11 +249,7 @@ class ErrorRecovery {
       try {
         // Apply timeout if specified
         if (timeout != null) {
-          return await tryWithTimeout(
-              operation,
-              timeout,
-              operationName: name
-          );
+          return await tryWithTimeout(operation, timeout, operationName: name);
         }
 
         // Execute the operation
@@ -258,7 +257,8 @@ class ErrorRecovery {
       } catch (e, stackTrace) {
         // If we've reached max retries, rethrow
         if (attempt > maxRetries) {
-          _logger.severe('$name failed after $maxRetries attempts', e, stackTrace);
+          _logger.severe(
+              '$name failed after $maxRetries attempts', e, stackTrace);
           if (e is Exception) {
             throw MCPOperationFailedException(
               'Failed to complete $name after $maxRetries attempts',
@@ -275,7 +275,8 @@ class ErrorRecovery {
           lastException = e;
 
           if (retryIf != null && !retryIf(e)) {
-            _logger.severe('$name failed with non-retryable exception', e, stackTrace);
+            _logger.severe(
+                '$name failed with non-retryable exception', e, stackTrace);
             throw MCPOperationFailedException(
               'Failed to complete $name with non-retryable exception',
               e,
@@ -284,7 +285,8 @@ class ErrorRecovery {
           }
         } else {
           // For non-Exception errors (like Error types), don't retry
-          _logger.severe('$name failed with non-Exception error', e, stackTrace);
+          _logger.severe(
+              '$name failed with non-Exception error', e, stackTrace);
           rethrow;
         }
 
@@ -304,7 +306,7 @@ class ErrorRecovery {
 
         _logger.warning(
           '$name failed, retrying in ${delay.inMilliseconds}ms '
-              '(attempt $attempt of $maxRetries)',
+          '(attempt $attempt of $maxRetries)',
           lastException,
         );
 
@@ -312,7 +314,7 @@ class ErrorRecovery {
         await Future.delayed(delay);
       }
     }
-    
+
     // This point should never be reached due to the throw statements above,
     // but adding for completeness
     throw MCPOperationFailedException(
@@ -335,7 +337,9 @@ class ErrorRecovery {
     }
 
     // Exponential backoff with jitter
-    final exponentialPart = (initialDelay.inMilliseconds * math.pow(backoffFactor, attempt - 1)).toInt();
+    final exponentialPart =
+        (initialDelay.inMilliseconds * math.pow(backoffFactor, attempt - 1))
+            .toInt();
 
     // Add jitter (±10%)
     final random = math.Random();
@@ -353,10 +357,10 @@ class ErrorRecovery {
 
   /// Wrap synchronous code with error handling
   static T tryCatch<T>(
-      T Function() operation, {
-        T Function(Exception)? onException,
-        String? operationName,
-      }) {
+    T Function() operation, {
+    T Function(Exception)? onException,
+    String? operationName,
+  }) {
     final name = operationName ?? 'operation';
 
     try {
@@ -382,10 +386,10 @@ class ErrorRecovery {
 
   /// Log and re-throw any exception
   static Future<T> logAndRethrow<T>(
-      Future<T> Function() operation, {
-        String? operationName,
-        bool includeStackTrace = true,
-      }) async {
+    Future<T> Function() operation, {
+    String? operationName,
+    bool includeStackTrace = true,
+  }) async {
     final name = operationName ?? 'operation';
 
     try {
@@ -410,5 +414,6 @@ class ErrorRecovery {
 
 /// Exception for CircuitBreaker open state
 class MCPCircuitBreakerOpenException extends MCPException {
-  MCPCircuitBreakerOpenException(super.message, [super.originalError, super.stackTrace]);
+  MCPCircuitBreakerOpenException(super.message,
+      [super.originalError, super.stackTrace]);
 }

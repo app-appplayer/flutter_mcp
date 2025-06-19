@@ -6,9 +6,13 @@ void main() {
   group('InputValidator', () {
     group('API Key Validation', () {
       test('should accept valid API keys', () {
-        expect(InputValidator.isValidApiKey('sk-1234567890abcdefghijklmnopqrstuvwxyz'), true);
+        expect(
+            InputValidator.isValidApiKey(
+                'sk-1234567890abcdefghijklmnopqrstuvwxyz'),
+            true);
         expect(InputValidator.isValidApiKey('gpt-4-turbo-preview-token'), true);
-        expect(InputValidator.isValidApiKey('anthropic_claude_3_api_key_123'), true);
+        expect(InputValidator.isValidApiKey('anthropic_claude_3_api_key_123'),
+            true);
         expect(InputValidator.isValidApiKey('0123456789abcdef-ghij'), true);
       });
 
@@ -16,23 +20,26 @@ void main() {
         expect(InputValidator.isValidApiKey(null), false);
         expect(InputValidator.isValidApiKey(''), false);
         expect(InputValidator.isValidApiKey('short'), false);
-        expect(InputValidator.isValidApiKey('contains spaces and invalid'), false);
+        expect(
+            InputValidator.isValidApiKey('contains spaces and invalid'), false);
         expect(InputValidator.isValidApiKey('has@invalid#chars'), false);
         expect(InputValidator.isValidApiKey('ὕλη'), false); // unicode chars
       });
 
       test('validateApiKeyOrThrow should throw for invalid keys', () {
-        expect(() => InputValidator.validateApiKeyOrThrow(null), 
-               throwsA(isA<MCPValidationException>()));
-        expect(() => InputValidator.validateApiKeyOrThrow('short'), 
-               throwsA(isA<MCPValidationException>()));
-        expect(() => InputValidator.validateApiKeyOrThrow('invalid@key'), 
-               throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validateApiKeyOrThrow(null),
+            throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validateApiKeyOrThrow('short'),
+            throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validateApiKeyOrThrow('invalid@key'),
+            throwsA(isA<MCPValidationException>()));
       });
 
       test('validateApiKeyOrThrow should not throw for valid keys', () {
-        expect(() => InputValidator.validateApiKeyOrThrow('sk-1234567890abcdefghijklmnopqrstuvwxyz'), 
-               returnsNormally);
+        expect(
+            () => InputValidator.validateApiKeyOrThrow(
+                'sk-1234567890abcdefghijklmnopqrstuvwxyz'),
+            returnsNormally);
       });
     });
 
@@ -40,7 +47,9 @@ void main() {
       test('should accept valid HTTP/HTTPS URLs', () {
         expect(InputValidator.isValidUrl('https://api.openai.com'), true);
         expect(InputValidator.isValidUrl('http://localhost:8080'), true);
-        expect(InputValidator.isValidUrl('https://api.anthropic.com/v1/messages'), true);
+        expect(
+            InputValidator.isValidUrl('https://api.anthropic.com/v1/messages'),
+            true);
         expect(InputValidator.isValidUrl('http://192.168.1.1:3000/api'), true);
       });
 
@@ -54,21 +63,24 @@ void main() {
       });
 
       test('should accept valid WebSocket URLs', () {
-        expect(InputValidator.isValidWebSocketUrl('wss://api.example.com/ws'), true);
-        expect(InputValidator.isValidWebSocketUrl('ws://localhost:8080/ws'), true);
+        expect(InputValidator.isValidWebSocketUrl('wss://api.example.com/ws'),
+            true);
+        expect(
+            InputValidator.isValidWebSocketUrl('ws://localhost:8080/ws'), true);
       });
 
       test('should reject invalid WebSocket URLs', () {
-        expect(InputValidator.isValidWebSocketUrl('https://example.com'), false);
+        expect(
+            InputValidator.isValidWebSocketUrl('https://example.com'), false);
         expect(InputValidator.isValidWebSocketUrl('not-a-url'), false);
         expect(InputValidator.isValidWebSocketUrl(null), false);
       });
 
       test('validateUrlOrThrow should throw for invalid URLs', () {
-        expect(() => InputValidator.validateUrlOrThrow('invalid-url'), 
-               throwsA(isA<MCPValidationException>()));
-        expect(() => InputValidator.validateUrlOrThrow('ftp://example.com'), 
-               throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validateUrlOrThrow('invalid-url'),
+            throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validateUrlOrThrow('ftp://example.com'),
+            throwsA(isA<MCPValidationException>()));
       });
     });
 
@@ -90,10 +102,10 @@ void main() {
       });
 
       test('validatePortOrThrow should throw for invalid ports', () {
-        expect(() => InputValidator.validatePortOrThrow(0), 
-               throwsA(isA<MCPValidationException>()));
-        expect(() => InputValidator.validatePortOrThrow(65536), 
-               throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validatePortOrThrow(0),
+            throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validatePortOrThrow(65536),
+            throwsA(isA<MCPValidationException>()));
       });
     });
 
@@ -110,7 +122,8 @@ void main() {
         expect(InputValidator.isValidFilePath('/etc/passwd'), false);
         expect(InputValidator.isValidFilePath('/root/secret'), false);
         expect(InputValidator.isValidFilePath('C:\\Windows\\System32'), false);
-        expect(InputValidator.isValidFilePath('..\\..\\windows\\system32'), false);
+        expect(
+            InputValidator.isValidFilePath('..\\..\\windows\\system32'), false);
       });
 
       test('should reject null or empty paths', () {
@@ -132,7 +145,10 @@ void main() {
         expect(InputValidator.isValidAppName(''), false);
         expect(InputValidator.isValidAppName('App@Name'), false);
         expect(InputValidator.isValidAppName('App_With_Underscores'), false);
-        expect(InputValidator.isValidAppName('Very very very very very very very very very very long app name that exceeds 100 characters limit test'), false);
+        expect(
+            InputValidator.isValidAppName(
+                'Very very very very very very very very very very long app name that exceeds 100 characters limit test'),
+            false);
       });
     });
 
@@ -174,8 +190,8 @@ void main() {
       });
 
       test('validateEmailOrThrow should throw for invalid emails', () {
-        expect(() => InputValidator.validateEmailOrThrow('invalid-email'), 
-               throwsA(isA<MCPValidationException>()));
+        expect(() => InputValidator.validateEmailOrThrow('invalid-email'),
+            throwsA(isA<MCPValidationException>()));
       });
     });
 
@@ -195,12 +211,14 @@ void main() {
 
     group('String Sanitization', () {
       test('should remove HTML tags', () {
-        final result = InputValidator.sanitizeString('<script>alert("xss")</script>Hello');
+        final result =
+            InputValidator.sanitizeString('<script>alert("xss")</script>Hello');
         expect(result, 'Hello');
       });
 
       test('should remove SQL injection characters', () {
-        final result = InputValidator.sanitizeString('SELECT * FROM users WHERE id = 1; DROP TABLE users;');
+        final result = InputValidator.sanitizeString(
+            'SELECT * FROM users WHERE id = 1; DROP TABLE users;');
         expect(result.contains(';'), false);
         expect(result.contains("'"), false);
         expect(result.contains('"'), false);
@@ -218,9 +236,12 @@ void main() {
 
     group('Length Validation', () {
       test('should validate string length correctly', () {
-        expect(InputValidator.isValidLength('hello', minLength: 3, maxLength: 10), true);
+        expect(
+            InputValidator.isValidLength('hello', minLength: 3, maxLength: 10),
+            true);
         expect(InputValidator.isValidLength('ab', minLength: 3), false);
-        expect(InputValidator.isValidLength('very long string', maxLength: 10), false);
+        expect(InputValidator.isValidLength('very long string', maxLength: 10),
+            false);
         expect(InputValidator.isValidLength(null, minLength: 0), true);
         expect(InputValidator.isValidLength(null), true);
       });
@@ -237,20 +258,24 @@ void main() {
 
     group('Required Fields Validation', () {
       test('should pass when all required fields are present', () {
-        expect(() => InputValidator.validateRequired({
-          'name': 'Test App',
-          'version': '1.0.0',
-          'port': 8080,
-        }), returnsNormally);
+        expect(
+            () => InputValidator.validateRequired({
+                  'name': 'Test App',
+                  'version': '1.0.0',
+                  'port': 8080,
+                }),
+            returnsNormally);
       });
 
       test('should throw when required fields are missing', () {
-        expect(() => InputValidator.validateRequired({
-          'name': '',
-          'version': null,
-          'data': [],
-          'config': {},
-        }), throwsA(isA<MCPValidationException>()));
+        expect(
+            () => InputValidator.validateRequired({
+                  'name': '',
+                  'version': null,
+                  'data': [],
+                  'config': {},
+                }),
+            throwsA(isA<MCPValidationException>()));
       });
 
       test('should provide missing field names in exception', () {
@@ -278,18 +303,22 @@ void main() {
     group('Edge Cases', () {
       test('should handle unicode characters appropriately', () {
         expect(InputValidator.isValidAppName('app_name'), false); // Non-ASCII
-        expect(InputValidator.sanitizeString('Hello 世界'), 'Hello 世界'); // Should preserve non-malicious unicode
+        expect(InputValidator.sanitizeString('Hello 世界'),
+            'Hello 世界'); // Should preserve non-malicious unicode
       });
 
       test('should handle very long inputs', () {
         final longString = 'a' * 10000;
         expect(InputValidator.isValidLength(longString, maxLength: 100), false);
-        expect(InputValidator.sanitizeString(longString).length, 10000); // Should not crash
+        expect(InputValidator.sanitizeString(longString).length,
+            10000); // Should not crash
       });
 
       test('should handle empty and whitespace inputs', () {
-        expect(InputValidator.isValidAppName('   '), true); // Spaces are allowed in app names
-        expect(InputValidator.sanitizeString('   '), '   '); // Preserve whitespace
+        expect(InputValidator.isValidAppName('   '),
+            true); // Spaces are allowed in app names
+        expect(
+            InputValidator.sanitizeString('   '), '   '); // Preserve whitespace
       });
     });
   });

@@ -3,15 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
 import 'package:flutter_mcp/src/utils/memory_manager.dart';
 import 'package:flutter_mcp/src/utils/resource_manager.dart';
-import 'package:flutter_mcp/src/utils/event_system.dart';
+import 'package:flutter_mcp/src/events/event_system.dart';
 import 'dart:io';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  
+
   group('Real Memory Management Tests', () {
     late FlutterMCP mcp;
-    
+
     setUp(() async {
       // Set up method channel mock handler
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -38,7 +38,7 @@ void main() {
           }
         },
       );
-      
+
       mcp = FlutterMCP.instance;
       if (!mcp.isInitialized) {
         await mcp.init(MCPConfig(
@@ -68,15 +68,16 @@ void main() {
 
     test('Measure actual memory usage', () async {
       print('=== Actual Memory Usage Measurement Test ===');
-      
+
       // Check initial memory state
       final initialMemory = ProcessInfo.currentRss;
-      print('Initial memory usage: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Initial memory usage: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+
       // Create multiple servers and clients (increase memory usage)
       final serverIds = <String>[];
       final clientIds = <String>[];
-      
+
       for (int i = 0; i < 5; i++) {
         // Create server
         final serverId = await mcp.createServer(
@@ -89,7 +90,7 @@ void main() {
           ),
         );
         serverIds.add(serverId);
-        
+
         // Create client
         final clientId = await mcp.createClient(
           name: 'Test Client $i',
@@ -103,81 +104,89 @@ void main() {
         );
         clientIds.add(clientId);
       }
-      
+
       // Check memory usage increase
       final afterCreationMemory = ProcessInfo.currentRss;
       final memoryIncrease = afterCreationMemory - initialMemory;
-      print('Memory after server/client creation: ${(afterCreationMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      print('Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Memory after server/client creation: ${(afterCreationMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print(
+          'Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
+
       expect(memoryIncrease, greaterThan(0)); // Memory should increase
-      
+
       // Clean up resources
       await mcp.shutdown();
-      
+
       // Attempt forced GC and delay (provide time for memory cleanup)
       await Future.delayed(Duration(milliseconds: 100));
-      
+
       // Try GC multiple times and measure memory
       int attempts = 0;
       int afterCleanupMemory = ProcessInfo.currentRss;
-      
+
       while (attempts < 3 && afterCleanupMemory >= afterCreationMemory) {
         attempts++;
         await Future.delayed(Duration(milliseconds: 200));
         afterCleanupMemory = ProcessInfo.currentRss;
-        print('Memory after GC attempt $attempts: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+        print(
+            'Memory after GC attempt $attempts: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
       }
-      
+
       final memoryReclaimed = afterCreationMemory - afterCleanupMemory;
-      print('Memory after cleanup: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      print('Reclaimed memory: ${(memoryReclaimed / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Memory after cleanup: ${(afterCleanupMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+      print(
+          'Reclaimed memory: ${(memoryReclaimed / 1024 / 1024).toStringAsFixed(2)} MB');
+
       // Verify memory cleanup - immediate memory release is not guaranteed in test environment
       // Apply flexible criteria as memory may not be fully reclaimed depending on GC timing
       final memoryIncreaseAfterCleanup = afterCleanupMemory - initialMemory;
-      
+
       // Consider normal if memory increase does not exceed 2x the initial increase
       // This means memory leaks are not severe
-      final allowedIncreaseRatio = 2.0; // Allow up to 200% increase (very lenient criteria)
-      expect(memoryIncreaseAfterCleanup, lessThan(memoryIncrease * allowedIncreaseRatio), 
-        reason: 'Memory after cleanup ($memoryIncreaseAfterCleanup bytes increase) should not exceed ${memoryIncrease * allowedIncreaseRatio} bytes increase');
+      final allowedIncreaseRatio =
+          2.0; // Allow up to 200% increase (very lenient criteria)
+      expect(memoryIncreaseAfterCleanup,
+          lessThan(memoryIncrease * allowedIncreaseRatio),
+          reason:
+              'Memory after cleanup ($memoryIncreaseAfterCleanup bytes increase) should not exceed ${memoryIncrease * allowedIncreaseRatio} bytes increase');
     });
 
     test('Memory threshold detection test', () async {
       print('=== Memory Threshold Detection Test ===');
-      
+
       bool highMemoryCallbackCalled = false;
       String? memoryEventData;
-      
+
       // Register high memory callback
       MemoryManager.instance.addHighMemoryCallback(() async {
         highMemoryCallbackCalled = true;
         print('High memory callback was called!');
       });
-      
+
       // Register memory event listener
-      EventSystem.instance.subscribe('memory.high', (data) {
+      EventSystem.instance.subscribeTopic('memory.high', (data) {
         memoryEventData = data.toString();
         print('Memory event received: $memoryEventData');
       });
-      
+
       // Start memory monitoring (with faster interval)
       MemoryManager.instance.initialize(
         startMonitoring: true,
         monitoringInterval: Duration(milliseconds: 100),
         highMemoryThresholdMB: 50, // Set very low threshold (for testing)
       );
-      
+
       // Wait for memory monitoring to execute
       await Future.delayed(Duration(milliseconds: 500));
-      
+
       // Stop memory monitoring
       MemoryManager.instance.stopMemoryMonitoring();
-      
+
       print('High memory callback called: $highMemoryCallbackCalled');
       print('Memory event data: $memoryEventData');
-      
+
       // Callback should be called due to low threshold
       expect(highMemoryCallbackCalled, isTrue);
       expect(memoryEventData, isNotNull);
@@ -185,10 +194,10 @@ void main() {
 
     test('Resource dependency management test', () async {
       print('=== Resource Dependency Management Test ===');
-      
+
       final resourceManager = ResourceManager.instance;
       final disposedOrder = <String>[];
-      
+
       // Register resources with dependencies
       resourceManager.register<String>(
         'dependency1',
@@ -199,9 +208,9 @@ void main() {
         },
         priority: ResourceManager.highPriority,
       );
-      
+
       resourceManager.register<String>(
-        'dependency2', 
+        'dependency2',
         'resource2',
         (resource) async {
           disposedOrder.add('dependency2');
@@ -210,7 +219,7 @@ void main() {
         dependencies: ['dependency1'],
         priority: ResourceManager.mediumPriority,
       );
-      
+
       resourceManager.register<String>(
         'main_resource',
         'main',
@@ -221,27 +230,29 @@ void main() {
         dependencies: ['dependency1', 'dependency2'],
         priority: ResourceManager.lowPriority,
       );
-      
+
       // Clean up main resource (dependencies should be cleaned up first)
       await resourceManager.dispose('dependency1');
-      
+
       print('Cleanup order: $disposedOrder');
-      
+
       // Check if main_resource and dependency2 were cleaned up first due to dependencies
       expect(disposedOrder.contains('main_resource'), isTrue);
       expect(disposedOrder.contains('dependency2'), isTrue);
-      expect(disposedOrder.last, equals('dependency1')); // dependency1 cleaned up last
+      expect(disposedOrder.last,
+          equals('dependency1')); // dependency1 cleaned up last
     });
 
     test('Memory chunk processing test', () async {
       print('=== Memory Chunk Processing Test ===');
-      
+
       // Create large data
       final largeDataSet = List.generate(1000, (index) => 'data_item_$index');
-      
+
       final initialMemory = ProcessInfo.currentRss;
-      print('Memory before chunk processing: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Memory before chunk processing: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+
       // Process by chunks (memory efficient)
       final results = await MemoryManager.processInChunks<String, String>(
         items: largeDataSet,
@@ -253,29 +264,33 @@ void main() {
         chunkSize: 50, // Process 50 items at a time
         pauseBetweenChunks: Duration(milliseconds: 10), // Pause between chunks
       );
-      
+
       final afterProcessingMemory = ProcessInfo.currentRss;
-      print('Memory after chunk processing: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Memory after chunk processing: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+
       expect(results.length, equals(largeDataSet.length));
       expect(results.first, equals('DATA_ITEM_0'));
-      
+
       // Check if memory usage was controlled (should not have large increase)
       final memoryIncrease = afterProcessingMemory - initialMemory;
-      print('Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
+
       // Memory increase should be limited due to chunk processing
-      expect(memoryIncrease, lessThan(50 * 1024 * 1024)); // Increase less than 50MB
+      expect(memoryIncrease,
+          lessThan(50 * 1024 * 1024)); // Increase less than 50MB
     });
 
     test('Parallel chunk processing and concurrency control test', () async {
       print('=== Parallel Chunk Processing and Concurrency Control Test ===');
-      
+
       final dataSet = List.generate(100, (index) => index);
-      
+
       final initialMemory = ProcessInfo.currentRss;
-      print('Memory before parallel processing: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Memory before parallel processing: ${(initialMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+
       // Parallel processing with limited concurrency
       final results = await MemoryManager.processInParallelChunks<int, int>(
         items: dataSet,
@@ -288,18 +303,21 @@ void main() {
         chunkSize: 10,
         pauseBetweenChunks: Duration(milliseconds: 5),
       );
-      
+
       final afterProcessingMemory = ProcessInfo.currentRss;
-      print('Memory after parallel processing: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
-      
+      print(
+          'Memory after parallel processing: ${(afterProcessingMemory / 1024 / 1024).toStringAsFixed(2)} MB');
+
       expect(results.length, equals(dataSet.length));
       expect(results[5], equals(25)); // 5^2 = 25
-      
+
       // Check if memory usage was limited by concurrency control
       final memoryIncrease = afterProcessingMemory - initialMemory;
-      print('Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
-      
-      expect(memoryIncrease, lessThan(30 * 1024 * 1024)); // Increase less than 30MB
+      print(
+          'Memory increase: ${(memoryIncrease / 1024 / 1024).toStringAsFixed(2)} MB');
+
+      expect(memoryIncrease,
+          lessThan(30 * 1024 * 1024)); // Increase less than 30MB
     });
   });
 }

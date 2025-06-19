@@ -52,21 +52,21 @@ void main() {
     test('Config accepts invalid values (no validation)', () {
       // Config doesn't validate values internally
       var config = MCPConfig(
-        appName: '',  // Empty app name
+        appName: '', // Empty app name
         appVersion: '1.0.0',
       );
       expect(config.appName, '');
 
       config = MCPConfig(
         appName: 'Test App',
-        appVersion: '',  // Empty app version
+        appVersion: '', // Empty app version
       );
       expect(config.appVersion, '');
 
       config = MCPConfig(
         appName: 'Test App',
         appVersion: '1.0.0',
-        highMemoryThresholdMB: -100,  // Negative memory threshold
+        highMemoryThresholdMB: -100, // Negative memory threshold
       );
       expect(config.highMemoryThresholdMB, -100);
     });
@@ -234,7 +234,7 @@ void main() {
       resourceManager.register<String>(
         'test_resource',
         'Test Value',
-            (value) async {
+        (value) async {
           resourceDisposed = true;
         },
       );
@@ -259,7 +259,7 @@ void main() {
       resourceManager.register<String>(
         'resource1',
         'Value 1',
-            (value) async {
+        (value) async {
           disposedResources.add('resource1');
         },
       );
@@ -267,7 +267,7 @@ void main() {
       resourceManager.register<String>(
         'resource2',
         'Value 2',
-            (value) async {
+        (value) async {
           disposedResources.add('resource2');
         },
       );
@@ -296,7 +296,7 @@ void main() {
       resourceManager.registerWithTag<String>(
         'resource1',
         'Value 1',
-            (value) async {
+        (value) async {
           disposedResources.add('resource1');
         },
         'test_tag',
@@ -305,7 +305,7 @@ void main() {
       resourceManager.registerWithTag<String>(
         'resource2',
         'Value 2',
-            (value) async {
+        (value) async {
           disposedResources.add('resource2');
         },
         'test_tag',
@@ -314,7 +314,7 @@ void main() {
       resourceManager.registerWithTag<String>(
         'resource3',
         'Value 3',
-            (value) async {
+        (value) async {
           disposedResources.add('resource3');
         },
         'different_tag',

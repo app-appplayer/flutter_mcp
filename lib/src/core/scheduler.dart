@@ -42,7 +42,8 @@ class MCPScheduler {
 
   /// Add a job
   String addJob(MCPJob job) {
-    final jobId = job.id ?? 'job_${DateTime.now().millisecondsSinceEpoch}_${_jobs.length}';
+    final jobId = job.id ??
+        'job_${DateTime.now().millisecondsSinceEpoch}_${_jobs.length}';
     _jobs[jobId] = job.copyWith(id: jobId);
     _logger.fine('Job added: $jobId, interval: ${job.interval}');
     return jobId;
@@ -91,7 +92,8 @@ class MCPScheduler {
       final jobId = entry.key;
       final job = entry.value;
 
-      _logger.fine('Checking job $jobId: paused=${job.paused}, lastRun=${job.lastRun}, interval=${job.interval}');
+      _logger.fine(
+          'Checking job $jobId: paused=${job.paused}, lastRun=${job.lastRun}, interval=${job.interval}');
 
       // Skip if job is paused
       if (job.paused) {
@@ -105,9 +107,9 @@ class MCPScheduler {
         continue;
       }
 
-      final shouldExecute = job.lastRun == null ||
-          now.difference(job.lastRun!) >= job.interval;
-      
+      final shouldExecute =
+          job.lastRun == null || now.difference(job.lastRun!) >= job.interval;
+
       _logger.fine('Job $jobId should execute: $shouldExecute');
 
       if (shouldExecute) {
@@ -131,31 +133,28 @@ class MCPScheduler {
 
     // Record execution start
     final execution = _JobExecution(
-        jobId: jobId,
-        startTime: now,
-        status: _JobExecutionStatus.running
-    );
+        jobId: jobId, startTime: now, status: _JobExecutionStatus.running);
     _addToHistory(execution);
 
     try {
       // Execute job task
       final result = job.task();
-      
+
       // If the result is a Future, handle it asynchronously
       if (result is Future) {
         result.then((_) {
           // Update execution record
           execution.complete();
-          
+
           // Update last run time
           _jobs[jobId] = job.copyWith(lastRun: now);
-          
+
           // Remove one-time job if needed
           if (job.runOnce) {
             _logger.fine('Removing one-time job: $jobId');
             _jobs.remove(jobId);
           }
-          
+
           // Mark job as not running anymore
           _runningJobs.remove(jobId);
         }).catchError((e, stackTrace) {
@@ -166,16 +165,16 @@ class MCPScheduler {
       } else {
         // Synchronous task completed immediately
         execution.complete();
-        
+
         // Update last run time
         _jobs[jobId] = job.copyWith(lastRun: now);
-        
+
         // Remove one-time job if needed
         if (job.runOnce) {
           _logger.fine('Removing one-time job: $jobId');
           _jobs.remove(jobId);
         }
-        
+
         // Mark job as not running anymore
         _runningJobs.remove(jobId);
       }
@@ -184,7 +183,7 @@ class MCPScheduler {
 
       // Update execution record with error
       execution.fail(e.toString());
-      
+
       // Mark job as not running anymore
       _runningJobs.remove(jobId);
     }
@@ -237,13 +236,12 @@ class MCPScheduler {
   Map<String, dynamic> getJobStatus(String jobId) {
     final job = _jobs[jobId];
     if (job == null) {
-      throw MCPResourceNotFoundException.withContext(
-        jobId,
-        additionalInfo: 'Job not found',
-        resourceType: 'Job',
-        errorCode: 'JOB_NOT_FOUND',
-        resolution: 'Verify the job ID and ensure the job has been added to the scheduler'
-      );
+      throw MCPResourceNotFoundException.withContext(jobId,
+          additionalInfo: 'Job not found',
+          resourceType: 'Job',
+          errorCode: 'JOB_NOT_FOUND',
+          resolution:
+              'Verify the job ID and ensure the job has been added to the scheduler');
     }
 
     return {

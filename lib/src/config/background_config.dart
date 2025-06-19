@@ -85,7 +85,7 @@ class BackgroundConfig {
       'keepAlive': keepAlive,
     };
   }
-  
+
   /// Convert to map (alias for toJson)
   Map<String, dynamic> toMap() => toJson();
 }

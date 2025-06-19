@@ -62,22 +62,27 @@ class InputValidator {
   /// Validate file path (basic security check)
   static bool isValidFilePath(String? path) {
     if (path == null || path.isEmpty) return false;
-    
+
     // Check for path traversal attempts
     if (path.contains('..')) return false;
-    
+
     // Check for common sensitive paths
     final lowerPath = path.toLowerCase();
     final dangerousPaths = [
-      '/etc/', '/root/', '/sys/', '/proc/',
-      'c:\\windows\\system32', 'c:\\windows\\',
-      '/private/etc/', '/private/var/'
+      '/etc/',
+      '/root/',
+      '/sys/',
+      '/proc/',
+      'c:\\windows\\system32',
+      'c:\\windows\\',
+      '/private/etc/',
+      '/private/var/'
     ];
-    
+
     for (final dangerous in dangerousPaths) {
       if (lowerPath.startsWith(dangerous)) return false;
     }
-    
+
     return true;
   }
 
@@ -113,29 +118,29 @@ class InputValidator {
   /// Validate JSON string
   static bool isValidJson(String? json) {
     if (json == null || json.isEmpty) return false;
-    
+
     try {
       // Check if it starts with valid JSON characters
       final trimmed = json.trim();
       if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
         return false;
       }
-      
+
       // Basic validation - check for matching brackets and quotes
       int bracketCount = 0;
       int bracketSquareCount = 0;
       int quoteCount = 0;
       bool inString = false;
       bool hasColon = false;
-      
+
       for (int i = 0; i < trimmed.length; i++) {
         final char = trimmed[i];
-        
-        if (char == '"' && (i == 0 || trimmed[i-1] != '\\')) {
+
+        if (char == '"' && (i == 0 || trimmed[i - 1] != '\\')) {
           inString = !inString;
           quoteCount++;
         }
-        
+
         if (!inString) {
           if (char == '{') {
             bracketCount++;
@@ -150,14 +155,14 @@ class InputValidator {
           }
         }
       }
-      
+
       // For objects, must have even number of quotes (key-value pairs)
       // and at least one colon
       if (trimmed.startsWith('{')) {
         if (!hasColon) return false;
         if (quoteCount % 2 != 0) return false;
       }
-      
+
       return bracketCount == 0 && bracketSquareCount == 0;
     } catch (e) {
       return false;
@@ -167,22 +172,30 @@ class InputValidator {
   /// Sanitize string by removing dangerous characters
   static String sanitizeString(String? input) {
     if (input == null) return '';
-    
+
     String result = input;
-    
+
     // Remove script tags and their content first
-    result = result.replaceAll(RegExp(r'<script[^>]*>.*?</script>', caseSensitive: false, dotAll: true), '');
-    
+    result = result.replaceAll(
+        RegExp(r'<script[^>]*>.*?</script>',
+            caseSensitive: false, dotAll: true),
+        '');
+
     // Remove all HTML tags
     result = result.replaceAll(RegExp(r'<[^>]*>'), '');
-    
+
     // Remove SQL injection characters
-    result = result.replaceAll(';', '').replaceAll("'", '').replaceAll('"', '').replaceAll('\\', '');
-    
+    result = result
+        .replaceAll(';', '')
+        .replaceAll("'", '')
+        .replaceAll('"', '')
+        .replaceAll('\\', '');
+
     // Remove other dangerous patterns
-    result = result.replaceAll(RegExp(r'javascript:', caseSensitive: false), '');
+    result =
+        result.replaceAll(RegExp(r'javascript:', caseSensitive: false), '');
     result = result.replaceAll(RegExp(r'on\w+\s*=', caseSensitive: false), '');
-    
+
     return result;
   }
 
@@ -205,17 +218,17 @@ class InputValidator {
   /// Validate required fields in a map
   static void validateRequired(Map<String, dynamic> data) {
     final missingFields = <String>[];
-    
+
     for (final entry in data.entries) {
       final value = entry.value;
-      if (value == null || 
+      if (value == null ||
           (value is String && value.isEmpty) ||
           (value is List && value.isEmpty) ||
           (value is Map && value.isEmpty)) {
         missingFields.add(entry.key);
       }
     }
-    
+
     if (missingFields.isNotEmpty) {
       throw MCPValidationException(
         'Missing required fields: ${missingFields.join(', ')}',

@@ -586,6 +586,80 @@ void FlutterMcpPlugin::Shutdown(
   result->Success();
 }
 
+void FlutterMcpPlugin::CheckPermission(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+  if (!arguments) {
+    result->Error("INVALID_ARGS", "Missing arguments");
+    return;
+  }
+  
+  auto permission_it = arguments->find(flutter::EncodableValue("permission"));
+  if (permission_it == arguments->end()) {
+    result->Error("INVALID_ARGS", "Missing permission");
+    return;
+  }
+  
+  std::string permission = std::get<std::string>(permission_it->second);
+  
+  // Handle Windows-specific permissions
+  if (permission == "notification") {
+    // Check if app is in notification settings
+    // For now, assume notifications are allowed
+    result->Success(flutter::EncodableValue(true));
+  } else if (permission == "background") {
+    // Windows allows background execution
+    result->Success(flutter::EncodableValue(true));
+  } else if (permission == "storage") {
+    // Storage is always available
+    result->Success(flutter::EncodableValue(true));
+  } else if (permission == "systemTray") {
+    // System tray is always available on Windows
+    result->Success(flutter::EncodableValue(true));
+  } else {
+    // Unknown permission, assume granted
+    result->Success(flutter::EncodableValue(true));
+  }
+}
+
+void FlutterMcpPlugin::RequestPermission(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+  if (!arguments) {
+    result->Error("INVALID_ARGS", "Missing arguments");
+    return;
+  }
+  
+  auto permission_it = arguments->find(flutter::EncodableValue("permission"));
+  if (permission_it == arguments->end()) {
+    result->Error("INVALID_ARGS", "Missing permission");
+    return;
+  }
+  
+  std::string permission = std::get<std::string>(permission_it->second);
+  
+  // Handle Windows-specific permissions
+  if (permission == "notification") {
+    // On Windows 10+, we could open notification settings
+    // For now, just return success
+    result->Success(flutter::EncodableValue(true));
+  } else if (permission == "background") {
+    // Windows allows background execution
+    result->Success(flutter::EncodableValue(true));
+  } else if (permission == "storage") {
+    // Storage is always available
+    result->Success(flutter::EncodableValue(true));
+  } else if (permission == "systemTray") {
+    // System tray is always available on Windows
+    result->Success(flutter::EncodableValue(true));
+  } else {
+    // Unknown permission, assume granted
+    result->Success(flutter::EncodableValue(true));
+  }
+}
+
 void FlutterMcpPlugin::OnListen(
     const flutter::EncodableValue* arguments,
     std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events) {

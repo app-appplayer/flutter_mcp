@@ -36,7 +36,8 @@ abstract class MCPToolPlugin extends MCPPlugin {
 /// MCP Resource plugin interface
 abstract class MCPResourcePlugin extends MCPPlugin {
   /// Get resource content
-  Future<Map<String, dynamic>> getResource(String resourceUri, Map<String, dynamic> params);
+  Future<Map<String, dynamic>> getResource(
+      String resourceUri, Map<String, dynamic> params);
 
   /// Get resource metadata
   Map<String, dynamic> getResourceMetadata();
@@ -81,7 +82,8 @@ abstract class MCPNotificationPlugin extends MCPPlugin {
   Future<void> hideNotification(String id);
 
   /// Register a notification click handler
-  void registerClickHandler(Function(String id, Map<String, dynamic>? data) handler);
+  void registerClickHandler(
+      Function(String id, Map<String, dynamic>? data) handler);
 }
 
 /// MCP Tray plugin interface
@@ -122,12 +124,14 @@ class MCPPluginRegistry {
   final List<String> _loadOrder = [];
 
   /// Register a plugin
-  Future<void> registerPlugin(MCPPlugin plugin, [Map<String, dynamic>? config]) async {
+  Future<void> registerPlugin(MCPPlugin plugin,
+      [Map<String, dynamic>? config]) async {
     final pluginType = plugin.runtimeType;
     final typeName = _getPluginTypeName(plugin);
     final pluginName = plugin.name;
 
-    _logger.fine('Registering $typeName plugin: $pluginName v${plugin.version}');
+    _logger
+        .fine('Registering $typeName plugin: $pluginName v${plugin.version}');
 
     // Initialize plugin type map if not exists
     _plugins.putIfAbsent(pluginType, () => {});
@@ -195,7 +199,7 @@ class MCPPluginRegistry {
       _logger.severe('Failed to shutdown plugin $pluginName', e, stackTrace);
       // Continue with cleanup even if shutdown failed
     }
-    
+
     // Always clean up resources regardless of shutdown result
     _plugins[foundType]!.remove(pluginName);
     _configurations.remove(pluginName);
@@ -238,7 +242,8 @@ class MCPPluginRegistry {
   }
 
   /// Execute a tool plugin
-  Future<Map<String, dynamic>> executeTool(String name, Map<String, dynamic> arguments) async {
+  Future<Map<String, dynamic>> executeTool(
+      String name, Map<String, dynamic> arguments) async {
     final plugin = getPlugin<MCPToolPlugin>(name);
 
     if (plugin == null) {
@@ -247,7 +252,7 @@ class MCPPluginRegistry {
 
     try {
       return await ErrorRecovery.tryWithRetry(
-            () => plugin.execute(arguments),
+        () => plugin.execute(arguments),
         operationName: 'Execute tool plugin $name',
         maxRetries: 2,
       );
@@ -263,7 +268,8 @@ class MCPPluginRegistry {
   }
 
   /// Execute a prompt plugin
-  Future<Map<String, dynamic>> executePrompt(String name, Map<String, dynamic> arguments) async {
+  Future<Map<String, dynamic>> executePrompt(
+      String name, Map<String, dynamic> arguments) async {
     final plugin = getPlugin<MCPPromptPlugin>(name);
 
     if (plugin == null) {
@@ -272,7 +278,7 @@ class MCPPluginRegistry {
 
     try {
       return await ErrorRecovery.tryWithRetry(
-            () => plugin.execute(arguments),
+        () => plugin.execute(arguments),
         operationName: 'Execute prompt plugin $name',
         maxRetries: 2,
       );
@@ -289,10 +295,7 @@ class MCPPluginRegistry {
 
   /// Get a resource from a resource plugin
   Future<Map<String, dynamic>> getResource(
-      String name,
-      String resourceUri,
-      Map<String, dynamic> params
-      ) async {
+      String name, String resourceUri, Map<String, dynamic> params) async {
     final plugin = getPlugin<MCPResourcePlugin>(name);
 
     if (plugin == null) {
@@ -301,7 +304,7 @@ class MCPPluginRegistry {
 
     try {
       return await ErrorRecovery.tryWithRetry(
-            () => plugin.getResource(resourceUri, params),
+        () => plugin.getResource(resourceUri, params),
         operationName: 'Get resource from plugin $name',
         maxRetries: 2,
       );
@@ -318,13 +321,13 @@ class MCPPluginRegistry {
 
   /// Show notification using a notification plugin
   Future<void> showNotification(
-      String name, {
-        required String title,
-        required String body,
-        String? id,
-        String? icon,
-        Map<String, dynamic>? additionalData,
-      }) async {
+    String name, {
+    required String title,
+    required String body,
+    String? id,
+    String? icon,
+    Map<String, dynamic>? additionalData,
+  }) async {
     final plugin = getPlugin<MCPNotificationPlugin>(name);
 
     if (plugin == null) {
@@ -340,7 +343,8 @@ class MCPPluginRegistry {
         additionalData: additionalData,
       );
     } catch (e, stackTrace) {
-      _logger.severe('Error showing notification with plugin $name', e, stackTrace);
+      _logger.severe(
+          'Error showing notification with plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error showing notification: ${e.toString()}',
@@ -403,7 +407,8 @@ class MCPPluginRegistry {
     try {
       await plugin.setIcon(iconPath);
     } catch (e, stackTrace) {
-      _logger.severe('Error updating tray icon with plugin $name', e, stackTrace);
+      _logger.severe(
+          'Error updating tray icon with plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error updating tray icon: ${e.toString()}',
@@ -424,7 +429,8 @@ class MCPPluginRegistry {
     try {
       await plugin.setMenuItems(items);
     } catch (e, stackTrace) {
-      _logger.severe('Error setting tray menu items with plugin $name', e, stackTrace);
+      _logger.severe(
+          'Error setting tray menu items with plugin $name', e, stackTrace);
       throw MCPPluginException(
         name,
         'Error setting tray menu items: ${e.toString()}',
@@ -501,7 +507,8 @@ class MCPPluginRegistry {
     _loadOrder.clear();
 
     if (errors.isNotEmpty) {
-      throw MCPException('Errors occurred while shutting down plugins: $errors');
+      throw MCPException(
+          'Errors occurred while shutting down plugins: $errors');
     }
   }
 
@@ -527,7 +534,8 @@ class MCPPluginRegistry {
   }
 
   /// Update plugin configuration
-  Future<void> updatePluginConfiguration(String pluginName, Map<String, dynamic> config) async {
+  Future<void> updatePluginConfiguration(
+      String pluginName, Map<String, dynamic> config) async {
     // Find the plugin
     MCPPlugin? plugin;
     for (final typeMap in _plugins.values) {
@@ -597,7 +605,8 @@ class LlmToolPluginAdapter implements MCPToolPlugin {
   String get description => _llmToolPlugin.description;
 
   @override
-  Future<void> initialize(Map<String, dynamic> config) => _llmToolPlugin.initialize(config);
+  Future<void> initialize(Map<String, dynamic> config) =>
+      _llmToolPlugin.initialize(config);
 
   @override
   Future<void> shutdown() => _llmToolPlugin.shutdown();
@@ -628,7 +637,8 @@ class LlmToolPluginAdapter implements MCPToolPlugin {
         return jsonDecode(textContent.text);
       } catch (e) {
         // Text content is not valid JSON, return as plain text result
-        Logger('flutter_mcp.plugin_system').finest('Tool result is not JSON, returning as text: $e');
+        Logger('flutter_mcp.plugin_system')
+            .finest('Tool result is not JSON, returning as text: $e');
         return {'result': textContent.text};
       }
     }
@@ -653,13 +663,15 @@ class LlmResourcePluginAdapter implements MCPResourcePlugin {
   String get description => _llmResourcePlugin.description;
 
   @override
-  Future<void> initialize(Map<String, dynamic> config) => _llmResourcePlugin.initialize(config);
+  Future<void> initialize(Map<String, dynamic> config) =>
+      _llmResourcePlugin.initialize(config);
 
   @override
   Future<void> shutdown() => _llmResourcePlugin.shutdown();
 
   @override
-  Future<Map<String, dynamic>> getResource(String resourceUri, Map<String, dynamic> params) async {
+  Future<Map<String, dynamic>> getResource(
+      String resourceUri, Map<String, dynamic> params) async {
     final result = await _llmResourcePlugin.read(params);
     return {
       'content': result.content,
@@ -696,7 +708,8 @@ class LlmPromptPluginAdapter implements MCPPromptPlugin {
   String get description => _llmPromptPlugin.description;
 
   @override
-  Future<void> initialize(Map<String, dynamic> config) => _llmPromptPlugin.initialize(config);
+  Future<void> initialize(Map<String, dynamic> config) =>
+      _llmPromptPlugin.initialize(config);
 
   @override
   Future<void> shutdown() => _llmPromptPlugin.shutdown();
@@ -716,12 +729,14 @@ class LlmPromptPluginAdapter implements MCPPromptPlugin {
     return {
       'name': promptDef.name,
       'description': promptDef.description,
-      'arguments': promptDef.arguments.map((arg) => {
-        'name': arg.name,
-        'description': arg.description,
-        'required': arg.required,
-        'default': arg.defaultValue,
-      }).toList(),
+      'arguments': promptDef.arguments
+          .map((arg) => {
+                'name': arg.name,
+                'description': arg.description,
+                'required': arg.required,
+                'default': arg.defaultValue,
+              })
+          .toList(),
     };
   }
 }

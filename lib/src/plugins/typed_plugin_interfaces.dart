@@ -1,4 +1,5 @@
-/// Type-safe plugin interfaces to replace Map<String, dynamic> usage
+/// Type-safe plugin interfaces to replace Map`<String, dynamic>` usage
+library;
 
 import '../config/typed_config.dart';
 import '../metrics/typed_metrics.dart';
@@ -18,16 +19,16 @@ class SuccessResult<T> implements PluginResult<T> {
   final T data;
   @override
   final DateTime timestamp;
-  
-  SuccessResult(this.data, {DateTime? timestamp}) 
+
+  SuccessResult(this.data, {DateTime? timestamp})
       : timestamp = timestamp ?? DateTime.now();
-  
+
   @override
   bool get isSuccess => true;
-  
+
   @override
   String? get error => null;
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -48,17 +49,17 @@ class FailureResult<T> implements PluginResult<T> {
   final T? data = null;
   final String? details;
   final Object? originalError;
-  
+
   FailureResult(
     this.error, {
     this.details,
     this.originalError,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-  
+
   @override
   bool get isSuccess => false;
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -77,7 +78,7 @@ class PluginContext {
   final PluginConfig config;
   final Map<String, dynamic> metadata;
   final DateTime startTime;
-  
+
   PluginContext({
     required this.requestId,
     required this.pluginName,
@@ -85,7 +86,7 @@ class PluginContext {
     this.metadata = const {},
     DateTime? startTime,
   }) : startTime = startTime ?? DateTime.now();
-  
+
   /// Create a child context for sub-operations
   PluginContext createChild(String operation) {
     return PluginContext(
@@ -106,7 +107,7 @@ abstract class PluginConfig {
   Duration get timeout;
   int get maxRetries;
   Map<String, dynamic> toMap();
-  
+
   factory PluginConfig.fromMap(Map<String, dynamic> map) {
     return DefaultPluginConfig.fromMap(map);
   }
@@ -124,7 +125,7 @@ class DefaultPluginConfig implements PluginConfig {
   @override
   final int maxRetries;
   final Map<String, dynamic> customSettings;
-  
+
   DefaultPluginConfig({
     required this.name,
     this.version = '1.0.0',
@@ -133,7 +134,7 @@ class DefaultPluginConfig implements PluginConfig {
     this.maxRetries = 3,
     this.customSettings = const {},
   });
-  
+
   factory DefaultPluginConfig.fromMap(Map<String, dynamic> map) {
     return DefaultPluginConfig(
       name: map['name'] as String,
@@ -144,7 +145,7 @@ class DefaultPluginConfig implements PluginConfig {
       customSettings: Map<String, dynamic>.from(map['customSettings'] ?? {}),
     );
   }
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -164,14 +165,14 @@ class ToolRequest {
   final Map<String, dynamic> arguments;
   final PluginContext context;
   final ToolInputSchema schema;
-  
+
   ToolRequest({
     required this.toolName,
     required this.arguments,
     required this.context,
     required this.schema,
   });
-  
+
   /// Validate arguments against schema
   List<ValidationError> validate() {
     return schema.validate(arguments);
@@ -185,7 +186,7 @@ class ToolResponse {
   final ToolOutputSchema? outputSchema;
   final Duration executionTime;
   final List<PerformanceMetric> metrics;
-  
+
   ToolResponse({
     required this.toolName,
     required this.result,
@@ -193,7 +194,7 @@ class ToolResponse {
     required this.executionTime,
     this.metrics = const [],
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'toolName': toolName,
@@ -210,18 +211,18 @@ class ToolInputSchema {
   final String description;
   final Map<String, PropertySchema> properties;
   final List<String> required;
-  
+
   ToolInputSchema({
     required this.name,
     required this.description,
     required this.properties,
     this.required = const [],
   });
-  
+
   /// Validate input arguments
   List<ValidationError> validate(Map<String, dynamic> arguments) {
     final errors = <ValidationError>[];
-    
+
     // Check required properties
     for (final requiredProp in required) {
       if (!arguments.containsKey(requiredProp)) {
@@ -232,7 +233,7 @@ class ToolInputSchema {
         ));
       }
     }
-    
+
     // Validate each property
     for (final entry in arguments.entries) {
       final propertySchema = properties[entry.key];
@@ -241,16 +242,17 @@ class ToolInputSchema {
         errors.addAll(propErrors);
       }
     }
-    
+
     return errors;
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'description': description,
       'type': 'object',
-      'properties': properties.map((key, schema) => MapEntry(key, schema.toMap())),
+      'properties':
+          properties.map((key, schema) => MapEntry(key, schema.toMap())),
       'required': required,
     };
   }
@@ -260,17 +262,18 @@ class ToolInputSchema {
 class ToolOutputSchema {
   final String description;
   final Map<String, PropertySchema> properties;
-  
+
   ToolOutputSchema({
     required this.description,
     required this.properties,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'description': description,
       'type': 'object',
-      'properties': properties.map((key, schema) => MapEntry(key, schema.toMap())),
+      'properties':
+          properties.map((key, schema) => MapEntry(key, schema.toMap())),
     };
   }
 }
@@ -284,7 +287,7 @@ class PropertySchema {
   final List<dynamic>? enumValues;
   final PropertySchema? items; // For arrays
   final Map<String, PropertySchema>? properties; // For objects
-  
+
   PropertySchema({
     required this.type,
     this.description,
@@ -294,10 +297,10 @@ class PropertySchema {
     this.items,
     this.properties,
   });
-  
+
   List<ValidationError> validate(String property, dynamic value) {
     final errors = <ValidationError>[];
-    
+
     if (value == null) {
       if (!nullable) {
         errors.add(ValidationError(
@@ -308,7 +311,7 @@ class PropertySchema {
       }
       return errors;
     }
-    
+
     // Type validation
     switch (type) {
       case 'string':
@@ -371,14 +374,15 @@ class PropertySchema {
           for (final entry in valueMap.entries) {
             final propSchema = properties![entry.key];
             if (propSchema != null) {
-              final propErrors = propSchema.validate('$property.${entry.key}', entry.value);
+              final propErrors =
+                  propSchema.validate('$property.${entry.key}', entry.value);
               errors.addAll(propErrors);
             }
           }
         }
         break;
     }
-    
+
     // Enum validation
     if (enumValues != null && !enumValues!.contains(value)) {
       errors.add(ValidationError(
@@ -387,23 +391,24 @@ class PropertySchema {
         value: value,
       ));
     }
-    
+
     return errors;
   }
-  
+
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
       'type': type,
     };
-    
+
     if (description != null) map['description'] = description;
     if (defaultValue != null) map['default'] = defaultValue;
     if (enumValues != null) map['enum'] = enumValues;
     if (items != null) map['items'] = items!.toMap();
     if (properties != null) {
-      map['properties'] = properties!.map((key, schema) => MapEntry(key, schema.toMap()));
+      map['properties'] =
+          properties!.map((key, schema) => MapEntry(key, schema.toMap()));
     }
-    
+
     return map;
   }
 }
@@ -413,13 +418,13 @@ class ValidationError {
   final String property;
   final String message;
   final dynamic value;
-  
+
   ValidationError({
     required this.property,
     required this.message,
     required this.value,
   });
-  
+
   @override
   String toString() => '$property: $message (value: $value)';
 }
@@ -430,14 +435,14 @@ class ResourceRequest {
   final Map<String, dynamic> parameters;
   final PluginContext context;
   final ResourceInputSchema? schema;
-  
+
   ResourceRequest({
     required this.resourceUri,
     required this.parameters,
     required this.context,
     this.schema,
   });
-  
+
   /// Validate parameters against schema
   List<ValidationError> validate() {
     if (schema == null) return [];
@@ -452,7 +457,7 @@ class ResourceResponse {
   final String? mimeType;
   final Map<String, String> metadata;
   final Duration retrievalTime;
-  
+
   ResourceResponse({
     required this.resourceUri,
     required this.content,
@@ -460,7 +465,7 @@ class ResourceResponse {
     this.metadata = const {},
     required this.retrievalTime,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'resourceUri': resourceUri,
@@ -483,9 +488,9 @@ class TextContent implements ResourceContent {
   final String type = 'text';
   final String text;
   final String? encoding;
-  
+
   TextContent(this.text, {this.encoding = 'utf-8'});
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -501,9 +506,9 @@ class BinaryContent implements ResourceContent {
   final String type = 'binary';
   final List<int> data;
   final String? encoding;
-  
+
   BinaryContent(this.data, {this.encoding});
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -518,9 +523,9 @@ class JsonContent implements ResourceContent {
   @override
   final String type = 'json';
   final Map<String, dynamic> data;
-  
+
   JsonContent(this.data);
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -533,12 +538,12 @@ class JsonContent implements ResourceContent {
 /// Resource input schema
 class ResourceInputSchema {
   final Map<String, PropertySchema> parameters;
-  
+
   ResourceInputSchema({required this.parameters});
-  
+
   List<ValidationError> validate(Map<String, dynamic> params) {
     final errors = <ValidationError>[];
-    
+
     for (final entry in params.entries) {
       final schema = parameters[entry.key];
       if (schema != null) {
@@ -546,7 +551,7 @@ class ResourceInputSchema {
         errors.addAll(paramErrors);
       }
     }
-    
+
     return errors;
   }
 }
@@ -557,14 +562,14 @@ class PromptRequest {
   final Map<String, dynamic> arguments;
   final PluginContext context;
   final PromptInputSchema schema;
-  
+
   PromptRequest({
     required this.promptName,
     required this.arguments,
     required this.context,
     required this.schema,
   });
-  
+
   /// Validate arguments against schema
   List<ValidationError> validate() {
     return schema.validate(arguments);
@@ -577,14 +582,14 @@ class PromptResponse {
   final String description;
   final List<PromptMessage> messages;
   final Duration generationTime;
-  
+
   PromptResponse({
     required this.promptName,
     required this.description,
     required this.messages,
     required this.generationTime,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'promptName': promptName,
@@ -600,13 +605,13 @@ class PromptMessage {
   final String role;
   final MessageContent content;
   final Map<String, dynamic> metadata;
-  
+
   PromptMessage({
     required this.role,
     required this.content,
     this.metadata = const {},
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'role': role,
@@ -626,9 +631,9 @@ class TextMessageContent implements MessageContent {
   @override
   final String type = 'text';
   final String text;
-  
+
   TextMessageContent(this.text);
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {'type': type, 'text': text};
@@ -640,9 +645,9 @@ class ImageMessageContent implements MessageContent {
   final String type = 'image';
   final String url;
   final String? alt;
-  
+
   ImageMessageContent(this.url, {this.alt});
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -659,17 +664,17 @@ class PromptInputSchema {
   final String description;
   final Map<String, PropertySchema> arguments;
   final List<String> required;
-  
+
   PromptInputSchema({
     required this.name,
     required this.description,
     required this.arguments,
     this.required = const [],
   });
-  
+
   List<ValidationError> validate(Map<String, dynamic> args) {
     final errors = <ValidationError>[];
-    
+
     // Check required arguments
     for (final requiredArg in required) {
       if (!args.containsKey(requiredArg)) {
@@ -680,7 +685,7 @@ class PromptInputSchema {
         ));
       }
     }
-    
+
     // Validate each argument
     for (final entry in args.entries) {
       final argSchema = arguments[entry.key];
@@ -689,7 +694,7 @@ class PromptInputSchema {
         errors.addAll(argErrors);
       }
     }
-    
+
     return errors;
   }
 }
@@ -701,7 +706,7 @@ class BackgroundTaskConfig {
   final int maxRetries;
   final bool autoRestart;
   final Map<String, dynamic> parameters;
-  
+
   BackgroundTaskConfig({
     required this.taskName,
     required this.interval,
@@ -709,7 +714,7 @@ class BackgroundTaskConfig {
     this.autoRestart = true,
     this.parameters = const {},
   });
-  
+
   factory BackgroundTaskConfig.fromMap(Map<String, dynamic> map) {
     return BackgroundTaskConfig(
       taskName: map['taskName'] as String,
@@ -719,7 +724,7 @@ class BackgroundTaskConfig {
       parameters: Map<String, dynamic>.from(map['parameters'] ?? {}),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'taskName': taskName,
@@ -739,7 +744,7 @@ class BackgroundTaskResult {
   final Map<String, dynamic> output;
   final DateTime completedAt;
   final Duration executionTime;
-  
+
   BackgroundTaskResult({
     required this.taskName,
     required this.success,
@@ -748,7 +753,7 @@ class BackgroundTaskResult {
     required this.completedAt,
     required this.executionTime,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'taskName': taskName,
@@ -770,7 +775,7 @@ class NotificationRequest {
   final String? iconPath;
   final Map<String, dynamic> data;
   final Duration? ttl;
-  
+
   NotificationRequest({
     required this.title,
     required this.body,
@@ -780,7 +785,7 @@ class NotificationRequest {
     this.data = const {},
     this.ttl,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'title': title,
@@ -800,14 +805,14 @@ class NotificationResponse {
   final bool delivered;
   final String? error;
   final DateTime timestamp;
-  
+
   NotificationResponse({
     required this.notificationId,
     required this.delivered,
     this.error,
     required this.timestamp,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'notificationId': notificationId,
@@ -823,13 +828,13 @@ class TrayMenuConfig {
   final List<TrayMenuItem> items;
   final String? iconPath;
   final String? tooltip;
-  
+
   TrayMenuConfig({
     required this.items,
     this.iconPath,
     this.tooltip,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'items': items.map((item) => item.toMap()).toList(),
@@ -848,7 +853,7 @@ class TrayMenuItem {
   final List<TrayMenuItem> subItems;
   final String? iconPath;
   final String? shortcut;
-  
+
   TrayMenuItem({
     required this.id,
     required this.label,
@@ -858,7 +863,7 @@ class TrayMenuItem {
     this.iconPath,
     this.shortcut,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -870,7 +875,7 @@ class TrayMenuItem {
       'shortcut': shortcut,
     };
   }
-  
+
   factory TrayMenuItem.fromMap(Map<String, dynamic> map) {
     return TrayMenuItem(
       id: map['id'] as String,
@@ -878,8 +883,10 @@ class TrayMenuItem {
       enabled: map['enabled'] as bool? ?? true,
       action: map['action'] as String?,
       subItems: (map['subItems'] as List<dynamic>?)
-          ?.map((item) => TrayMenuItem.fromMap(item as Map<String, dynamic>))
-          .toList() ?? [],
+              ?.map(
+                  (item) => TrayMenuItem.fromMap(item as Map<String, dynamic>))
+              .toList() ??
+          [],
       iconPath: map['iconPath'] as String?,
       shortcut: map['shortcut'] as String?,
     );

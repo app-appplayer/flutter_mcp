@@ -52,9 +52,9 @@ class PlatformServices {
     try {
       // Initialize method channel platform interface
       await _initializePlatformInterface(config);
-      
+
       // Initialize secure storage
-      if(config.secure) {
+      if (config.secure) {
         await _initializeSecureStorage(config);
       }
 
@@ -63,13 +63,13 @@ class PlatformServices {
         if (PlatformUtils.supportsBackgroundService) {
           await _initializeBackgroundService(config);
         } else {
-          _logger.warning('Background service requested but not supported on this platform: ${PlatformUtils.platformName}');
-          throw MCPPlatformNotSupportedException(
-            'background',
-            errorCode: 'BACKGROUND_SERVICE_UNSUPPORTED',
-            context: {'platform': PlatformUtils.platformName},
-            resolution: 'Disable background service in config for this platform or use a supported platform'
-          );
+          _logger.warning(
+              'Background service requested but not supported on this platform: ${PlatformUtils.platformName}');
+          throw MCPPlatformNotSupportedException('background',
+              errorCode: 'BACKGROUND_SERVICE_UNSUPPORTED',
+              context: {'platform': PlatformUtils.platformName},
+              resolution:
+                  'Disable background service in config for this platform or use a supported platform');
         }
       }
 
@@ -77,13 +77,13 @@ class PlatformServices {
         if (PlatformUtils.supportsNotifications) {
           await _initializeNotificationManager(config);
         } else {
-          _logger.warning('Notifications requested but not supported on this platform: ${PlatformUtils.platformName}');
-          throw MCPPlatformNotSupportedException(
-            'notifications',
-            errorCode: 'NOTIFICATIONS_UNSUPPORTED',
-            context: {'platform': PlatformUtils.platformName},
-            resolution: 'Disable notifications in config for this platform or use a supported platform'
-          );
+          _logger.warning(
+              'Notifications requested but not supported on this platform: ${PlatformUtils.platformName}');
+          throw MCPPlatformNotSupportedException('notifications',
+              errorCode: 'NOTIFICATIONS_UNSUPPORTED',
+              context: {'platform': PlatformUtils.platformName},
+              resolution:
+                  'Disable notifications in config for this platform or use a supported platform');
         }
       }
 
@@ -91,13 +91,13 @@ class PlatformServices {
         if (PlatformUtils.supportsTray) {
           await _initializeTrayManager(config);
         } else {
-          _logger.warning('System tray requested but not supported on this platform: ${PlatformUtils.platformName}');
-          throw MCPPlatformNotSupportedException(
-            'tray',
-            errorCode: 'TRAY_UNSUPPORTED',
-            context: {'platform': PlatformUtils.platformName},
-            resolution: 'Disable system tray in config for this platform or use a supported platform'
-          );
+          _logger.warning(
+              'System tray requested but not supported on this platform: ${PlatformUtils.platformName}');
+          throw MCPPlatformNotSupportedException('tray',
+              errorCode: 'TRAY_UNSUPPORTED',
+              context: {'platform': PlatformUtils.platformName},
+              resolution:
+                  'Disable system tray in config for this platform or use a supported platform');
         }
       }
 
@@ -110,23 +110,24 @@ class PlatformServices {
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize platform services', e, stackTrace);
       await _cleanupOnError();
-      throw MCPInitializationException('Failed to initialize platform services', e, stackTrace);
+      throw MCPInitializationException(
+          'Failed to initialize platform services', e, stackTrace);
     }
   }
 
   /// Initialize platform interface
   Future<void> _initializePlatformInterface(MCPConfig config) async {
     _logger.fine('Initializing platform interface');
-    
+
     try {
       // Set up platform interface if not already set
       if (FlutterMcpPlatform.instance is! MethodChannelFlutterMcp) {
         FlutterMcpPlatform.instance = MethodChannelFlutterMcp();
       }
-      
+
       // Initialize with config
       await FlutterMcpPlatform.instance.initialize(config);
-      
+
       // Add cleanup callback
       _cleanupCallbacks.add(() async {
         _logger.fine('Shutting down platform interface');
@@ -134,7 +135,8 @@ class PlatformServices {
       });
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize platform interface', e, stackTrace);
-      throw MCPInitializationException('Failed to initialize platform interface', e, stackTrace);
+      throw MCPInitializationException(
+          'Failed to initialize platform interface', e, stackTrace);
     }
   }
 
@@ -153,7 +155,8 @@ class PlatformServices {
       });
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize secure storage', e, stackTrace);
-      throw MCPInitializationException('Failed to initialize secure storage', e, stackTrace);
+      throw MCPInitializationException(
+          'Failed to initialize secure storage', e, stackTrace);
     }
   }
 
@@ -164,7 +167,7 @@ class PlatformServices {
     try {
       _backgroundService = _factory.createBackgroundService();
       await ErrorRecovery.tryWithRetry(
-            () => _backgroundService!.initialize(config.background),
+        () => _backgroundService!.initialize(config.background),
         operationName: 'initialize background service',
         maxRetries: 2,
       );
@@ -178,7 +181,8 @@ class PlatformServices {
       });
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize background service', e, stackTrace);
-      throw MCPInitializationException('Failed to initialize background service', e, stackTrace);
+      throw MCPInitializationException(
+          'Failed to initialize background service', e, stackTrace);
     }
   }
 
@@ -189,13 +193,15 @@ class PlatformServices {
     try {
       _notificationManager = _factory.createNotificationManager();
       await ErrorRecovery.tryWithRetry(
-            () => _notificationManager!.initialize(config.notification),
+        () => _notificationManager!.initialize(config.notification),
         operationName: 'initialize notification manager',
         maxRetries: 2,
       );
     } catch (e, stackTrace) {
-      _logger.severe('Failed to initialize notification manager', e, stackTrace);
-      throw MCPInitializationException('Failed to initialize notification manager', e, stackTrace);
+      _logger.severe(
+          'Failed to initialize notification manager', e, stackTrace);
+      throw MCPInitializationException(
+          'Failed to initialize notification manager', e, stackTrace);
     }
   }
 
@@ -206,7 +212,7 @@ class PlatformServices {
     try {
       _trayManager = _factory.createTrayManager();
       await ErrorRecovery.tryWithRetry(
-            () => _trayManager!.initialize(config.tray),
+        () => _trayManager!.initialize(config.tray),
         operationName: 'initialize tray manager',
         maxRetries: 2,
       );
@@ -220,7 +226,8 @@ class PlatformServices {
       });
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize tray manager', e, stackTrace);
-      throw MCPInitializationException('Failed to initialize tray manager', e, stackTrace);
+      throw MCPInitializationException(
+          'Failed to initialize tray manager', e, stackTrace);
     }
   }
 
@@ -241,7 +248,8 @@ class PlatformServices {
       });
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize lifecycle manager', e, stackTrace);
-      throw MCPInitializationException('Failed to initialize lifecycle manager', e, stackTrace);
+      throw MCPInitializationException(
+          'Failed to initialize lifecycle manager', e, stackTrace);
     }
   }
 
@@ -252,7 +260,7 @@ class PlatformServices {
     }
 
     _logger.fine('Starting background service');
-    
+
     // Use method channel for native platforms
     if (PlatformUtils.isNative) {
       return await ErrorRecovery.tryWithRetry(
@@ -261,7 +269,7 @@ class PlatformServices {
         maxRetries: 2,
       );
     }
-    
+
     // Use Dart implementation for non-native platforms
     if (_backgroundService == null) {
       _logger.warning('Background service not initialized');
@@ -269,7 +277,7 @@ class PlatformServices {
     }
 
     return await ErrorRecovery.tryWithRetry(
-          () => _backgroundService!.start(),
+      () => _backgroundService!.start(),
       operationName: 'start background service',
       maxRetries: 2,
     );
@@ -282,7 +290,7 @@ class PlatformServices {
     }
 
     _logger.fine('Stopping background service');
-    
+
     // Use method channel for native platforms
     if (PlatformUtils.isNative) {
       return await ErrorRecovery.tryWithRetry(
@@ -291,7 +299,7 @@ class PlatformServices {
         maxRetries: 2,
       );
     }
-    
+
     // Use Dart implementation for non-native platforms
     if (_backgroundService == null) {
       _logger.warning('Background service not initialized');
@@ -299,7 +307,7 @@ class PlatformServices {
     }
 
     return await ErrorRecovery.tryWithRetry(
-          () => _backgroundService!.stop(),
+      () => _backgroundService!.stop(),
       operationName: 'stop background service',
       maxRetries: 2,
     );
@@ -317,7 +325,7 @@ class PlatformServices {
     }
 
     _logger.fine('Showing notification: $title');
-    
+
     // Use method channel for native platforms
     if (PlatformUtils.isNative) {
       await ErrorRecovery.tryWithRetry(
@@ -332,7 +340,7 @@ class PlatformServices {
       );
       return;
     }
-    
+
     // Use Dart implementation for non-native platforms
     if (_notificationManager == null) {
       _logger.warning('Notification manager not initialized');
@@ -340,7 +348,7 @@ class PlatformServices {
     }
 
     await ErrorRecovery.tryWithRetry(
-          () => _notificationManager!.showNotification(
+      () => _notificationManager!.showNotification(
         title: title,
         body: body,
         icon: icon,
@@ -364,7 +372,7 @@ class PlatformServices {
 
     _logger.fine('Hiding notification: $id');
     await ErrorRecovery.tryWithRetry(
-          () => _notificationManager!.hideNotification(id),
+      () => _notificationManager!.hideNotification(id),
       operationName: 'hide notification',
       maxRetries: 2,
     );
@@ -377,7 +385,7 @@ class PlatformServices {
     }
 
     _logger.fine('Storing secure value: $key');
-    
+
     // Use method channel for native platforms
     if (PlatformUtils.isNative) {
       await ErrorRecovery.tryWithRetry(
@@ -387,14 +395,14 @@ class PlatformServices {
       );
       return;
     }
-    
+
     // Use Dart implementation for non-native platforms
     if (_secureStorage == null) {
       throw MCPException('Secure storage not initialized');
     }
 
     await ErrorRecovery.tryWithRetry(
-          () => _secureStorage!.saveString(key, value),
+      () => _secureStorage!.saveString(key, value),
       operationName: 'store secure value',
       maxRetries: 2,
     );
@@ -407,7 +415,7 @@ class PlatformServices {
     }
 
     _logger.fine('Reading secure value: $key');
-    
+
     // Use method channel for native platforms
     if (PlatformUtils.isNative) {
       return await ErrorRecovery.tryWithRetry(
@@ -416,14 +424,14 @@ class PlatformServices {
         maxRetries: 2,
       );
     }
-    
+
     // Use Dart implementation for non-native platforms
     if (_secureStorage == null) {
       throw MCPException('Secure storage not initialized');
     }
 
     return await ErrorRecovery.tryWithRetry(
-          () => _secureStorage!.readString(key),
+      () => _secureStorage!.readString(key),
       operationName: 'read secure value',
       maxRetries: 2,
     );
@@ -441,7 +449,7 @@ class PlatformServices {
 
     _logger.fine('Deleting secure value: $key');
     return await ErrorRecovery.tryWithRetry(
-          () => _secureStorage!.delete(key),
+      () => _secureStorage!.delete(key),
       operationName: 'delete secure value',
       maxRetries: 2,
     );
@@ -458,7 +466,7 @@ class PlatformServices {
     }
 
     return await ErrorRecovery.tryWithRetry(
-          () => _secureStorage!.containsKey(key),
+      () => _secureStorage!.containsKey(key),
       operationName: 'check secure key',
       maxRetries: 2,
     );
@@ -477,7 +485,7 @@ class PlatformServices {
 
     _logger.fine('Setting tray menu items');
     await ErrorRecovery.tryWithRetry(
-          () => _trayManager!.setContextMenu(items),
+      () => _trayManager!.setContextMenu(items),
       operationName: 'set tray menu',
       maxRetries: 2,
     );
@@ -496,7 +504,7 @@ class PlatformServices {
 
     _logger.fine('Setting tray icon: $path');
     await ErrorRecovery.tryWithRetry(
-          () => _trayManager!.setIcon(path),
+      () => _trayManager!.setIcon(path),
       operationName: 'set tray icon',
       maxRetries: 2,
     );
@@ -515,7 +523,7 @@ class PlatformServices {
 
     _logger.fine('Setting tray tooltip: $tooltip');
     await ErrorRecovery.tryWithRetry(
-          () => _trayManager!.setTooltip(tooltip),
+      () => _trayManager!.setTooltip(tooltip),
       operationName: 'set tray tooltip',
       maxRetries: 2,
     );

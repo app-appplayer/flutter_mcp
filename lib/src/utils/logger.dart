@@ -8,13 +8,13 @@ import 'package:logging/logging.dart';
 extension LoggerExtensions on Logger {
   /// Debug log - maps to fine level
   void debug(String message) => fine(message);
-  
-  /// Error log - maps to severe level  
+
+  /// Error log - maps to severe level
   void error(String message) => severe(message);
-  
+
   /// Warning log - maps to warning level
   void warn(String message) => warning(message);
-  
+
   /// Trace log - maps to finest level
   void trace(String message) => finest(message);
 }
@@ -28,29 +28,29 @@ class FlutterMcpLogging {
   }) {
     // Set log level
     Logger.root.level = enableDebugLogging ? Level.FINE : level;
-    
+
     // Configure standard MCP log output format
     Logger.root.onRecord.listen((record) {
       final timestamp = record.time.toIso8601String();
       final levelName = record.level.name;
       final loggerName = record.loggerName;
       final message = record.message;
-      
+
       // Use stderr for logging output (standard practice for logs)
       stderr.writeln('[$timestamp] [$levelName] $loggerName: $message');
-      
+
       // Write error details if available
       if (record.error != null) {
         stderr.writeln('  Error: ${record.error}');
       }
-      
+
       // Write stack trace if available
       if (record.stackTrace != null) {
         stderr.writeln('  StackTrace: ${record.stackTrace}');
       }
     });
   }
-  
+
   /// Create a logger with standard MCP naming convention
   /// Format: flutter_mcp.component_name
   static Logger createLogger(String componentName) {

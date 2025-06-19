@@ -10,7 +10,6 @@ import 'package:flutter_mcp/src/platform/storage/secure_storage.dart';
 
 import 'mcp_mock_test.mocks.dart';
 
-
 // Generate mocks for platform-specific implementations
 @GenerateMocks([
   BackgroundService,
@@ -48,7 +47,8 @@ void main() {
       icon: anyNamed('icon'),
       id: anyNamed('id'),
     )).thenAnswer((_) async {});
-    when(mockNotificationManager.hideNotification(any)).thenAnswer((_) async {});
+    when(mockNotificationManager.hideNotification(any))
+        .thenAnswer((_) async {});
 
     when(mockTrayManager.initialize(any)).thenAnswer((_) async {});
     when(mockTrayManager.setIcon(any)).thenAnswer((_) async {});
@@ -58,7 +58,8 @@ void main() {
 
     when(mockSecureStorage.initialize()).thenAnswer((_) async {});
     when(mockSecureStorage.saveString(any, any)).thenAnswer((_) async {});
-    when(mockSecureStorage.readString(any)).thenAnswer((_) async => 'mock-value');
+    when(mockSecureStorage.readString(any))
+        .thenAnswer((_) async => 'mock-value');
     when(mockSecureStorage.delete(any)).thenAnswer((_) async => true);
     when(mockSecureStorage.containsKey(any)).thenAnswer((_) async => true);
 
@@ -165,7 +166,8 @@ void main() {
       await platformServices.hideNotification('test_notification');
 
       // Verify notification was hidden
-      verify(mockNotificationManager.hideNotification('test_notification')).called(1);
+      verify(mockNotificationManager.hideNotification('test_notification'))
+          .called(1);
     });
 
     test('Set tray menu', () async {
@@ -275,12 +277,12 @@ void main() {
 
       // Calling methods should throw exception
       expect(
-            () => platformServices.startBackgroundService(),
+        () => platformServices.startBackgroundService(),
         throwsA(isInstanceOf<MCPException>()),
       );
 
       expect(
-            () => platformServices.showNotification(
+        () => platformServices.showNotification(
           title: 'Test',
           body: 'Test',
         ),
@@ -288,7 +290,7 @@ void main() {
       );
 
       expect(
-            () => platformServices.secureStore('key', 'value'),
+        () => platformServices.secureStore('key', 'value'),
         throwsA(isInstanceOf<MCPException>()),
       );
     });
@@ -304,11 +306,11 @@ class TestPlatformServices extends PlatformServices {
   bool _initialized = false;
 
   TestPlatformServices(
-      this._backgroundService,
-      this._notificationManager,
-      this._trayManager,
-      this._secureStorage,
-      );
+    this._backgroundService,
+    this._notificationManager,
+    this._trayManager,
+    this._secureStorage,
+  );
 
   @override
   Future<void> initialize(MCPConfig config) async {

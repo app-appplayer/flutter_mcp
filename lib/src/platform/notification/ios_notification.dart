@@ -1,16 +1,17 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/services.dart';
-import '../../config/notification_config.dart';
+import '../../config/notification_config.dart' hide NotificationPriority;
 import '../../utils/logger.dart';
 import '../../utils/exceptions.dart';
 import 'notification_manager.dart';
+import 'notification_models.dart';
 
 /// iOS notification manager implementation
 class IOSNotificationManager implements NotificationManager {
   static const MethodChannel _channel = MethodChannel('flutter_mcp');
   static const EventChannel _eventChannel = EventChannel('flutter_mcp/events');
-  
+
   final Logger _logger = Logger('flutter_mcp.ios_notification');
   StreamSubscription? _eventSubscription;
 
@@ -18,7 +19,8 @@ class IOSNotificationManager implements NotificationManager {
   final Map<String, Map<String, dynamic>> _notificationData = {};
 
   // Notification click handlers
-  final Map<String, Function(String, Map<String, dynamic>?)> _clickHandlers = {};
+  final Map<String, Function(String, Map<String, dynamic>?)> _clickHandlers =
+      {};
 
   // Active notifications queue (since iOS doesn't have a notification center API)
   final Queue<String> _activeNotifications = Queue<String>();
@@ -38,7 +40,8 @@ class IOSNotificationManager implements NotificationManager {
     // Apply configuration if provided
     if (config != null) {
       _soundEnabled = config.enableSound;
-      _defaultPriority = config.priority;
+      // Convert from config NotificationPriority to models NotificationPriority
+      _defaultPriority = NotificationPriority.values[config.priority.index];
     }
 
     // Initialize event listener for notification responses
@@ -62,7 +65,8 @@ class IOSNotificationManager implements NotificationManager {
       });
 
       // Request notification permission
-      final hasPermission = await _channel.invokeMethod<bool>('requestNotificationPermission');
+      final hasPermission =
+          await _channel.invokeMethod<bool>('requestNotificationPermission');
       if (hasPermission != true) {
         _logger.warning('Notification permission not granted');
       } else {
@@ -71,21 +75,25 @@ class IOSNotificationManager implements NotificationManager {
 
       _logger.fine('iOS notification manager initialized successfully');
     } catch (e, stackTrace) {
-      _logger.severe('Failed to initialize iOS notification manager', e, stackTrace);
-      throw MCPException('Failed to initialize iOS notification manager: ${e.toString()}', e, stackTrace);
+      _logger.severe(
+          'Failed to initialize iOS notification manager', e, stackTrace);
+      throw MCPException(
+          'Failed to initialize iOS notification manager: ${e.toString()}',
+          e,
+          stackTrace);
     }
   }
 
   void _handleEvent(Map<String, dynamic> event) {
     final type = event['type'] as String?;
     final data = event['data'] as Map<String, dynamic>? ?? {};
-    
+
     _logger.fine('Received notification event: $type');
-    
+
     if (type == 'notificationEvent') {
       final action = data['action'] as String?;
       final notificationId = data['notificationId'] as String?;
-      
+
       if (action == 'click' && notificationId != null) {
         _handleNotificationTap(notificationId);
       } else if (action == 'dismiss' && notificationId != null) {
@@ -101,13 +109,22 @@ class IOSNotificationManager implements NotificationManager {
     required String body,
     String? icon,
     String id = 'mcp_notification',
-    Map<String, dynamic>? additionalData,
+    Map<String, dynamic>? data,
+    List<NotificationAction>? actions,
+    String? channelId,
+    NotificationPriority priority = NotificationPriority.normal,
+    bool showProgress = false,
+    int? progress,
+    int? maxProgress,
+    String? group,
+    String? image,
+    bool ongoing = false,
   }) async {
     _logger.fine('Showing iOS notification: $title, ID: $id');
 
     try {
       // Store additional data for later retrieval
-      final notificationData = additionalData ?? {};
+      final notificationData = data ?? {};
       notificationData['title'] = title;
       notificationData['body'] = body;
       _notificationData[id] = notificationData;
@@ -121,13 +138,15 @@ class IOSNotificationManager implements NotificationManager {
         'title': title,
         'body': body,
         'subtitle': notificationData['subtitle'] as String?,
-        'priority': _defaultPriority.index,
+        'priority': priority.index,
         'enableSound': _soundEnabled,
         'enableBadges': _badgesEnabled,
         'badgeNumber': _getNextBadgeNumber(),
         'threadIdentifier': id,
         'categoryIdentifier': 'mcp_category',
-        'additionalData': additionalData,
+        'data': data,
+        'actions': actions?.map((a) => a.toMap()).toList(),
+        'image': image,
       });
 
       // Add to active notifications
@@ -136,7 +155,8 @@ class IOSNotificationManager implements NotificationManager {
       _logger.fine('iOS notification shown successfully: $id');
     } catch (e, stackTrace) {
       _logger.severe('Failed to show iOS notification', e, stackTrace);
-      throw MCPException('Failed to show iOS notification: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to show iOS notification: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -157,7 +177,8 @@ class IOSNotificationManager implements NotificationManager {
       _logger.fine('iOS notification hidden successfully: $id');
     } catch (e, stackTrace) {
       _logger.severe('Failed to hide iOS notification', e, stackTrace);
-      throw MCPException('Failed to hide iOS notification: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to hide iOS notification: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -176,12 +197,16 @@ class IOSNotificationManager implements NotificationManager {
       _logger.fine('All iOS notifications cleared successfully');
     } catch (e, stackTrace) {
       _logger.severe('Failed to clear all iOS notifications', e, stackTrace);
-      throw MCPException('Failed to clear all iOS notifications: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to clear all iOS notifications: ${e.toString()}',
+          e,
+          stackTrace);
     }
   }
 
   /// Register a notification click handler
-  void registerClickHandler(String id, Function(String, Map<String, dynamic>?) handler) {
+  void registerClickHandler(
+      String id, Function(String, Map<String, dynamic>?) handler) {
     _clickHandlers[id] = handler;
   }
 
@@ -210,15 +235,16 @@ class IOSNotificationManager implements NotificationManager {
     // If we're at the limit, remove the oldest notification
     if (_activeNotifications.length >= _maxConcurrentNotifications) {
       final oldestId = _activeNotifications.removeFirst();
-      
+
       // Cancel the oldest notification
       _channel.invokeMethod('cancelNotification', {
         'id': oldestId,
       });
-      
+
       _notificationData.remove(oldestId);
 
-      _logger.fine('Removed oldest notification to stay within limit: $oldestId');
+      _logger
+          .fine('Removed oldest notification to stay within limit: $oldestId');
     }
   }
 
@@ -245,10 +271,72 @@ class IOSNotificationManager implements NotificationManager {
   /// Check if a notification is active
   bool isNotificationActive(String id) => _activeNotifications.contains(id);
 
-  void dispose() {
+  @override
+  Future<void> dispose() async {
     _eventSubscription?.cancel();
     _clickHandlers.clear();
     _notificationData.clear();
     _activeNotifications.clear();
+  }
+
+  @override
+  Future<bool> requestPermission() async {
+    try {
+      final result =
+          await _channel.invokeMethod<bool>('requestNotificationPermission');
+      return result ?? false;
+    } catch (e) {
+      _logger.severe('Failed to request permission', e);
+      return false;
+    }
+  }
+
+  @override
+  Future<void> cancelNotification(String id) async {
+    await hideNotification(id);
+  }
+
+  @override
+  Future<void> cancelAllNotifications() async {
+    await clearAllNotifications();
+  }
+
+  @override
+  Future<void> updateNotification({
+    required String id,
+    String? title,
+    String? body,
+    int? progress,
+    Map<String, dynamic>? data,
+  }) async {
+    if (!_activeNotifications.contains(id)) {
+      return;
+    }
+
+    try {
+      await _channel.invokeMethod('updateNotification', {
+        'id': id,
+        'title': title,
+        'body': body,
+        'progress': progress,
+        'data': data,
+      });
+    } catch (e) {
+      _logger.severe('Failed to update notification', e);
+    }
+  }
+
+  @override
+  List<NotificationInfo> getActiveNotifications() {
+    return _activeNotifications.map((id) {
+      final data = _notificationData[id] ?? {};
+      return NotificationInfo(
+        id: id,
+        title: data['title'] ?? '',
+        body: data['body'] ?? '',
+        shownAt: DateTime.now(), // We should track this properly
+        data: data,
+      );
+    }).toList();
   }
 }

@@ -6,7 +6,7 @@ import 'logger.dart';
 /// Platform utility class with enhanced error handling and diagnostics
 class PlatformUtils {
   static final Logger _logger = Logger('flutter_mcp.platform_utils');
-  
+
   /// Current platform name for diagnostic purposes
   static String get platformName {
     if (kIsWeb) return 'Web';
@@ -23,7 +23,7 @@ class PlatformUtils {
       return 'Unknown';
     }
   }
-  
+
   /// Check if running on mobile platform
   static bool get isMobile {
     if (kIsWeb) return false;
@@ -39,7 +39,9 @@ class PlatformUtils {
   static bool get isDesktop {
     if (kIsWeb) return false;
     try {
-      return io.Platform.isWindows || io.Platform.isMacOS || io.Platform.isLinux;
+      return io.Platform.isWindows ||
+          io.Platform.isMacOS ||
+          io.Platform.isLinux;
     } catch (e) {
       _logger.warning('Failed to check desktop platform: $e');
       return false;
@@ -81,10 +83,10 @@ class PlatformUtils {
 
   /// Check if running on web platform
   static bool get isWeb => kIsWeb;
-  
+
   /// Check if running on native platform (not web)
   static bool get isNative => !kIsWeb;
-  
+
   /// Check if running on Android
   static bool get isAndroid {
     if (kIsWeb) return false;
@@ -95,7 +97,7 @@ class PlatformUtils {
       return false;
     }
   }
-  
+
   /// Check if running on iOS
   static bool get isIOS {
     if (kIsWeb) return false;
@@ -116,9 +118,10 @@ class PlatformUtils {
           io.Platform.isMacOS ||
           io.Platform.isWindows ||
           io.Platform.isLinux;
-      
+
       if (!supported) {
-        _logger.warning('Notifications not supported on platform: $platformName');
+        _logger
+            .warning('Notifications not supported on platform: $platformName');
       }
       return supported;
     } catch (e) {
@@ -133,10 +136,11 @@ class PlatformUtils {
       _logger.info('System tray not supported on Web');
       return false;
     }
-    
+
     try {
-      final supported = io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux;
-      
+      final supported =
+          io.Platform.isMacOS || io.Platform.isWindows || io.Platform.isLinux;
+
       if (!supported) {
         _logger.warning('System tray not supported on platform: $platformName');
       }
@@ -153,16 +157,17 @@ class PlatformUtils {
       _logger.info('Web supports limited background functionality');
       return true;
     }
-    
+
     try {
       final supported = io.Platform.isAndroid ||
           io.Platform.isIOS ||
           io.Platform.isMacOS ||
           io.Platform.isWindows ||
           io.Platform.isLinux;
-          
+
       if (!supported) {
-        _logger.warning('Background service not supported on platform: $platformName');
+        _logger.warning(
+            'Background service not supported on platform: $platformName');
       }
       return supported;
     } catch (e) {
@@ -170,7 +175,7 @@ class PlatformUtils {
       return false;
     }
   }
-  
+
   /// Checks if a feature is supported on the current platform
   static bool isFeatureSupported(String feature) {
     switch (feature.toLowerCase()) {
@@ -187,7 +192,7 @@ class PlatformUtils {
         return false;
     }
   }
-  
+
   /// Get a map of platform features and their support status
   static Map<String, bool> getFeatureSupport() {
     return {
@@ -213,7 +218,7 @@ class PlatformUtils {
         // If we can't get the version, assume it's supported for backward compatibility
         return true;
       }
-      
+
       return currentSdkVersion >= sdkVersion;
     } catch (e) {
       // If platform channel fails, fall back to operating system version parsing
@@ -233,7 +238,7 @@ class PlatformUtils {
         // If we can't get the version, assume it's supported for backward compatibility
         return true;
       }
-      
+
       return _compareVersions(currentVersion, version) >= 0;
     } catch (e) {
       // If platform channel fails, fall back to operating system version parsing
@@ -263,7 +268,8 @@ class PlatformUtils {
       if (!kIsWeb && io.Platform.isIOS) {
         // Try to get from system version
         final versionString = io.Platform.operatingSystemVersion;
-        final versionMatch = RegExp(r'Version (\d+\.\d+(?:\.\d+)?)').firstMatch(versionString);
+        final versionMatch =
+            RegExp(r'Version (\d+\.\d+(?:\.\d+)?)').firstMatch(versionString);
         if (versionMatch != null) {
           return versionMatch.group(1);
         }
@@ -317,7 +323,8 @@ class PlatformUtils {
     try {
       final osVersion = io.Platform.operatingSystemVersion;
       // Try to extract version from OS version string
-      final versionMatch = RegExp(r'(\d+\.\d+(?:\.\d+)?)').firstMatch(osVersion);
+      final versionMatch =
+          RegExp(r'(\d+\.\d+(?:\.\d+)?)').firstMatch(osVersion);
       if (versionMatch != null) {
         final currentVersion = versionMatch.group(1) ?? '';
         return _compareVersions(currentVersion, targetVersion) >= 0;
@@ -333,17 +340,28 @@ class PlatformUtils {
   static int _androidVersionToSdkLevel(int androidVersion) {
     // Rough mapping of Android versions to SDK levels
     switch (androidVersion) {
-      case 4: return 14; // Android 4.0
-      case 5: return 21; // Android 5.0
-      case 6: return 23; // Android 6.0
-      case 7: return 24; // Android 7.0
-      case 8: return 26; // Android 8.0
-      case 9: return 28; // Android 9.0
-      case 10: return 29; // Android 10
-      case 11: return 30; // Android 11
-      case 12: return 31; // Android 12
-      case 13: return 33; // Android 13
-      case 14: return 34; // Android 14
+      case 4:
+        return 14; // Android 4.0
+      case 5:
+        return 21; // Android 5.0
+      case 6:
+        return 23; // Android 6.0
+      case 7:
+        return 24; // Android 7.0
+      case 8:
+        return 26; // Android 8.0
+      case 9:
+        return 28; // Android 9.0
+      case 10:
+        return 29; // Android 10
+      case 11:
+        return 30; // Android 11
+      case 12:
+        return 31; // Android 12
+      case 13:
+        return 33; // Android 13
+      case 14:
+        return 34; // Android 14
       default:
         // For unknown versions, assume latest known + offset
         return androidVersion > 14 ? 34 + (androidVersion - 14) : 14;
@@ -354,18 +372,18 @@ class PlatformUtils {
   static int _compareVersions(String version1, String version2) {
     final v1Parts = version1.split('.').map(int.tryParse).toList();
     final v2Parts = version2.split('.').map(int.tryParse).toList();
-    
+
     // Normalize lengths
     final maxLength = math.max(v1Parts.length, v2Parts.length);
-    
+
     for (int i = 0; i < maxLength; i++) {
       final v1Part = i < v1Parts.length ? (v1Parts[i] ?? 0) : 0;
       final v2Part = i < v2Parts.length ? (v2Parts[i] ?? 0) : 0;
-      
+
       if (v1Part > v2Part) return 1;
       if (v1Part < v2Part) return -1;
     }
-    
+
     return 0; // Equal
   }
 
@@ -378,10 +396,11 @@ class PlatformUtils {
 
     if (!kIsWeb) {
       info['operatingSystemVersion'] = io.Platform.operatingSystemVersion;
-      
+
       if (io.Platform.isAndroid) {
         info['androidSdkVersion'] = await _getAndroidSdkVersion();
-        info['androidVersion'] = await _getSystemProperty('ro.build.version.release');
+        info['androidVersion'] =
+            await _getSystemProperty('ro.build.version.release');
       } else if (io.Platform.isIOS) {
         info['iosVersion'] = await _getIOSVersion();
       }

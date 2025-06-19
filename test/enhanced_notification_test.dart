@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/notifications/enhanced_notification_manager.dart';
 import 'package:flutter_mcp/src/platform/notification/notification_manager.dart';
+import 'package:flutter_mcp/src/platform/notification/notification_models.dart'
+    as platform;
 import 'package:flutter_mcp/src/events/enhanced_typed_event_system.dart';
 import 'package:flutter_mcp/src/events/event_models.dart';
 
@@ -20,18 +22,68 @@ class MockNotificationManager implements NotificationManager {
     required String body,
     String? icon,
     String id = 'mcp_notification',
+    Map<String, dynamic>? data,
+    List<platform.NotificationAction>? actions,
+    String? channelId,
+    platform.NotificationPriority priority =
+        platform.NotificationPriority.normal,
+    bool showProgress = false,
+    int? progress,
+    int? maxProgress,
+    String? group,
+    String? image,
+    bool ongoing = false,
   }) async {
     shownNotifications.add({
       'title': title,
       'body': body,
       'icon': icon,
       'id': id,
+      'data': data,
+      'priority': priority,
     });
   }
 
   @override
   Future<void> hideNotification(String id) async {
     hiddenNotifications.add(id);
+  }
+
+  @override
+  Future<bool> requestPermission() async {
+    return true;
+  }
+
+  @override
+  Future<void> cancelNotification(String id) async {
+    return hideNotification(id);
+  }
+
+  @override
+  Future<void> cancelAllNotifications() async {
+    shownNotifications.clear();
+  }
+
+  @override
+  Future<void> updateNotification({
+    required String id,
+    String? title,
+    String? body,
+    int? progress,
+    Map<String, dynamic>? data,
+  }) async {
+    // Mock implementation
+  }
+
+  @override
+  List<platform.NotificationInfo> getActiveNotifications() {
+    return [];
+  }
+
+  @override
+  Future<void> dispose() async {
+    shownNotifications.clear();
+    hiddenNotifications.clear();
   }
 }
 
@@ -69,7 +121,8 @@ void main() {
       await manager.showNotification(config);
 
       expect(mockManager.shownNotifications.length, equals(1));
-      expect(mockManager.shownNotifications.first['title'], equals('Test Title'));
+      expect(
+          mockManager.shownNotifications.first['title'], equals('Test Title'));
       expect(mockManager.shownNotifications.first['body'], equals('Test Body'));
       expect(mockManager.shownNotifications.first['id'], equals('test_1'));
     });
@@ -78,7 +131,8 @@ void main() {
       final config = EnhancedNotificationConfig(
         id: 'test_2',
         title: 'Big Text',
-        body: 'This is a very long text that should be expanded in the notification',
+        body:
+            'This is a very long text that should be expanded in the notification',
         style: NotificationStyle.bigText,
       );
 
@@ -118,7 +172,8 @@ void main() {
       await manager.showNotification(config);
 
       expect(mockManager.shownNotifications.length, equals(1));
-      expect(mockManager.shownNotifications.first['body'], equals('How are you?'));
+      expect(
+          mockManager.shownNotifications.first['body'], equals('How are you?'));
     });
 
     test('Should show progress notification', () async {
@@ -280,7 +335,8 @@ void main() {
       // Simulate notification click
       manager.simulateNotificationClick('event_test', {'action': 'click'});
 
-      await Future.delayed(Duration(milliseconds: 10)); // Allow event to propagate
+      await Future.delayed(
+          Duration(milliseconds: 10)); // Allow event to propagate
 
       expect(publishedEvent, isNotNull);
       expect(publishedEvent?.taskType, equals('notification_interaction'));
@@ -301,8 +357,8 @@ void main() {
         groupManager.addToGroup('group1', 'notification2');
 
         expect(groupManager.getGroupCount('group1'), equals(2));
-        expect(groupManager.getGroupNotifications('group1'), 
-               containsAll(['notification1', 'notification2']));
+        expect(groupManager.getGroupNotifications('group1'),
+            containsAll(['notification1', 'notification2']));
       });
 
       test('Should determine when to show group summary', () {
@@ -320,8 +376,8 @@ void main() {
         groupManager.removeFromGroup('group1', 'notification1');
 
         expect(groupManager.getGroupCount('group1'), equals(1));
-        expect(groupManager.getGroupNotifications('group1'), 
-               equals(['notification2']));
+        expect(groupManager.getGroupNotifications('group1'),
+            equals(['notification2']));
       });
 
       test('Should clear groups when count reaches zero', () {

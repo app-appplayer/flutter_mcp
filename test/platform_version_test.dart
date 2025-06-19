@@ -20,7 +20,7 @@ void main() {
 
     test('getPlatformVersionInfo returns basic info', () async {
       final info = await PlatformUtils.getPlatformVersionInfo();
-      
+
       expect(info, isA<Map<String, dynamic>>());
       expect(info.containsKey('platform'), isTrue);
       expect(info.containsKey('isWeb'), isTrue);
@@ -74,8 +74,10 @@ void main() {
     test('Handles system property errors gracefully', () async {
       // Test should not throw even if system property access fails
       if (!kIsWeb) {
-        expect(() async => await PlatformUtils.isAndroidAtLeast(30), returnsNormally);
-        expect(() async => await PlatformUtils.isIOSAtLeast('15.0'), returnsNormally);
+        expect(() async => await PlatformUtils.isAndroidAtLeast(30),
+            returnsNormally);
+        expect(() async => await PlatformUtils.isIOSAtLeast('15.0'),
+            returnsNormally);
       }
     });
 

@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
-import 'package:flutter_mcp/src/platform/tray/macos_tray.dart' hide TrayEventListener;
+import 'package:flutter_mcp/src/platform/tray/macos_tray.dart'
+    hide TrayEventListener;
 import 'package:flutter_mcp/src/platform/tray/windows_tray.dart';
-import 'package:flutter_mcp/src/platform/tray/linux_tray.dart' hide TrayEventListener;
+import 'package:flutter_mcp/src/platform/tray/linux_tray.dart'
+    hide TrayEventListener;
 import 'dart:async';
 
 void main() {
@@ -13,17 +15,18 @@ void main() {
     late MethodChannel methodChannel;
     final List<MethodCall> methodCalls = [];
     late StreamController<Map<String, dynamic>> eventController;
-    
+
     setUp(() {
       methodChannel = const MethodChannel('flutter_mcp');
       methodCalls.clear();
       eventController = StreamController<Map<String, dynamic>>.broadcast();
-      
+
       // Set up method channel mock handler
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(methodChannel, (MethodCall methodCall) async {
+          .setMockMethodCallHandler(methodChannel,
+              (MethodCall methodCall) async {
         methodCalls.add(methodCall);
-        
+
         switch (methodCall.method) {
           case 'showTrayIcon':
             return null;
@@ -39,7 +42,7 @@ void main() {
             return null;
         }
       });
-      
+
       // Mock event channel
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockStreamHandler(
@@ -51,7 +54,7 @@ void main() {
         ),
       );
     });
-    
+
     tearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(methodChannel, null);
@@ -63,7 +66,7 @@ void main() {
     group('macOS System Tray', () {
       test('Should initialize NSStatusItem with correct properties', () async {
         final trayManager = MacOSTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: '/Applications/MyApp.app/Contents/Resources/tray_icon.png',
           tooltip: 'My macOS App',
@@ -76,19 +79,22 @@ void main() {
             TrayMenuItem(label: 'Quit', onTap: () {}),
           ],
         ));
-        
+
         // Verify icon was set
-        expect(methodCalls.any((call) => 
-          call.method == 'showTrayIcon' &&
-          call.arguments['iconPath'] == '/Applications/MyApp.app/Contents/Resources/tray_icon.png'
-        ), isTrue);
-        
+        expect(
+            methodCalls.any((call) =>
+                call.method == 'showTrayIcon' &&
+                call.arguments['iconPath'] ==
+                    '/Applications/MyApp.app/Contents/Resources/tray_icon.png'),
+            isTrue);
+
         // Verify tooltip
-        expect(methodCalls.any((call) => 
-          call.method == 'updateTrayTooltip' &&
-          call.arguments['tooltip'] == 'My macOS App'
-        ), isTrue);
-        
+        expect(
+            methodCalls.any((call) =>
+                call.method == 'updateTrayTooltip' &&
+                call.arguments['tooltip'] == 'My macOS App'),
+            isTrue);
+
         // Verify menu structure
         final menuCall = methodCalls.firstWhere(
           (call) => call.method == 'setTrayMenu',
@@ -98,12 +104,12 @@ void main() {
         expect(items[2]['isSeparator'], isTrue);
         expect(items[4]['isSeparator'], isTrue);
       });
-      
+
       test('Should handle menu item clicks', () async {
         final trayManager = MacOSTrayManager();
         var showWindowCalled = false;
         var preferencesCalled = false;
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: '/path/to/icon.png',
           menuItems: [
@@ -117,7 +123,7 @@ void main() {
             ),
           ],
         ));
-        
+
         // Simulate menu item click event
         eventController.add({
           'type': 'trayEvent',
@@ -126,10 +132,10 @@ void main() {
             'itemId': 'item_0', // First menu item
           },
         });
-        
+
         await Future.delayed(Duration(milliseconds: 100));
         expect(showWindowCalled, isTrue);
-        
+
         // Click second item
         eventController.add({
           'type': 'trayEvent',
@@ -138,29 +144,29 @@ void main() {
             'itemId': 'item_1', // Second menu item
           },
         });
-        
+
         await Future.delayed(Duration(milliseconds: 100));
         expect(preferencesCalled, isTrue);
       });
-      
+
       test('Should support dynamic menu updates', () async {
         final trayManager = MacOSTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: '/path/to/icon.png',
           menuItems: [
             TrayMenuItem(label: 'Item 1'),
           ],
         ));
-        
+
         methodCalls.clear();
-        
+
         // Update menu
         await trayManager.setContextMenu([
           TrayMenuItem(label: 'Updated Item 1'),
           TrayMenuItem(label: 'New Item 2'),
         ]);
-        
+
         final menuCall = methodCalls.firstWhere(
           (call) => call.method == 'setTrayMenu',
         );
@@ -174,7 +180,7 @@ void main() {
     group('Windows System Tray', () {
       test('Should create Windows tray icon with balloon support', () async {
         final trayManager = WindowsTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: 'assets/icons/tray_icon.ico',
           tooltip: 'My Windows App - Click for menu',
@@ -185,36 +191,40 @@ void main() {
             TrayMenuItem(label: 'Exit'),
           ],
         ));
-        
+
         // Windows uses ICO format
-        expect(methodCalls.any((call) => 
-          call.method == 'showTrayIcon' &&
-          call.arguments['iconPath'] == 'assets/icons/tray_icon.ico'
-        ), isTrue);
-        
+        expect(
+            methodCalls.any((call) =>
+                call.method == 'showTrayIcon' &&
+                call.arguments['iconPath'] == 'assets/icons/tray_icon.ico'),
+            isTrue);
+
         // Longer tooltips are common on Windows
-        expect(methodCalls.any((call) => 
-          call.method == 'updateTrayTooltip' &&
-          call.arguments['tooltip'].toString().contains('Click for menu')
-        ), isTrue);
+        expect(
+            methodCalls.any((call) =>
+                call.method == 'updateTrayTooltip' &&
+                call.arguments['tooltip']
+                    .toString()
+                    .contains('Click for menu')),
+            isTrue);
       });
-      
+
       test('Should handle left and right click events', () async {
         final trayManager = WindowsTrayManager();
         var leftClickCount = 0;
         var rightClickCount = 0;
-        
+
         final listener = TrayEventListener(
           onTrayMouseDown: () => leftClickCount++,
           onTrayRightMouseDown: () => rightClickCount++,
         );
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: 'icon.ico',
         ));
-        
+
         trayManager.addEventListener(listener);
-        
+
         // Simulate left click
         eventController.add({
           'type': 'trayEvent',
@@ -222,10 +232,10 @@ void main() {
             'action': 'trayIconClicked',
           },
         });
-        
+
         await Future.delayed(Duration(milliseconds: 50));
         expect(leftClickCount, equals(1));
-        
+
         // Simulate right click
         eventController.add({
           'type': 'trayEvent',
@@ -233,13 +243,13 @@ void main() {
             'action': 'trayIconRightClicked',
           },
         });
-        
+
         await Future.delayed(Duration(milliseconds: 50));
         expect(rightClickCount, equals(1));
-        
+
         // Remove listener
         trayManager.removeEventListener(listener);
-        
+
         // Click again - should not increment
         eventController.add({
           'type': 'trayEvent',
@@ -247,36 +257,38 @@ void main() {
             'action': 'trayIconClicked',
           },
         });
-        
+
         await Future.delayed(Duration(milliseconds: 50));
         expect(leftClickCount, equals(1)); // Still 1
       });
-      
+
       test('Should support show/hide operations', () async {
         final trayManager = WindowsTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: 'icon.ico',
         ));
-        
+
         methodCalls.clear();
-        
+
         // Hide
         await trayManager.hide();
-        expect(methodCalls.any((call) => call.method == 'hideTrayIcon'), isTrue);
-        
+        expect(
+            methodCalls.any((call) => call.method == 'hideTrayIcon'), isTrue);
+
         methodCalls.clear();
-        
+
         // Show
         await trayManager.show();
-        expect(methodCalls.any((call) => call.method == 'showTrayIcon'), isTrue);
+        expect(
+            methodCalls.any((call) => call.method == 'showTrayIcon'), isTrue);
       });
     });
 
     group('Linux System Tray', () {
       test('Should use AppIndicator on Linux', () async {
         final trayManager = LinuxTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: '/usr/share/icons/hicolor/48x48/apps/myapp.png',
           tooltip: 'My Linux App',
@@ -287,32 +299,35 @@ void main() {
             TrayMenuItem(label: 'Quit'),
           ],
         ));
-        
+
         // Linux typically uses full paths for icons
-        expect(methodCalls.any((call) => 
-          call.method == 'showTrayIcon' &&
-          call.arguments['iconPath'].toString().contains('/usr/share/icons')
-        ), isTrue);
+        expect(
+            methodCalls.any((call) =>
+                call.method == 'showTrayIcon' &&
+                call.arguments['iconPath']
+                    .toString()
+                    .contains('/usr/share/icons')),
+            isTrue);
       });
-      
+
       test('Should handle Unity/GNOME specific features', () async {
         final trayManager = LinuxTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
-          iconPath: 'myapp-tray',  // Icon name from theme
+          iconPath: 'myapp-tray', // Icon name from theme
           tooltip: 'Application Status',
           menuItems: [
             TrayMenuItem(label: 'Status: Connected'),
             TrayMenuItem(label: 'Toggle', disabled: false),
           ],
         ));
-        
+
         // Verify menu items
         final menuCall = methodCalls.firstWhere(
           (call) => call.method == 'setTrayMenu',
         );
         final items = menuCall.arguments['items'] as List;
-        
+
         expect(items[0]['label'], equals('Status: Connected'));
         expect(items[1]['disabled'], isFalse);
       });
@@ -325,24 +340,25 @@ void main() {
           WindowsTrayManager(),
           LinuxTrayManager(),
         ];
-        
+
         for (final manager in managers) {
           methodCalls.clear();
-          
+
           await manager.initialize(TrayConfig(
             iconPath: 'test_icon',
           ));
-          
+
           await manager.dispose();
-          
+
           // Should hide icon and clean up
-          expect(methodCalls.any((call) => call.method == 'hideTrayIcon'), isTrue);
+          expect(
+              methodCalls.any((call) => call.method == 'hideTrayIcon'), isTrue);
         }
       });
-      
+
       test('Should handle disabled menu items', () async {
         final trayManager = MacOSTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: 'icon',
           menuItems: [
@@ -350,40 +366,41 @@ void main() {
             TrayMenuItem(label: 'Disabled Item', disabled: true),
           ],
         ));
-        
+
         final menuCall = methodCalls.firstWhere(
           (call) => call.method == 'setTrayMenu',
         );
         final items = menuCall.arguments['items'] as List;
-        
+
         expect(items[0]['disabled'], isFalse);
         expect(items[1]['disabled'], isTrue);
       });
-      
+
       test('Should update menu item properties', () async {
         final trayManager = WindowsTrayManager();
-        
+
         await trayManager.initialize(TrayConfig(
           iconPath: 'icon',
           menuItems: [
             TrayMenuItem(label: 'Dynamic Item', disabled: false),
           ],
         ));
-        
+
         methodCalls.clear();
-        
+
         // Update menu item
-        await trayManager.updateMenuItem('item_0', 
+        await trayManager.updateMenuItem(
+          'item_0',
           label: 'Updated Label',
           disabled: true,
         );
-        
+
         // Should rebuild menu with updated item
         final menuCall = methodCalls.firstWhere(
           (call) => call.method == 'setTrayMenu',
         );
         final items = menuCall.arguments['items'] as List;
-        
+
         expect(items[0]['label'], equals('Updated Label'));
         expect(items[0]['disabled'], isTrue);
       });
@@ -392,7 +409,7 @@ void main() {
     group('Tray Error Handling', () {
       test('Should handle missing icon gracefully', () async {
         final trayManager = MacOSTrayManager();
-        
+
         // Should not throw even with invalid path
         await expectLater(
           trayManager.initialize(TrayConfig(
@@ -401,10 +418,11 @@ void main() {
           completes,
         );
       });
-      
+
       test('Should handle platform exceptions', () async {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(methodChannel, (MethodCall methodCall) async {
+            .setMockMethodCallHandler(methodChannel,
+                (MethodCall methodCall) async {
           if (methodCall.method == 'showTrayIcon') {
             throw PlatformException(
               code: 'TRAY_ERROR',
@@ -413,9 +431,9 @@ void main() {
           }
           return null;
         });
-        
+
         final trayManager = WindowsTrayManager();
-        
+
         expect(
           () => trayManager.initialize(TrayConfig(iconPath: 'icon.ico')),
           throwsA(isA<MCPException>()),

@@ -5,7 +5,7 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import '../utils/logger.dart';
 import '../utils/performance_monitor.dart';
-import '../utils/event_system.dart';
+import '../events/event_system.dart';
 import '../config/app_config.dart';
 import '../events/event_models.dart';
 import 'web_memory_monitor.dart';
@@ -64,7 +64,8 @@ class MemoryManager {
   void startMemoryMonitoring() {
     if (_isMonitoring) return;
 
-    _logger.fine('Starting memory monitoring with interval: ${_monitoringInterval.inSeconds}s');
+    _logger.fine(
+        'Starting memory monitoring with interval: ${_monitoringInterval.inSeconds}s');
 
     _monitoringTimer = Timer.periodic(_monitoringInterval, (_) {
       _checkMemoryUsage();
@@ -123,12 +124,14 @@ class MemoryManager {
       capacity: _highMemoryThresholdMB?.toDouble(),
     );
 
-    _logger.fine('Current memory usage: ${memoryUsageMB}MB (Peak: ${_peakMemoryUsageMB}MB)');
+    _logger.fine(
+        'Current memory usage: ${memoryUsageMB}MB (Peak: ${_peakMemoryUsageMB}MB)');
 
     // Check threshold
     if (_highMemoryThresholdMB != null &&
         memoryUsageMB > _highMemoryThresholdMB!) {
-      _logger.warning('High memory usage detected: ${memoryUsageMB}MB exceeds threshold of ${_highMemoryThresholdMB}MB');
+      _logger.warning(
+          'High memory usage detected: ${memoryUsageMB}MB exceeds threshold of ${_highMemoryThresholdMB}MB');
 
       // Publish memory warning event (both typed and legacy)
       final memoryEvent = MemoryEvent(
@@ -136,12 +139,12 @@ class MemoryManager {
         thresholdMB: _highMemoryThresholdMB!,
         peakMB: _peakMemoryUsageMB,
       );
-      
-      // New type-safe event
+
+      // Publish typed event
       EventSystem.instance.publishTyped<MemoryEvent>(memoryEvent);
-      
-      // Legacy event for backward compatibility
-      EventSystem.instance.publish('memory.high', {
+
+      // Also publish topic-based event for backward compatibility
+      EventSystem.instance.publishTopic('memory.high', {
         'currentMB': memoryUsageMB,
         'thresholdMB': _highMemoryThresholdMB,
         'peakMB': _peakMemoryUsageMB,
@@ -170,18 +173,21 @@ class MemoryManager {
         return await _getWebMemoryUsage();
       } else if (io.Platform.isAndroid || io.Platform.isIOS) {
         return await _getMobileMemoryUsage();
-      } else if (io.Platform.isWindows || io.Platform.isMacOS || io.Platform.isLinux) {
+      } else if (io.Platform.isWindows ||
+          io.Platform.isMacOS ||
+          io.Platform.isLinux) {
         return await _getDesktopMemoryUsage();
       }
-      
+
       // Fallback to simulation if platform-specific implementation fails
       return _simulateMemoryUsage();
     } catch (e) {
-      _logger.warning('Failed to get actual memory usage, using simulation: $e');
+      _logger
+          .warning('Failed to get actual memory usage, using simulation: $e');
       return _simulateMemoryUsage();
     }
   }
-  
+
   /// Get memory usage on web platform
   Future<int> _getWebMemoryUsage() async {
     // Use the dedicated web memory monitor
@@ -192,7 +198,7 @@ class MemoryManager {
       return _simulateMemoryUsage();
     }
   }
-  
+
   /// Get memory usage on mobile platforms
   Future<int> _getMobileMemoryUsage() async {
     // On mobile, we can use ProcessInfo to get RSS (Resident Set Size)
@@ -203,7 +209,7 @@ class MemoryManager {
     }
     return _simulateMemoryUsage();
   }
-  
+
   /// Get memory usage on desktop platforms
   Future<int> _getDesktopMemoryUsage() async {
     // On desktop, we can also use ProcessInfo
@@ -214,7 +220,7 @@ class MemoryManager {
     }
     return _simulateMemoryUsage();
   }
-  
+
   /// Simulate memory usage as fallback
   int _simulateMemoryUsage() {
     final memoryConfig = AppConfig.instance.getMemoryConfig();
@@ -227,7 +233,8 @@ class MemoryManager {
 
     if (shouldGC) {
       // Simulate GC reducing memory
-      return math.max(memoryConfig.initialSimulationMB, lastReading - math.Random().nextInt(50));
+      return math.max(memoryConfig.initialSimulationMB,
+          lastReading - math.Random().nextInt(50));
     } else {
       // Simulate memory growth
       return lastReading + math.Random().nextInt(20);
@@ -247,7 +254,8 @@ class MemoryManager {
       // by running operations known to stress the memory system
 
       final memoryConfig = AppConfig.instance.getMemoryConfig();
-      final largeList = List<int>.filled(memoryConfig.gcHintArraySize, 0); // Create some garbage
+      final largeList = List<int>.filled(
+          memoryConfig.gcHintArraySize, 0); // Create some garbage
       for (int i = 0; i < largeList.length; i++) {
         largeList[i] = i; // Touch all elements
       }
@@ -390,7 +398,7 @@ class MemoryAwareCache<K, V> {
   MemoryAwareCache({
     int maxSize = 100,
     Duration? entryTTL,
-  }) : _maxSize = maxSize,
+  })  : _maxSize = maxSize,
         _entryTTL = entryTTL {
     // Register for high memory notifications
     _memoryManager.addHighMemoryCallback(_onHighMemory);
@@ -399,11 +407,8 @@ class MemoryAwareCache<K, V> {
   /// Put an item in the cache
   void put(K key, V value) {
     final now = DateTime.now();
-    _cache[key] = _CacheEntry(
-        value: value,
-        insertedAt: now,
-        lastAccessedAt: now
-    );
+    _cache[key] =
+        _CacheEntry(value: value, insertedAt: now, lastAccessedAt: now);
 
     // Check if we need to evict entries
     _checkEviction();
@@ -490,19 +495,22 @@ class MemoryAwareCache<K, V> {
 
     // Remove older half of the cache
     final keysToKeep = _cache.entries
-        .sorted((a, b) => b.value.lastAccessedAt.compareTo(a.value.lastAccessedAt)) // Sort by most recent first
+        .sorted((a, b) => b.value.lastAccessedAt
+            .compareTo(a.value.lastAccessedAt)) // Sort by most recent first
         .take((currentSize / 2).ceil()) // Keep the newer half
         .map((e) => e.key)
         .toSet();
 
     // Remove keys not in the keysToKeep set
-    final keysToRemove = _cache.keys.where((key) => !keysToKeep.contains(key)).toList();
+    final keysToRemove =
+        _cache.keys.where((key) => !keysToKeep.contains(key)).toList();
 
     for (final key in keysToRemove) {
       _cache.remove(key);
     }
 
-    Logger('flutter_mcp.memory_cache').info('Cache reduced from $currentSize to ${_cache.length} items due to high memory');
+    Logger('flutter_mcp.memory_cache').info(
+        'Cache reduced from $currentSize to ${_cache.length} items due to high memory');
   }
 
   /// Current cache size
@@ -530,7 +538,8 @@ class _CacheEntry<V> {
 
 /// Extension for sorted entries
 extension SortedEntries<K, V> on Iterable<MapEntry<K, V>> {
-  List<MapEntry<K, V>> sorted(int Function(MapEntry<K, V>, MapEntry<K, V>) compare) {
+  List<MapEntry<K, V>> sorted(
+      int Function(MapEntry<K, V>, MapEntry<K, V>) compare) {
     final list = toList();
     list.sort(compare);
     return list;

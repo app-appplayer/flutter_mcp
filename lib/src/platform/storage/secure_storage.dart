@@ -30,7 +30,7 @@ abstract class SecureStorageManager {
 
   /// Clear all storage
   Future<void> clear();
-  
+
   /// Get all keys
   Future<Set<String>> getAllKeys();
 }
@@ -80,7 +80,8 @@ class SecureStorageManagerImpl implements SecureStorageManager {
       initialDelay: Duration(milliseconds: 100),
       operationName: 'save_string',
       onRetry: (attempt, error) {
-        _logger.warning('Failed to save string (attempt $attempt), retrying: $error');
+        _logger.warning(
+            'Failed to save string (attempt $attempt), retrying: $error');
       },
     );
   }
@@ -107,7 +108,8 @@ class SecureStorageManagerImpl implements SecureStorageManager {
       initialDelay: Duration(milliseconds: 100),
       operationName: 'read_string',
       onRetry: (attempt, error) {
-        _logger.warning('Failed to read string (attempt $attempt), retrying: $error');
+        _logger.warning(
+            'Failed to read string (attempt $attempt), retrying: $error');
       },
     );
   }
@@ -184,7 +186,8 @@ class SecureStorageManagerImpl implements SecureStorageManager {
     await _ensureInitialized();
     try {
       _logger.finest('Getting all keys from secure storage');
-      final result = await _channel.invokeMethod<List<dynamic>>('secureGetAllKeys');
+      final result =
+          await _channel.invokeMethod<List<dynamic>>('secureGetAllKeys');
       if (result == null) return {};
       return result.cast<String>().toSet();
     } catch (e, stackTrace) {

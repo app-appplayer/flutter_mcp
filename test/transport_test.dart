@@ -8,7 +8,7 @@ void main() {
 
   setUp(() async {
     FlutterMcpLogging.configure(level: Level.FINE, enableDebugLogging: true);
-    
+
     // Set up method channel mock handler for platform interface
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -34,9 +34,9 @@ void main() {
         }
       },
     );
-    
+
     mcp = FlutterMCP.instance;
-    
+
     // Only initialize if not already initialized
     if (!mcp.isInitialized) {
       await mcp.init(MCPConfig(
@@ -57,7 +57,7 @@ void main() {
     } catch (_) {
       // Ignore shutdown errors
     }
-    
+
     // Clear method channel mock after all tests
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -73,7 +73,7 @@ void main() {
         version: '1.0.0',
         useStdioTransport: true,
       );
-      
+
       expect(serverId, isNotNull);
       expect(serverId, isNotEmpty);
     });
@@ -86,7 +86,7 @@ void main() {
         useStdioTransport: false,
         ssePort: 0, // Let system choose available port
       );
-      
+
       expect(serverId, isNotNull);
       expect(serverId, isNotEmpty);
     });
@@ -97,7 +97,7 @@ void main() {
         version: '1.0.0',
         transportCommand: 'echo',
       );
-      
+
       expect(clientId, isNotNull);
       expect(clientId, isNotEmpty);
     });
@@ -107,17 +107,19 @@ void main() {
       // In real environments, SSE client creation would fail when no server is running
       // but in test environment, the client is created successfully
       final randomPort = 9000 + (DateTime.now().millisecondsSinceEpoch % 1000);
-      
+
       // Client creation succeeds even without server in test environment
       final clientId = await mcp.createClient(
         name: 'Test SSE Client',
         version: '1.0.0',
         serverUrl: 'http://localhost:$randomPort',
       );
-      
+
       expect(clientId, isNotNull);
       expect(clientId, isNotEmpty);
-    }, skip: 'SSE client creation does not fail immediately in test environment');
+    },
+        skip:
+            'SSE client creation does not fail immediately in test environment');
 
     test('Transport error handling', () async {
       // Test invalid command - this should throw an error
@@ -139,28 +141,28 @@ void main() {
         version: '1.0.0',
         useStdioTransport: true,
       );
-      
+
       final server2 = await mcp.createServer(
         name: 'Server 2',
         version: '1.0.0',
         useStdioTransport: true,
       );
-      
+
       expect(server1, isNot(equals(server2)));
-      
+
       // Create multiple clients
       final client1 = await mcp.createClient(
         name: 'Client 1',
         version: '1.0.0',
         transportCommand: 'echo',
       );
-      
+
       final client2 = await mcp.createClient(
         name: 'Client 2',
         version: '1.0.0',
         transportCommand: 'echo',
       );
-      
+
       expect(client1, isNot(equals(client2)));
     });
   });
@@ -178,7 +180,7 @@ void main() {
         ),
       );
       expect(stdioServer, isNotNull);
-      
+
       // Test SSE transport with dynamic port
       final sseServer = await mcp.createServer(
         name: 'SSE Server',
@@ -191,7 +193,7 @@ void main() {
         ),
       );
       expect(sseServer, isNotNull);
-      
+
       // Test streamablehttp transport with dynamic port
       final httpServer = await mcp.createServer(
         name: 'HTTP Server',
@@ -206,9 +208,10 @@ void main() {
       expect(httpServer, isNotNull);
     });
 
-    test('Client supports all three transport types', 
-      skip: 'Flaky due to TestWidgetsFlutterBinding HTTP mocking - passes when run individually',
-      () async {
+    test('Client supports all three transport types',
+        skip:
+            'Flaky due to TestWidgetsFlutterBinding HTTP mocking - passes when run individually',
+        () async {
       // Test stdio transport - should succeed
       String? stdioClientId;
       try {
@@ -228,11 +231,11 @@ void main() {
         // Even stdio can fail in test environment, that's acceptable
         print('Stdio client creation failed (acceptable in test): $e');
       }
-      
+
       // Test SSE transport - create with exception handling
       final ssePort = 9001 + (DateTime.now().millisecondsSinceEpoch % 1000);
       bool sseHandled = false;
-      
+
       // Wrap in expectLater to properly handle async errors
       await expectLater(
         () async {
@@ -255,18 +258,20 @@ void main() {
             // This is expected behavior when no server is available
             // The error might be wrapped in MCPException with the actual McpError as inner error
             final errorString = e.toString();
-            expect(errorString, anyOf([
-              contains('400'),
-              contains('MCPException'),
-              contains('MCPOperationFailedException'),
-              contains('Connection refused'),
-              contains('Failed to create'),
-              contains('Failed to connect to SSE endpoint'),
-              contains('Failed to establish SSE connection'),
-              contains('Unsupported operation'),
-              contains('Mocked response'),
-              contains('McpError'),
-            ]));
+            expect(
+                errorString,
+                anyOf([
+                  contains('400'),
+                  contains('MCPException'),
+                  contains('MCPOperationFailedException'),
+                  contains('Connection refused'),
+                  contains('Failed to create'),
+                  contains('Failed to connect to SSE endpoint'),
+                  contains('Failed to establish SSE connection'),
+                  contains('Unsupported operation'),
+                  contains('Mocked response'),
+                  contains('McpError'),
+                ]));
             sseHandled = true;
           }
         }(),
@@ -275,17 +280,17 @@ void main() {
           throwsA(anything), // Allow any error to be thrown
         ]),
       );
-      
+
       // If no exception was caught in the try-catch, mark as handled
       if (!sseHandled) {
         sseHandled = true;
       }
       expect(sseHandled, isTrue);
-      
+
       // Test streamablehttp transport - create with exception handling
       final httpPort = 9002 + (DateTime.now().millisecondsSinceEpoch % 1000);
       bool httpHandled = false;
-      
+
       // Wrap in expectLater to properly handle async errors
       await expectLater(
         () async {
@@ -308,18 +313,20 @@ void main() {
             // This is expected behavior when no server is available
             // The error might be wrapped in MCPException with the actual McpError as inner error
             final errorString = e.toString();
-            expect(errorString, anyOf([
-              contains('400'),
-              contains('MCPException'),
-              contains('MCPOperationFailedException'),
-              contains('Connection refused'),
-              contains('Failed to create'),
-              contains('Failed to connect to SSE endpoint'),
-              contains('Failed to establish SSE connection'),
-              contains('Unsupported operation'),
-              contains('Mocked response'),
-              contains('McpError'),
-            ]));
+            expect(
+                errorString,
+                anyOf([
+                  contains('400'),
+                  contains('MCPException'),
+                  contains('MCPOperationFailedException'),
+                  contains('Connection refused'),
+                  contains('Failed to create'),
+                  contains('Failed to connect to SSE endpoint'),
+                  contains('Failed to establish SSE connection'),
+                  contains('Unsupported operation'),
+                  contains('Mocked response'),
+                  contains('McpError'),
+                ]));
             httpHandled = true;
           } finally {
             // Ensure httpHandled is always true - both success and failure are acceptable
@@ -332,7 +339,7 @@ void main() {
         ]),
       );
       expect(httpHandled, isTrue);
-      
+
       // All three transport types have been tested
       // Success or expected failure for each is acceptable in test environment
     });
@@ -377,7 +384,7 @@ void main() {
         name: 'Success Server',
         version: '1.0.0',
       );
-      
+
       // ID should follow expected format
       expect(serverId, matches(RegExp(r'^server_[a-zA-Z0-9_]+$')));
     });
@@ -392,7 +399,7 @@ void main() {
             name: 'Failure Client',
             version: '1.0.0',
             transportType: 'stdio',
-            transportCommand: '',  // Empty command should fail
+            transportCommand: '', // Empty command should fail
           ),
         ),
         throwsA(isA<MCPOperationFailedException>()),

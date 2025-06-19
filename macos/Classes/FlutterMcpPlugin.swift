@@ -209,22 +209,41 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             return
         }
         
-        notificationManager.showNotification(
-            title: title,
-            body: body,
-            identifier: id
-        )
+        if #available(macOS 10.14, *) {
+            (notificationManager as! NotificationManager).showNotification(
+                title: title,
+                body: body,
+                identifier: id
+            )
+        } else {
+            (notificationManager as! LegacyNotificationManager).showNotification(
+                title: title,
+                body: body,
+                identifier: id
+            )
+        }
         result(nil)
     }
     
     private func requestNotificationPermission(result: @escaping FlutterResult) {
-        // macOS doesn't require explicit notification permission
-        result(true)
+        if #available(macOS 10.14, *) {
+            (notificationManager as! NotificationManager).requestPermission { granted in
+                result(granted)
+            }
+        } else {
+            (notificationManager as! LegacyNotificationManager).requestPermission { granted in
+                result(granted)
+            }
+        }
     }
     
     private func configureNotifications(call: FlutterMethodCall, result: @escaping FlutterResult) {
         if let config = call.arguments as? [String: Any] {
-            notificationManager.configure(config: config)
+            if #available(macOS 10.14, *) {
+                (notificationManager as! NotificationManager).configure(config: config)
+            } else {
+                (notificationManager as! LegacyNotificationManager).configure(config: config)
+            }
         }
         result(nil)
     }
@@ -236,12 +255,20 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             return
         }
         
-        notificationManager.cancelNotification(identifier: id)
+        if #available(macOS 10.14, *) {
+            (notificationManager as! NotificationManager).cancelNotification(identifier: id)
+        } else {
+            (notificationManager as! LegacyNotificationManager).cancelNotification(identifier: id)
+        }
         result(nil)
     }
     
     private func cancelAllNotifications(result: @escaping FlutterResult) {
-        notificationManager.cancelAllNotifications()
+        if #available(macOS 10.14, *) {
+            (notificationManager as! NotificationManager).cancelAllNotifications()
+        } else {
+            (notificationManager as! LegacyNotificationManager).cancelAllNotifications()
+        }
         result(nil)
     }
     

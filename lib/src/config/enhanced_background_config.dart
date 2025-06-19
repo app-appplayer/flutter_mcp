@@ -3,64 +3,49 @@ import 'background_job.dart';
 
 /// Enhanced background service configuration
 class EnhancedBackgroundConfig extends BackgroundConfig {
-  /// Enable foreground service (Android)
-  final bool enableForegroundService;
-  
-  /// Notification title for foreground service
-  final String? notificationTitle;
-  
-  /// Notification channel description (Android)
-  final String? notificationChannelDescription;
-  
-  /// Enable wake lock to keep CPU awake
-  final bool wakeLock;
-  
-  /// Enable WiFi lock to keep WiFi active
-  final bool wifiLock;
-  
   /// Maximum retry attempts for failed tasks
   final int maxRetries;
-  
+
   /// Scheduled jobs
   final List<Job>? schedule;
-  
+
   /// Battery optimization settings
   final bool requestBatteryOptimization;
-  
+
   /// Minimum battery level to run tasks (percentage)
   final int minBatteryLevel;
-  
+
   /// Only run tasks when charging
   final bool requireCharging;
-  
+
   /// Only run tasks on WiFi
   final bool requireWifi;
-  
+
   /// Task execution timeout
   final Duration taskTimeout;
-  
+
   /// Enable crash recovery
   final bool enableCrashRecovery;
-  
+
   /// Enable task persistence
   final bool enableTaskPersistence;
-  
+
   EnhancedBackgroundConfig({
     // Base config
-    String? notificationChannelId,
-    String? notificationChannelName,
-    String? notificationDescription,
-    String? notificationIcon,
-    bool autoStartOnBoot = false,
-    int intervalMs = 5000,
-    bool keepAlive = true,
-    
+    super.notificationChannelId,
+    super.notificationChannelName,
+    super.notificationDescription,
+    super.notificationIcon,
+    super.autoStartOnBoot = false,
+    super.intervalMs = 5000,
+    super.keepAlive = true,
+    super.enableForegroundService = false,
+    super.notificationTitle,
+    super.notificationChannelDescription,
+    super.wakeLock = false,
+    super.wifiLock = false,
+
     // Enhanced config
-    this.enableForegroundService = false,
-    this.notificationTitle,
-    this.notificationChannelDescription,
-    this.wakeLock = false,
-    this.wifiLock = false,
     this.maxRetries = 3,
     this.schedule,
     this.requestBatteryOptimization = false,
@@ -70,16 +55,8 @@ class EnhancedBackgroundConfig extends BackgroundConfig {
     this.taskTimeout = const Duration(minutes: 5),
     this.enableCrashRecovery = true,
     this.enableTaskPersistence = true,
-  }) : super(
-    notificationChannelId: notificationChannelId,
-    notificationChannelName: notificationChannelName,
-    notificationDescription: notificationDescription,
-    notificationIcon: notificationIcon,
-    autoStartOnBoot: autoStartOnBoot,
-    intervalMs: intervalMs,
-    keepAlive: keepAlive,
-  );
-  
+  });
+
   /// Create default enhanced configuration
   factory EnhancedBackgroundConfig.defaultConfig() {
     return EnhancedBackgroundConfig(
@@ -103,7 +80,7 @@ class EnhancedBackgroundConfig extends BackgroundConfig {
       enableTaskPersistence: true,
     );
   }
-  
+
   /// Create from base config
   factory EnhancedBackgroundConfig.fromBase(BackgroundConfig base) {
     return EnhancedBackgroundConfig(
@@ -116,7 +93,7 @@ class EnhancedBackgroundConfig extends BackgroundConfig {
       keepAlive: base.keepAlive,
     );
   }
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
@@ -138,17 +115,17 @@ class EnhancedBackgroundConfig extends BackgroundConfig {
     });
     return json;
   }
-  
+
   /// Validate configuration
   bool validate() {
     if (minBatteryLevel < 0 || minBatteryLevel > 100) {
       return false;
     }
-    
+
     if (enableForegroundService && notificationTitle == null) {
       return false;
     }
-    
+
     if (schedule != null) {
       for (final job in schedule!) {
         if (!job.validate()) {
@@ -156,7 +133,7 @@ class EnhancedBackgroundConfig extends BackgroundConfig {
         }
       }
     }
-    
+
     return true;
   }
 }

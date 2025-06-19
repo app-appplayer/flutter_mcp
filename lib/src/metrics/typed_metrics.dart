@@ -1,4 +1,5 @@
-/// Type-safe performance metrics to replace Map<String, dynamic> usage
+/// Type-safe performance metrics to replace Map`<String, dynamic>` usage
+library;
 
 import 'dart:math' as math;
 import '../events/event_models.dart';
@@ -7,22 +8,22 @@ import '../events/event_models.dart';
 abstract class PerformanceMetric {
   /// Unique identifier for this metric
   String get name;
-  
+
   /// The measured value
   double get value;
-  
+
   /// Optional maximum capacity (for utilization calculation)
   double? get capacity;
-  
+
   /// When this metric was recorded
   DateTime get timestamp;
-  
+
   /// Type of metric for categorization
   MetricType get type;
-  
+
   /// Unit of measurement (optional)
   String? get unit;
-  
+
   /// Calculate utilization percentage if capacity is available
   double? get utilizationPercentage {
     if (capacity != null && capacity! > 0) {
@@ -30,10 +31,10 @@ abstract class PerformanceMetric {
     }
     return null;
   }
-  
+
   /// Convert to map for serialization
   Map<String, dynamic> toMap();
-  
+
   /// Create a PerformanceEvent from this metric
   PerformanceEvent toEvent() {
     return PerformanceEvent(
@@ -51,21 +52,21 @@ abstract class PerformanceMetric {
 class ResourceUsageMetric extends PerformanceMetric {
   @override
   final String name;
-  
+
   @override
   final double value;
-  
+
   @override
   final double? capacity;
-  
+
   @override
   final DateTime timestamp;
-  
+
   @override
   final String? unit;
-  
+
   final ResourceType resourceType;
-  
+
   ResourceUsageMetric({
     required this.name,
     required this.value,
@@ -74,10 +75,10 @@ class ResourceUsageMetric extends PerformanceMetric {
     this.unit,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-  
+
   @override
   MetricType get type => MetricType.gauge;
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -91,7 +92,7 @@ class ResourceUsageMetric extends PerformanceMetric {
       'utilizationPercentage': utilizationPercentage,
     };
   }
-  
+
   factory ResourceUsageMetric.fromMap(Map<String, dynamic> map) {
     return ResourceUsageMetric(
       name: map['name'] as String,
@@ -110,18 +111,18 @@ enum ResourceType { memory, cpu, disk, network, battery }
 class CounterMetric extends PerformanceMetric {
   @override
   final String name;
-  
+
   @override
   final double value;
-  
+
   @override
   final DateTime timestamp;
-  
+
   @override
   final String? unit;
-  
+
   final double increment;
-  
+
   CounterMetric({
     required this.name,
     required this.value,
@@ -129,13 +130,13 @@ class CounterMetric extends PerformanceMetric {
     this.unit,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-  
+
   @override
   MetricType get type => MetricType.counter;
-  
+
   @override
   double? get capacity => null; // Counters don't have capacity
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -147,7 +148,7 @@ class CounterMetric extends PerformanceMetric {
       'increment': increment,
     };
   }
-  
+
   factory CounterMetric.fromMap(Map<String, dynamic> map) {
     return CounterMetric(
       name: map['name'] as String,
@@ -163,15 +164,15 @@ class CounterMetric extends PerformanceMetric {
 class TimerMetric extends PerformanceMetric {
   @override
   final String name;
-  
+
   @override
   final DateTime timestamp;
-  
+
   final Duration duration;
   final String operation;
   final bool success;
   final String? errorMessage;
-  
+
   TimerMetric({
     required this.name,
     required this.duration,
@@ -180,19 +181,19 @@ class TimerMetric extends PerformanceMetric {
     this.errorMessage,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-  
+
   @override
   double get value => duration.inMicroseconds.toDouble();
-  
+
   @override
   String get unit => 'microseconds';
-  
+
   @override
   MetricType get type => MetricType.timer;
-  
+
   @override
   double? get capacity => null; // Timers don't have capacity
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -207,7 +208,7 @@ class TimerMetric extends PerformanceMetric {
       'errorMessage': errorMessage,
     };
   }
-  
+
   factory TimerMetric.fromMap(Map<String, dynamic> map) {
     return TimerMetric(
       name: map['name'] as String,
@@ -224,75 +225,78 @@ class TimerMetric extends PerformanceMetric {
 class HistogramMetric extends PerformanceMetric {
   @override
   final String name;
-  
+
   @override
   final DateTime timestamp;
-  
+
   @override
   final String? unit;
-  
+
   final List<double> samples;
   final List<double> buckets;
   final Map<double, int> bucketCounts;
-  
+
   HistogramMetric({
     required this.name,
     required this.samples,
     required this.buckets,
     this.unit,
     DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now(),
-       bucketCounts = _calculateBucketCounts(samples, buckets);
-  
+  })  : timestamp = timestamp ?? DateTime.now(),
+        bucketCounts = _calculateBucketCounts(samples, buckets);
+
   @override
-  double get value => samples.isNotEmpty 
-      ? samples.reduce((a, b) => a + b) / samples.length 
+  double get value => samples.isNotEmpty
+      ? samples.reduce((a, b) => a + b) / samples.length
       : 0.0; // Average value
-  
+
   @override
   MetricType get type => MetricType.histogram;
-  
+
   @override
   double? get capacity => null; // Histograms don't have capacity
-  
+
   /// Calculate percentiles
   double getPercentile(double p) {
     if (samples.isEmpty) return 0.0;
-    
+
     final sorted = List<double>.from(samples)..sort();
     final index = (p / 100) * (sorted.length - 1);
-    
+
     if (index.isFinite && index >= 0 && index < sorted.length) {
       return sorted[index.floor()];
     }
     return 0.0;
   }
-  
+
   /// Get minimum value
-  double get min => samples.isNotEmpty ? samples.reduce((a, b) => a < b ? a : b) : 0.0;
-  
+  double get min =>
+      samples.isNotEmpty ? samples.reduce((a, b) => a < b ? a : b) : 0.0;
+
   /// Get maximum value
-  double get max => samples.isNotEmpty ? samples.reduce((a, b) => a > b ? a : b) : 0.0;
-  
+  double get max =>
+      samples.isNotEmpty ? samples.reduce((a, b) => a > b ? a : b) : 0.0;
+
   /// Get standard deviation
   double get stdDev {
     if (samples.length < 2) return 0.0;
-    
+
     final mean = value;
-    final variance = samples
-        .map((x) => (x - mean) * (x - mean))
-        .reduce((a, b) => a + b) / samples.length;
-    
+    final variance =
+        samples.map((x) => (x - mean) * (x - mean)).reduce((a, b) => a + b) /
+            samples.length;
+
     return variance.isFinite ? math.sqrt(variance) : 0.0;
   }
-  
-  static Map<double, int> _calculateBucketCounts(List<double> samples, List<double> buckets) {
+
+  static Map<double, int> _calculateBucketCounts(
+      List<double> samples, List<double> buckets) {
     final counts = <double, int>{};
-    
+
     for (final bucket in buckets) {
       counts[bucket] = 0;
     }
-    
+
     for (final sample in samples) {
       for (final bucket in buckets) {
         if (sample <= bucket) {
@@ -301,10 +305,10 @@ class HistogramMetric extends PerformanceMetric {
         }
       }
     }
-    
+
     return counts;
   }
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -324,7 +328,7 @@ class HistogramMetric extends PerformanceMetric {
       'p99': getPercentile(99),
     };
   }
-  
+
   factory HistogramMetric.fromMap(Map<String, dynamic> map) {
     return HistogramMetric(
       name: map['name'] as String,
@@ -340,20 +344,20 @@ class HistogramMetric extends PerformanceMetric {
 class NetworkMetric extends PerformanceMetric {
   @override
   final String name;
-  
+
   @override
   final double value;
-  
+
   @override
   final DateTime timestamp;
-  
+
   final NetworkOperation operation;
   final Duration latency;
   final int bytes;
   final bool success;
   final int? statusCode;
   final String? endpoint;
-  
+
   NetworkMetric({
     required this.name,
     required this.value,
@@ -365,18 +369,18 @@ class NetworkMetric extends PerformanceMetric {
     this.endpoint,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-  
+
   @override
   MetricType get type => MetricType.timer;
-  
+
   @override
-  String get unit => operation == NetworkOperation.throughput 
-      ? 'bytes_per_second' 
+  String get unit => operation == NetworkOperation.throughput
+      ? 'bytes_per_second'
       : 'milliseconds';
-  
+
   @override
   double? get capacity => null;
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -393,7 +397,7 @@ class NetworkMetric extends PerformanceMetric {
       'endpoint': endpoint,
     };
   }
-  
+
   factory NetworkMetric.fromMap(Map<String, dynamic> map) {
     return NetworkMetric(
       name: map['name'] as String,
@@ -415,25 +419,25 @@ enum NetworkOperation { request, response, throughput, latency }
 class CustomMetric extends PerformanceMetric {
   @override
   final String name;
-  
+
   @override
   final double value;
-  
+
   @override
   final double? capacity;
-  
+
   @override
   final DateTime timestamp;
-  
+
   @override
   final MetricType type;
-  
+
   @override
   final String? unit;
-  
+
   final Map<String, dynamic> metadata;
   final String category;
-  
+
   CustomMetric({
     required this.name,
     required this.value,
@@ -444,7 +448,7 @@ class CustomMetric extends PerformanceMetric {
     this.metadata = const {},
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-  
+
   @override
   Map<String, dynamic> toMap() {
     return {
@@ -459,7 +463,7 @@ class CustomMetric extends PerformanceMetric {
       'utilizationPercentage': utilizationPercentage,
     };
   }
-  
+
   factory CustomMetric.fromMap(Map<String, dynamic> map) {
     return CustomMetric(
       name: map['name'] as String,
@@ -479,33 +483,33 @@ class MetricCollection {
   final String name;
   final List<PerformanceMetric> metrics;
   final DateTime createdAt;
-  
+
   MetricCollection({
     required this.name,
     required this.metrics,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
-  
+
   /// Get metrics by type
   List<T> getMetricsByType<T extends PerformanceMetric>() {
     return metrics.whereType<T>().toList();
   }
-  
+
   /// Get metrics by name pattern
   List<PerformanceMetric> getMetricsByName(Pattern pattern) {
     return metrics.where((m) => pattern.allMatches(m.name).isNotEmpty).toList();
   }
-  
+
   /// Calculate aggregate statistics
   Map<String, double> getAggregateStats() {
     if (metrics.isEmpty) return {};
-    
+
     final values = metrics.map((m) => m.value).toList();
     values.sort();
-    
+
     final sum = values.reduce((a, b) => a + b);
     final avg = sum / values.length;
-    
+
     return {
       'count': metrics.length.toDouble(),
       'sum': sum,
@@ -515,7 +519,7 @@ class MetricCollection {
       'median': values[values.length ~/ 2],
     };
   }
-  
+
   /// Export to JSON-serializable format
   Map<String, dynamic> toMap() {
     return {
@@ -525,21 +529,22 @@ class MetricCollection {
       'aggregateStats': getAggregateStats(),
     };
   }
-  
+
   factory MetricCollection.fromMap(Map<String, dynamic> map) {
     final metricMaps = map['metrics'] as List<dynamic>;
-    final metrics = metricMaps.map((m) => _parseMetric(m as Map<String, dynamic>)).toList();
-    
+    final metrics =
+        metricMaps.map((m) => _parseMetric(m as Map<String, dynamic>)).toList();
+
     return MetricCollection(
       name: map['name'] as String,
       metrics: metrics,
       createdAt: DateTime.parse(map['createdAt'] as String),
     );
   }
-  
+
   static PerformanceMetric _parseMetric(Map<String, dynamic> map) {
     final type = MetricType.values.byName(map['type'] as String);
-    
+
     switch (type) {
       case MetricType.gauge:
         if (map.containsKey('resourceType')) {

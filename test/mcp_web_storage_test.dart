@@ -7,10 +7,9 @@ class MockWebStorageManager extends WebStorageManager {
   final Map<String, String> data = {};
   String prefix; // Store our own copy of the prefix
 
-  MockWebStorageManager({
-    bool useLocalStorage = true,
-    this.prefix = 'mcp_test_'
-  }) : super(useLocalStorage: useLocalStorage, prefix: prefix);
+  MockWebStorageManager(
+      {bool useLocalStorage = true, this.prefix = 'mcp_test_'})
+      : super(useLocalStorage: useLocalStorage, prefix: prefix);
 
   // Override all methods to use our in-memory storage directly
 
@@ -98,17 +97,23 @@ void main() {
       localStorage.printStorage();
 
       // Verify encryption materials were created
-      expect(localStorage.data.containsKey('mcp_test___encryption_key'), isTrue);
-      expect(localStorage.data.containsKey('mcp_test___encryption_salt'), isTrue);
+      expect(
+          localStorage.data.containsKey('mcp_test___encryption_key'), isTrue);
+      expect(
+          localStorage.data.containsKey('mcp_test___encryption_salt'), isTrue);
       expect(localStorage.data.containsKey('mcp_test___encryption_iv'), isTrue);
-      expect(localStorage.data.containsKey('mcp_test___storage_version'), isTrue);
+      expect(
+          localStorage.data.containsKey('mcp_test___storage_version'), isTrue);
     });
 
-    test('Initialize uses existing encryption materials if available', () async {
+    test('Initialize uses existing encryption materials if available',
+        () async {
       // Setup
       localStorage.data['mcp_test___encryption_key'] = 'test_key';
-      localStorage.data['mcp_test___encryption_salt'] = base64Encode([1, 2, 3, 4]);
-      localStorage.data['mcp_test___encryption_iv'] = base64Encode([5, 6, 7, 8]);
+      localStorage.data['mcp_test___encryption_salt'] =
+          base64Encode([1, 2, 3, 4]);
+      localStorage.data['mcp_test___encryption_iv'] =
+          base64Encode([5, 6, 7, 8]);
       localStorage.data['mcp_test___storage_version'] = '2';
 
       // Execute
@@ -116,8 +121,10 @@ void main() {
 
       // Verify encryption materials weren't changed
       expect(localStorage.data['mcp_test___encryption_key'], 'test_key');
-      expect(localStorage.data['mcp_test___encryption_salt'], base64Encode([1, 2, 3, 4]));
-      expect(localStorage.data['mcp_test___encryption_iv'], base64Encode([5, 6, 7, 8]));
+      expect(localStorage.data['mcp_test___encryption_salt'],
+          base64Encode([1, 2, 3, 4]));
+      expect(localStorage.data['mcp_test___encryption_iv'],
+          base64Encode([5, 6, 7, 8]));
     });
 
     test('Save and read string works properly', () async {
@@ -141,7 +148,11 @@ void main() {
     test('Save and read map works properly', () async {
       // Setup
       await localStorage.initialize();
-      final testMap = {'name': 'test', 'value': 42, 'nested': {'inner': true}};
+      final testMap = {
+        'name': 'test',
+        'value': 42,
+        'nested': {'inner': true}
+      };
 
       // Execute
       await localStorage.saveMap('map_key', testMap);

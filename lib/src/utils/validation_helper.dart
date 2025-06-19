@@ -6,10 +6,9 @@ import '../utils/input_validator.dart';
 
 /// Common validation helper methods
 class ValidationHelper {
-  
   /// Validate string is not null or empty
   static String validateNonEmptyString(
-    String? value, 
+    String? value,
     String fieldName, {
     int? minLength,
     int? maxLength,
@@ -22,31 +21,31 @@ class ValidationHelper {
         {fieldName: 'Required field is empty'},
       );
     }
-    
+
     if (minLength != null && value.length < minLength) {
       throw MCPValidationException(
         'Field "$fieldName" must be at least $minLength characters',
         {fieldName: 'Minimum length is $minLength, got ${value.length}'},
       );
     }
-    
+
     if (maxLength != null && value.length > maxLength) {
       throw MCPValidationException(
         'Field "$fieldName" must be at most $maxLength characters',
         {fieldName: 'Maximum length is $maxLength, got ${value.length}'},
       );
     }
-    
+
     if (pattern != null && !pattern.allMatches(value).isNotEmpty) {
       throw MCPValidationException(
         'Field "$fieldName" has invalid format${patternDescription != null ? ': $patternDescription' : ''}',
         {fieldName: 'Value does not match required pattern'},
       );
     }
-    
+
     return value;
   }
-  
+
   /// Validate integer within range
   static int validateIntRange(
     int? value,
@@ -65,24 +64,24 @@ class ValidationHelper {
       }
       return defaultValue ?? 0;
     }
-    
+
     if (min != null && value < min) {
       throw MCPValidationException(
         'Field "$fieldName" must be at least $min',
         {fieldName: 'Value $value is below minimum $min'},
       );
     }
-    
+
     if (max != null && value > max) {
       throw MCPValidationException(
         'Field "$fieldName" must be at most $max',
         {fieldName: 'Value $value is above maximum $max'},
       );
     }
-    
+
     return value;
   }
-  
+
   /// Validate double within range
   static double validateDoubleRange(
     double? value,
@@ -101,24 +100,24 @@ class ValidationHelper {
       }
       return defaultValue ?? 0.0;
     }
-    
+
     if (min != null && value < min) {
       throw MCPValidationException(
         'Field "$fieldName" must be at least $min',
         {fieldName: 'Value $value is below minimum $min'},
       );
     }
-    
+
     if (max != null && value > max) {
       throw MCPValidationException(
         'Field "$fieldName" must be at most $max',
         {fieldName: 'Value $value is above maximum $max'},
       );
     }
-    
+
     return value;
   }
-  
+
   /// Validate list is not null or empty
   static List<T> validateNonEmptyList<T>(
     List<T>? value,
@@ -132,24 +131,24 @@ class ValidationHelper {
         {fieldName: 'Required list is empty'},
       );
     }
-    
+
     if (minLength != null && value.length < minLength) {
       throw MCPValidationException(
         'Field "$fieldName" must have at least $minLength items',
         {fieldName: 'List has ${value.length} items, minimum is $minLength'},
       );
     }
-    
+
     if (maxLength != null && value.length > maxLength) {
       throw MCPValidationException(
         'Field "$fieldName" must have at most $maxLength items',
         {fieldName: 'List has ${value.length} items, maximum is $maxLength'},
       );
     }
-    
+
     return value;
   }
-  
+
   /// Validate map is not null or empty
   static Map<K, V> validateNonEmptyMap<K, V>(
     Map<K, V>? value,
@@ -162,9 +161,10 @@ class ValidationHelper {
         {fieldName: 'Required map is empty'},
       );
     }
-    
+
     if (requiredKeys != null) {
-      final missing = requiredKeys.where((key) => !value.containsKey(key)).toList();
+      final missing =
+          requiredKeys.where((key) => !value.containsKey(key)).toList();
       if (missing.isNotEmpty) {
         throw MCPValidationException(
           'Field "$fieldName" is missing required keys: ${missing.join(', ')}',
@@ -172,57 +172,59 @@ class ValidationHelper {
         );
       }
     }
-    
+
     return value;
   }
-  
+
   /// Validate email format
   static String validateEmail(String? value, String fieldName) {
     final email = validateNonEmptyString(value, fieldName);
-    
+
     if (!InputValidator.isValidEmail(email)) {
       throw MCPValidationException(
         'Field "$fieldName" must be a valid email address',
         {fieldName: 'Invalid email format'},
       );
     }
-    
+
     return email;
   }
-  
+
   /// Validate URL format
-  static String validateUrl(String? value, String fieldName, {
+  static String validateUrl(
+    String? value,
+    String fieldName, {
     List<String>? allowedSchemes,
   }) {
     final url = validateNonEmptyString(value, fieldName);
-    
+
     try {
       final uri = Uri.parse(url);
-      
+
       if (!uri.hasScheme) {
         throw MCPValidationException(
           'Field "$fieldName" must include a URL scheme (http/https)',
           {fieldName: 'Missing URL scheme'},
         );
       }
-      
-      if (allowedSchemes != null && !allowedSchemes.contains(uri.scheme.toLowerCase())) {
+
+      if (allowedSchemes != null &&
+          !allowedSchemes.contains(uri.scheme.toLowerCase())) {
         throw MCPValidationException(
           'Field "$fieldName" must use one of these schemes: ${allowedSchemes.join(', ')}',
           {fieldName: 'Invalid URL scheme: ${uri.scheme}'},
         );
       }
-      
     } catch (e) {
       throw MCPValidationException(
         'Field "$fieldName" must be a valid URL',
         {fieldName: 'Invalid URL format: $e'},
       );
     }
-    
+
     return url;
   }
-  
+
   /// Validate enum value
   static T validateEnum<T extends Enum>(
     String? value,
@@ -246,7 +248,7 @@ class ValidationHelper {
         {fieldName: 'No default value provided for optional enum'},
       );
     }
-    
+
     try {
       return allowedValues.firstWhere((e) => e.name == value);
     } catch (e) {
@@ -257,7 +259,7 @@ class ValidationHelper {
       );
     }
   }
-  
+
   /// Validate duration is within acceptable range
   static Duration validateDuration(
     Duration? value,
@@ -276,24 +278,30 @@ class ValidationHelper {
       }
       return defaultValue ?? Duration.zero;
     }
-    
+
     if (min != null && value < min) {
       throw MCPValidationException(
         'Field "$fieldName" must be at least ${min.inMilliseconds}ms',
-        {fieldName: 'Duration ${value.inMilliseconds}ms is below minimum ${min.inMilliseconds}ms'},
+        {
+          fieldName:
+              'Duration ${value.inMilliseconds}ms is below minimum ${min.inMilliseconds}ms'
+        },
       );
     }
-    
+
     if (max != null && value > max) {
       throw MCPValidationException(
         'Field "$fieldName" must be at most ${max.inMilliseconds}ms',
-        {fieldName: 'Duration ${value.inMilliseconds}ms is above maximum ${max.inMilliseconds}ms'},
+        {
+          fieldName:
+              'Duration ${value.inMilliseconds}ms is above maximum ${max.inMilliseconds}ms'
+        },
       );
     }
-    
+
     return value;
   }
-  
+
   /// Validate that a value is one of the allowed values
   static T validateAllowedValue<T>(
     T? value,
@@ -317,17 +325,17 @@ class ValidationHelper {
         {fieldName: 'No default value provided for optional field'},
       );
     }
-    
+
     if (!allowedValues.contains(value)) {
       throw MCPValidationException(
         'Field "$fieldName" must be one of: ${allowedValues.join(', ')}',
         {fieldName: 'Invalid value: $value'},
       );
     }
-    
+
     return value;
   }
-  
+
   /// Validate file path format and existence (basic checks)
   static String validateFilePath(
     String? value,
@@ -336,7 +344,7 @@ class ValidationHelper {
     List<String>? allowedExtensions,
   }) {
     final path = validateNonEmptyString(value, fieldName);
-    
+
     // Basic validation - check for illegal characters
     final illegalChars = RegExp(r'[<>:\"|?*]');
     if (illegalChars.hasMatch(path)) {
@@ -345,7 +353,7 @@ class ValidationHelper {
         {fieldName: 'Path contains illegal characters'},
       );
     }
-    
+
     if (allowedExtensions != null) {
       final extension = path.split('.').last.toLowerCase();
       if (!allowedExtensions.map((e) => e.toLowerCase()).contains(extension)) {
@@ -355,23 +363,23 @@ class ValidationHelper {
         );
       }
     }
-    
+
     // Note: File existence checking would require dart:io which may not be available on web
     // This is kept simple for cross-platform compatibility
-    
+
     return path;
   }
-  
+
   /// Validate port number
   static int validatePort(int? value, String fieldName) {
     final port = validateIntRange(value, fieldName, min: 1, max: 65535);
     return port;
   }
-  
+
   /// Validate IPv4 address format
   static String validateIPv4(String? value, String fieldName) {
     final ip = validateNonEmptyString(value, fieldName);
-    
+
     final parts = ip.split('.');
     if (parts.length != 4) {
       throw MCPValidationException(
@@ -379,7 +387,7 @@ class ValidationHelper {
         {fieldName: 'IPv4 address must have 4 parts separated by dots'},
       );
     }
-    
+
     for (int i = 0; i < parts.length; i++) {
       final num = int.tryParse(parts[i]);
       if (num == null || num < 0 || num > 255) {
@@ -389,14 +397,14 @@ class ValidationHelper {
         );
       }
     }
-    
+
     return ip;
   }
-  
+
   /// Batch validation - validate multiple fields at once
   static void validateBatch(Map<String, dynamic Function()> validations) {
     final errors = <String, dynamic>{};
-    
+
     for (final entry in validations.entries) {
       try {
         entry.value();
@@ -406,7 +414,7 @@ class ValidationHelper {
         errors[entry.key] = e.toString();
       }
     }
-    
+
     if (errors.isNotEmpty) {
       throw MCPValidationException(
         'Multiple validation errors occurred',

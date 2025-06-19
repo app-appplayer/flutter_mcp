@@ -22,9 +22,7 @@ class MCPServerManager extends BaseManager {
   /// Generate new server ID
   String generateId() {
     _counter++;
-    return 'server_${DateTime
-        .now()
-        .millisecondsSinceEpoch}_$_counter';
+    return 'server_${DateTime.now().millisecondsSinceEpoch}_$_counter';
   }
 
   /// Register server
@@ -35,7 +33,7 @@ class MCPServerManager extends BaseManager {
       server: server,
       transport: transport,
     );
-    
+
     // Report health status
     reportHealthy('Server registered: $id');
   }
@@ -74,7 +72,7 @@ class MCPServerManager extends BaseManager {
         await serverInfo.llmServer!.close();
       }
       _servers.remove(id);
-      
+
       // Report health status
       reportHealthy('Server closed: $id');
     }
@@ -100,34 +98,27 @@ class MCPServerManager extends BaseManager {
     return {
       ...baseStatus,
       'total': _servers.length,
-      'servers': _servers.map((key, value) =>
-          MapEntry(key, {
+      'servers': _servers.map((key, value) => MapEntry(key, {
             'name': value.server.name,
             'version': value.server.version,
-            'tools': value.server
-                .getTools()
-                .length,
-            'resources': value.server
-                .getResources()
-                .length,
-            'prompts': value.server
-                .getPrompts()
-                .length,
+            'tools': value.server.getTools().length,
+            'resources': value.server.getResources().length,
+            'prompts': value.server.getPrompts().length,
             'hasLlmServer': value.llmServer != null,
           })),
     };
   }
-  
+
   @override
   Future<MCPHealthCheckResult> performHealthCheck() async {
     final baseHealth = await super.performHealthCheck();
     if (baseHealth.status == MCPHealthStatus.unhealthy) {
       return baseHealth;
     }
-    
+
     // Check specific health metrics
     final totalCount = _servers.length;
-    
+
     if (totalCount == 0) {
       return MCPHealthCheckResult(
         status: MCPHealthStatus.healthy,
@@ -135,18 +126,18 @@ class MCPServerManager extends BaseManager {
         details: getStatus(),
       );
     }
-    
+
     // Check if any server has issues
     int serversWithIssues = 0;
     for (final serverInfo in _servers.values) {
       // Basic health check - could be enhanced with actual server status checks
-      if (serverInfo.server.getTools().isEmpty && 
-          serverInfo.server.getResources().isEmpty && 
+      if (serverInfo.server.getTools().isEmpty &&
+          serverInfo.server.getResources().isEmpty &&
           serverInfo.server.getPrompts().isEmpty) {
         serversWithIssues++;
       }
     }
-    
+
     if (serversWithIssues == totalCount) {
       return MCPHealthCheckResult(
         status: MCPHealthStatus.degraded,
@@ -160,7 +151,7 @@ class MCPServerManager extends BaseManager {
         details: getStatus(),
       );
     }
-    
+
     return MCPHealthCheckResult(
       status: MCPHealthStatus.healthy,
       message: '$totalCount servers configured and operational',

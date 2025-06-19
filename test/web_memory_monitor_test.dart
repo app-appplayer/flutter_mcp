@@ -29,7 +29,7 @@ void main() {
       if (kIsWeb) {
         monitor.startMonitoring();
         expect(monitor.getStatistics()['isMonitoring'], isTrue);
-        
+
         monitor.stopMonitoring();
         expect(monitor.getStatistics()['isMonitoring'], isFalse);
       } else {
@@ -48,7 +48,7 @@ void main() {
 
     test('getStatistics returns complete data structure', () {
       final stats = monitor.getStatistics();
-      
+
       expect(stats, isA<Map<String, dynamic>>());
       expect(stats.containsKey('isSupported'), isTrue);
       expect(stats.containsKey('isMonitoring'), isTrue);
@@ -75,7 +75,7 @@ void main() {
 
     test('Export data functionality', () {
       final exportData = monitor.exportData();
-      
+
       expect(exportData, isA<Map<String, dynamic>>());
       expect(exportData.containsKey('metadata'), isTrue);
       expect(exportData.containsKey('statistics'), isTrue);
@@ -89,7 +89,7 @@ void main() {
 
     test('Memory monitoring with custom interval', () {
       const customInterval = Duration(seconds: 2);
-      
+
       if (kIsWeb) {
         monitor.startMonitoring(interval: customInterval);
         expect(monitor.getStatistics()['isMonitoring'], isTrue);
@@ -135,7 +135,7 @@ void main() {
   group('Web Memory Monitor Error Handling', () {
     test('Handles monitoring errors gracefully', () {
       final monitor = WebMemoryMonitor.instance;
-      
+
       // Should not throw even if browser APIs are not available
       expect(() => monitor.startMonitoring(), returnsNormally);
       expect(() => monitor.stopMonitoring(), returnsNormally);
@@ -143,7 +143,7 @@ void main() {
 
     test('Handles memory measurement errors gracefully', () async {
       final monitor = WebMemoryMonitor.instance;
-      
+
       // Should return valid value even if measurement fails
       final memoryUsage = await monitor.getCurrentMemoryUsage();
       expect(memoryUsage, isA<int>());

@@ -13,8 +13,7 @@ class TestToolPlugin implements MCPToolPlugin {
     String name = 'test_tool',
     String version = '1.0.0',
     String description = 'A test tool plugin',
-  }) :
-        _name = name,
+  })  : _name = name,
         _version = version,
         _description = description;
 
@@ -42,10 +41,7 @@ class TestToolPlugin implements MCPToolPlugin {
     if (!_isInitialized) {
       throw Exception('Plugin not initialized');
     }
-    return {
-      'result': 'Executed with ${arguments.toString()}',
-      'plugin': name
-    };
+    return {'result': 'Executed with ${arguments.toString()}', 'plugin': name};
   }
 
   @override
@@ -76,8 +72,7 @@ class TestResourcePlugin implements MCPResourcePlugin {
     String name = 'test_resource',
     String version = '1.0.0',
     String description = 'A test resource plugin',
-  }) :
-        _name = name,
+  })  : _name = name,
         _version = version,
         _description = description;
 
@@ -101,12 +96,14 @@ class TestResourcePlugin implements MCPResourcePlugin {
   }
 
   @override
-  Future<Map<String, dynamic>> getResource(String resourceUri, Map<String, dynamic> params) async {
+  Future<Map<String, dynamic>> getResource(
+      String resourceUri, Map<String, dynamic> params) async {
     if (!_isInitialized) {
       throw Exception('Plugin not initialized');
     }
     return {
-      'content': 'Resource content for URI: $resourceUri with params: ${params.toString()}',
+      'content':
+          'Resource content for URI: $resourceUri with params: ${params.toString()}',
       'mimeType': 'text/plain',
       'plugin': name
     };
@@ -132,7 +129,7 @@ void main() {
   // Initialize once before all tests
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    
+
     // Mock method channel for platform interface
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -156,7 +153,7 @@ void main() {
         }
       },
     );
-    
+
     // Initialize FlutterMCP
     flutterMcp = FlutterMCP.instance;
 
@@ -179,7 +176,7 @@ void main() {
   tearDownAll(() async {
     // Clean up after tests
     await flutterMcp.shutdown();
-    
+
     // Clear method channel mock
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -233,7 +230,8 @@ void main() {
       // Verify plugin is in the registry
       final pluginInfo = flutterMcp.getAllPluginInfo();
       expect(pluginInfo['tool_plugins'], isNotEmpty);
-      expect(pluginInfo['tool_plugins']!.any((p) => p['name'] == 'test_tool'), true);
+      expect(pluginInfo['tool_plugins']!.any((p) => p['name'] == 'test_tool'),
+          true);
     });
 
     test('Register Resource Plugin', () async {
@@ -246,7 +244,10 @@ void main() {
       // Verify plugin is in the registry
       final pluginInfo = flutterMcp.getAllPluginInfo();
       expect(pluginInfo['resource_plugins'], isNotEmpty);
-      expect(pluginInfo['resource_plugins']!.any((p) => p['name'] == 'test_resource'), true);
+      expect(
+          pluginInfo['resource_plugins']!
+              .any((p) => p['name'] == 'test_resource'),
+          true);
     });
 
     test('Register Plugin with custom config', () async {
@@ -254,10 +255,7 @@ void main() {
       final toolPlugin = TestToolPlugin();
 
       // Create custom config
-      final config = {
-        'customSetting': 'value1',
-        'enableFeatureX': true
-      };
+      final config = {'customSetting': 'value1', 'enableFeatureX': true};
 
       // Register the plugin with config
       await flutterMcp.registerPlugin(toolPlugin, config);
@@ -267,7 +265,8 @@ void main() {
 
       // Verify plugin is in the registry
       final pluginInfo = flutterMcp.getAllPluginInfo();
-      expect(pluginInfo['tool_plugins']!.any((p) => p['name'] == 'test_tool'), true);
+      expect(pluginInfo['tool_plugins']!.any((p) => p['name'] == 'test_tool'),
+          true);
     });
 
     test('Unregister Plugin', () async {
@@ -277,14 +276,21 @@ void main() {
 
       // Verify plugin is in the registry
       final pluginInfoBefore = flutterMcp.getAllPluginInfo();
-      expect(pluginInfoBefore['tool_plugins']!.any((p) => p['name'] == 'test_tool'), true);
+      expect(
+          pluginInfoBefore['tool_plugins']!
+              .any((p) => p['name'] == 'test_tool'),
+          true);
 
       // Unregister the plugin
       await flutterMcp.unregisterPlugin(toolPlugin.name);
 
       // Verify plugin is no longer in the registry
       final pluginInfoAfter = flutterMcp.getAllPluginInfo();
-      expect(pluginInfoAfter['tool_plugins']?.any((p) => p['name'] == 'test_tool') ?? false, false);
+      expect(
+          pluginInfoAfter['tool_plugins']
+                  ?.any((p) => p['name'] == 'test_tool') ??
+              false,
+          false);
 
       // Verify the plugin's shutdown method was called
       expect((toolPlugin).isInitialized, false);
@@ -298,10 +304,8 @@ void main() {
       await flutterMcp.registerPlugin(toolPlugin);
 
       // Execute the tool plugin
-      final result = await flutterMcp.executeToolPlugin(
-          'test_tool',
-          {'input': 'test_value'}
-      );
+      final result = await flutterMcp
+          .executeToolPlugin('test_tool', {'input': 'test_value'});
 
       // Verify execution result
       expect(result, isNotEmpty);
@@ -316,10 +320,7 @@ void main() {
 
       // Get resource from the plugin
       final result = await flutterMcp.getPluginResource(
-          'test_resource',
-          'test://resource',
-          {'format': 'json'}
-      );
+          'test_resource', 'test://resource', {'format': 'json'});
 
       // Verify resource result
       expect(result, isNotEmpty);
@@ -339,10 +340,8 @@ void main() {
       toolPlugin._isInitialized = false;
 
       // Execute and expect error
-      expect(
-              () => flutterMcp.executeToolPlugin('test_tool', {'input': 'test'}),
-          throwsA(isA<Exception>())
-      );
+      expect(() => flutterMcp.executeToolPlugin('test_tool', {'input': 'test'}),
+          throwsA(isA<Exception>()));
     });
   });
 }

@@ -9,7 +9,7 @@ import 'tray_manager.dart';
 class LinuxTrayManager implements TrayManager {
   static const MethodChannel _channel = MethodChannel('flutter_mcp');
   static const EventChannel _eventChannel = EventChannel('flutter_mcp/events');
-  
+
   final Logger _logger = Logger('flutter_mcp.linux_tray');
   StreamSubscription? _eventSubscription;
 
@@ -60,19 +60,22 @@ class LinuxTrayManager implements TrayManager {
       _logger.fine('Linux tray manager initialized successfully');
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize Linux tray manager', e, stackTrace);
-      throw MCPException('Failed to initialize Linux tray manager: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to initialize Linux tray manager: ${e.toString()}',
+          e,
+          stackTrace);
     }
   }
 
   void _handleEvent(Map<String, dynamic> event) {
     final type = event['type'] as String?;
     final data = event['data'] as Map<String, dynamic>? ?? {};
-    
+
     _logger.fine('Received tray event: $type');
-    
+
     if (type == 'trayEvent') {
       final action = data['action'] as String?;
-      
+
       switch (action) {
         case 'menuItemClicked':
           final itemId = data['itemId'] as String?;
@@ -80,13 +83,13 @@ class LinuxTrayManager implements TrayManager {
             _menuItems[itemId]?.onTap?.call();
           }
           break;
-        
+
         case 'trayIconClicked':
           for (final listener in _eventListeners) {
             listener.onTrayMouseDown?.call();
           }
           break;
-        
+
         case 'trayIconRightClicked':
           for (final listener in _eventListeners) {
             listener.onTrayRightMouseDown?.call();
@@ -107,7 +110,8 @@ class LinuxTrayManager implements TrayManager {
       _isVisible = true;
     } catch (e, stackTrace) {
       _logger.severe('Failed to set Linux tray icon', e, stackTrace);
-      throw MCPException('Failed to set Linux tray icon: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to set Linux tray icon: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -121,7 +125,8 @@ class LinuxTrayManager implements TrayManager {
       });
     } catch (e, stackTrace) {
       _logger.severe('Failed to set Linux tray tooltip', e, stackTrace);
-      throw MCPException('Failed to set Linux tray tooltip: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to set Linux tray tooltip: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -135,10 +140,10 @@ class LinuxTrayManager implements TrayManager {
 
       // Convert to native menu items format
       final List<Map<String, dynamic>> nativeItems = [];
-      
+
       for (int i = 0; i < items.length; i++) {
         final item = items[i];
-        
+
         if (item.isSeparator) {
           nativeItems.add({
             'isSeparator': true,
@@ -147,7 +152,7 @@ class LinuxTrayManager implements TrayManager {
           // Generate ID for this item
           final itemId = 'item_${_menuItemIdCounter++}';
           _menuItems[itemId] = item;
-          
+
           nativeItems.add({
             'id': itemId,
             'label': item.label ?? '',
@@ -163,7 +168,10 @@ class LinuxTrayManager implements TrayManager {
       });
     } catch (e, stackTrace) {
       _logger.severe('Failed to set Linux tray context menu', e, stackTrace);
-      throw MCPException('Failed to set Linux tray context menu: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to set Linux tray context menu: ${e.toString()}',
+          e,
+          stackTrace);
     }
   }
 
@@ -174,7 +182,7 @@ class LinuxTrayManager implements TrayManager {
     try {
       // Hide the tray icon
       await _channel.invokeMethod('hideTrayIcon');
-      
+
       // Cancel event subscription
       _eventSubscription?.cancel();
 
@@ -184,7 +192,10 @@ class LinuxTrayManager implements TrayManager {
       _isVisible = false;
     } catch (e, stackTrace) {
       _logger.severe('Failed to dispose Linux tray manager', e, stackTrace);
-      throw MCPException('Failed to dispose Linux tray manager: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to dispose Linux tray manager: ${e.toString()}',
+          e,
+          stackTrace);
     }
   }
 
@@ -211,7 +222,8 @@ class LinuxTrayManager implements TrayManager {
   }
 
   /// Update a single menu item
-  Future<void> updateMenuItem(String id, {String? label, bool? disabled}) async {
+  Future<void> updateMenuItem(String id,
+      {String? label, bool? disabled}) async {
     if (!_menuItems.containsKey(id)) {
       _logger.warning('Menu item with ID $id not found');
       return;

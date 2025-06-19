@@ -193,10 +193,7 @@ class WebStorageManager implements SecureStorageManager {
     } catch (e, stackTrace) {
       _logger.severe('Failed to save map to web storage', e, stackTrace);
       throw MCPException(
-          'Failed to save map to web storage: ${e.toString()}',
-          e,
-          stackTrace
-      );
+          'Failed to save map to web storage: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -251,11 +248,8 @@ class WebStorageManager implements SecureStorageManager {
       }
     } catch (e, stackTrace) {
       _logger.severe('Failed to read map from web storage', e, stackTrace);
-      throw MCPException(
-          'Failed to read map from web storage: ${e.toString()}',
-          e,
-          stackTrace
-      );
+      throw MCPException('Failed to read map from web storage: ${e.toString()}',
+          e, stackTrace);
     }
   }
 
@@ -351,7 +345,6 @@ class WebStorageManager implements SecureStorageManager {
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
-
         final value = storage[key];
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
           hasLegacyKeys = true;
@@ -376,7 +369,6 @@ class WebStorageManager implements SecureStorageManager {
           key != '${_prefix}__encryption_salt' &&
           key != '${_prefix}__encryption_iv' &&
           key != '${_prefix}__storage_version') {
-
         final value = storage[key];
         if (value != null && (!value.startsWith('{') || !value.endsWith('}'))) {
           legacyKeys.add(key);
@@ -404,9 +396,7 @@ class WebStorageManager implements SecureStorageManager {
 
   /// Get the appropriate storage based on settings
   Storage _getStorage() {
-    return _useLocalStorage
-        ? window.localStorage
-        : window.sessionStorage;
+    return _useLocalStorage ? window.localStorage : window.sessionStorage;
   }
 
   /// Generate a random string of specified length
@@ -443,8 +433,8 @@ class WebStorageManager implements SecureStorageManager {
 
     for (int i = 0; i < valueBytes.length; i++) {
       encrypted[i] = valueBytes[i] ^
-      keyDigest[i % keyDigest.length] ^
-      _encryptionIV[i % _encryptionIV.length];
+          keyDigest[i % keyDigest.length] ^
+          _encryptionIV[i % _encryptionIV.length];
     }
 
     // Return Base64 encoded result
@@ -467,8 +457,8 @@ class WebStorageManager implements SecureStorageManager {
 
       for (int i = 0; i < encrypted.length; i++) {
         decrypted[i] = encrypted[i] ^
-        keyDigest[i % keyDigest.length] ^
-        _encryptionIV[i % _encryptionIV.length];
+            keyDigest[i % keyDigest.length] ^
+            _encryptionIV[i % _encryptionIV.length];
       }
 
       // Convert bytes back to string
@@ -498,7 +488,10 @@ class WebStorageManager implements SecureStorageManager {
       return keys.toSet();
     } catch (e, stackTrace) {
       _logger.severe('Failed to get all keys from web storage', e, stackTrace);
-      throw MCPException('Failed to get all keys from web storage: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to get all keys from web storage: ${e.toString()}',
+          e,
+          stackTrace);
     }
   }
 }

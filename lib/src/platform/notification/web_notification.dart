@@ -2,9 +2,10 @@ import 'dart:async';
 import 'package:universal_html/html.dart';
 import 'package:universal_html/js_util.dart';
 
-import '../../config/notification_config.dart';
+import '../../config/notification_config.dart' hide NotificationPriority;
 import '../../utils/logger.dart';
 import 'notification_manager.dart';
+import 'notification_models.dart';
 import '../../utils/exceptions.dart';
 
 /// Web notification manager implementation using modern Web APIs
@@ -16,7 +17,8 @@ class WebNotificationManager implements NotificationManager {
   final Map<String, Notification> _activeNotifications = {};
 
   /// Notification click handlers
-  final Map<String, Function(String id, Map<String, dynamic>? data)> _clickHandlers = {};
+  final Map<String, Function(String id, Map<String, dynamic>? data)>
+      _clickHandlers = {};
 
   /// Default notification icon
   String? _defaultIcon;
@@ -57,7 +59,16 @@ class WebNotificationManager implements NotificationManager {
     required String body,
     String? icon,
     String id = 'mcp_notification',
-    Map<String, dynamic>? additionalData,
+    Map<String, dynamic>? data,
+    List<NotificationAction>? actions,
+    String? channelId,
+    NotificationPriority priority = NotificationPriority.normal,
+    bool showProgress = false,
+    int? progress,
+    int? maxProgress,
+    String? group,
+    String? image,
+    bool ongoing = false,
   }) async {
     _logger.fine('Showing web notification: $title');
 
@@ -116,7 +127,8 @@ class WebNotificationManager implements NotificationManager {
       return;
     } catch (e, stackTrace) {
       _logger.severe('Failed to show web notification', e, stackTrace);
-      throw MCPException('Failed to show web notification: ${e.toString()}', e, stackTrace);
+      throw MCPException(
+          'Failed to show web notification: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -130,13 +142,15 @@ class WebNotificationManager implements NotificationManager {
         _activeNotifications.remove(id);
       } catch (e, stackTrace) {
         _logger.severe('Failed to hide web notification', e, stackTrace);
-        throw MCPException('Failed to hide web notification: ${e.toString()}', e, stackTrace);
+        throw MCPException(
+            'Failed to hide web notification: ${e.toString()}', e, stackTrace);
       }
     }
   }
 
   /// Register a notification click handler
-  void registerClickHandler(String id, Function(String id, Map<String, dynamic>? data) handler) {
+  void registerClickHandler(
+      String id, Function(String id, Map<String, dynamic>? data) handler) {
     _clickHandlers[id] = handler;
   }
 
@@ -155,6 +169,7 @@ class WebNotificationManager implements NotificationManager {
   }
 
   /// Request notification permission explicitly
+  @override
   Future<bool> requestPermission() async {
     if (!_isSupported()) {
       return false;
@@ -213,4 +228,57 @@ class WebNotificationManager implements NotificationManager {
 
   /// Check if notification permission is granted
   bool get isPermissionGranted => _permissionGranted;
+
+  @override
+  Future<void> updateNotification({
+    required String id,
+    String? title,
+    String? body,
+    int? progress,
+    Map<String, dynamic>? data,
+  }) async {
+    // Web notifications don't support updates, so we'll recreate
+    if (_activeNotifications.containsKey(id)) {
+      final oldNotification = _activeNotifications[id]!;
+      await hideNotification(id);
+      await showNotification(
+        id: id,
+        title: title ?? oldNotification.title ?? '',
+        body: body ?? oldNotification.body ?? '',
+        icon: oldNotification.icon,
+        data: data,
+        progress: progress,
+      );
+    }
+  }
+
+  @override
+  Future<void> cancelNotification(String id) async {
+    return hideNotification(id);
+  }
+
+  @override
+  Future<void> cancelAllNotifications() async {
+    return clearAll();
+  }
+
+  @override
+  List<NotificationInfo> getActiveNotifications() {
+    return _activeNotifications.entries.map((entry) {
+      final notification = entry.value;
+      return NotificationInfo(
+        id: entry.key,
+        title: notification.title ?? '',
+        body: notification.body ?? '',
+        shownAt: DateTime.now(), // Web API doesn't provide creation time
+        data: _convertNotificationToMap(notification) ?? {},
+      );
+    }).toList();
+  }
+
+  @override
+  Future<void> dispose() async {
+    await clearAll();
+    _clickHandlers.clear();
+  }
 }

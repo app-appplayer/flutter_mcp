@@ -12,7 +12,8 @@ class AsyncUtils {
   static final Logger _logger = Logger('flutter_mcp.async_utils');
 
   // Track operations in progress by ID
-  static final Map<String, Completer<dynamic>> _operations = <String, Completer<dynamic>>{};
+  static final Map<String, Completer<dynamic>> _operations =
+      <String, Completer<dynamic>>{};
 
   // Locks for thread-safe operations by ID
   static final Map<String, Lock> _locks = <String, Lock>{};
@@ -30,8 +31,10 @@ class AsyncUtils {
     // Get configuration values
     final config = AppConfig.instance.scoped('async');
     maxRetries ??= config.get<int>('defaultMaxRetries', defaultValue: 3);
-    initialDelay ??= config.getDuration('defaultInitialDelay', defaultValue: const Duration(milliseconds: 500));
-    final backoffFactor = config.get<double>('defaultBackoffFactor', defaultValue: 2.0);
+    initialDelay ??= config.getDuration('defaultInitialDelay',
+        defaultValue: const Duration(milliseconds: 500));
+    final backoffFactor =
+        config.get<double>('defaultBackoffFactor', defaultValue: 2.0);
 
     int attempt = 0;
     Duration currentDelay = initialDelay;
@@ -42,18 +45,21 @@ class AsyncUtils {
       try {
         final result = await operation();
         if (attempt > 1) {
-          _logger.info('Operation "$operationName" succeeded on attempt $attempt');
+          _logger
+              .info('Operation "$operationName" succeeded on attempt $attempt');
         }
         return result;
       } on Exception catch (e) {
         final shouldRetry = retryIf?.call(e) ?? true;
-        
+
         if (attempt >= maxRetries || !shouldRetry) {
-          _logger.severe('Operation "$operationName" failed after $attempt attempts', e);
+          _logger.severe(
+              'Operation "$operationName" failed after $attempt attempts', e);
           rethrow;
         }
 
-        _logger.warning('Operation "$operationName" failed on attempt $attempt, retrying in ${currentDelay.inMilliseconds}ms: $e');
+        _logger.warning(
+            'Operation "$operationName" failed on attempt $attempt, retrying in ${currentDelay.inMilliseconds}ms: $e');
 
         // Wait before retrying with jitter
         await Future.delayed(_addJitter(currentDelay));
@@ -69,10 +75,11 @@ class AsyncUtils {
         }
       }
     }
-    
+
     // If we've exhausted all retries, this should have been caught above,
     // but adding for completeness
-    throw Exception('Operation "$operationName" failed after $maxRetries attempts');
+    throw Exception(
+        'Operation "$operationName" failed after $maxRetries attempts');
   }
 
   /// Add jitter to delay to avoid thundering herd problem
@@ -118,14 +125,15 @@ class AsyncUtils {
     try {
       return await operation().timeout(timeout);
     } on TimeoutException catch (e) {
-      final errorMessage = 'Operation "$operationName" timed out after ${timeout.inMilliseconds}ms';
+      final errorMessage =
+          'Operation "$operationName" timed out after ${timeout.inMilliseconds}ms';
       _logger.warning(errorMessage);
-      
+
       if (fallback != null) {
         _logger.info('Using fallback value for "$operationName"');
         return fallback;
       }
-      
+
       throw MCPTimeoutException.withContext(
         errorMessage,
         timeout,
@@ -157,8 +165,9 @@ class AsyncUtils {
 
     try {
       final future = operation();
-      final result = timeout != null ? await future.timeout(timeout) : await future;
-      
+      final result =
+          timeout != null ? await future.timeout(timeout) : await future;
+
       completer.complete(result);
       return result;
     } catch (e, stackTrace) {
@@ -201,8 +210,10 @@ class AsyncUtils {
     bool failFast = true,
   }) async {
     try {
-      final future = failFast ? Future.wait(futures) : Future.wait(futures, eagerError: false);
-      
+      final future = failFast
+          ? Future.wait(futures)
+          : Future.wait(futures, eagerError: false);
+
       if (timeout != null) {
         return await future.timeout(timeout);
       } else {
@@ -226,19 +237,19 @@ class AsyncUtils {
     Duration? operationTimeout,
   }) async {
     if (operations.isEmpty) return <T>[];
-    
+
     final results = <T>[]..length = operations.length;
     final semaphore = Semaphore(maxConcurrency);
-    
+
     final futures = operations.asMap().entries.map((entry) async {
       final index = entry.key;
       final operation = entry.value;
-      
+
       await semaphore.acquire();
       try {
         final future = operation();
-        final result = operationTimeout != null 
-            ? await future.timeout(operationTimeout) 
+        final result = operationTimeout != null
+            ? await future.timeout(operationTimeout)
             : await future;
         results[index] = result;
       } finally {
@@ -256,7 +267,7 @@ class AsyncUtils {
     Duration delay,
   ) {
     Timer? timer;
-    
+
     return () {
       timer?.cancel();
       timer = Timer(delay, function);
@@ -270,7 +281,7 @@ class AsyncUtils {
     Duration interval,
   ) {
     DateTime? lastExecution;
-    
+
     return () {
       final now = DateTime.now();
       if (lastExecution == null || now.difference(lastExecution!) >= interval) {
@@ -287,11 +298,12 @@ class AsyncUtils {
     for (final completer in _operations.values) {
       if (!completer.isCompleted) {
         completer.completeError(
-          MCPOperationCancelledException('System cleanup - operation cancelled'),
+          MCPOperationCancelledException(
+              'System cleanup - operation cancelled'),
         );
       }
     }
-    
+
     _operations.clear();
     _locks.clear();
   }

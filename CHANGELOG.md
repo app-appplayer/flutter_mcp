@@ -1,3 +1,36 @@
+## 1.0.1 - 2025-06-18
+
+### Bug Fixes and Security Improvements
+
+* **Security Enhancements**
+    * Replaced XOR encryption with HMAC-SHA256 based stream cipher
+    * Added encryption timeout and error handling
+    * Improved key generation and management
+
+* **Platform Compatibility Fixes**
+    * Android: Migrated from deprecated FlutterMain to FlutterLoader
+    * macOS: Replaced deprecated NSUserNotification with UserNotifications framework (10.14+)
+    * Added legacy support for older macOS versions
+
+* **Event System Improvements**
+    * Fixed hanging issues in EnhancedTypedEventSystem
+    * Added timeout protection for middleware processing
+    * Improved async event handling to prevent deadlocks
+    * Restored full functionality of type-safe event system
+    * **Event System Cleanup**
+        * Removed dependency on EnhancedTypedEventSystem in core EventSystem
+        * Made EventSystem fully self-contained without external dependencies
+        * Integrated typed event support directly into EventSystem
+        * Preserved all improvements (single lock, memory leak prevention, statistics)
+        * Simplified API by removing temporary workarounds
+
+* **Code Quality**
+    * Fixed null safety issues in Android background service
+    * Improved error handling across all platforms
+    * Enhanced logging and diagnostics
+
+---
+
 ## 1.0.0 - 2025-03-26
 
 ### First Stable Release

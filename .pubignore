@@ -1,3 +1,38 @@
+# Development files
+ISSUES_AND_IMPROVEMENTS.md
+.claude/
+
+# Git files
+.git/
+.gitignore
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# macOS files
+.DS_Store
+
+# Build artifacts
+build/
+.dart_tool/
+
+# Example gitignore files
+example/.gitignore
+example/android/.gitignore
+example/ios/.gitignore
+example/linux/.gitignore
+example/macos/.gitignore
+example/windows/.gitignore
+
+# Platform gitignore files
+android/.gitignore
+ios/.gitignore
+linux/.gitignore
+macos/.gitignore
+windows/.gitignore
+
 # Test output files
 test_output.txt
 test_results.txt
@@ -9,14 +44,6 @@ coverage/
 MCP_API_MIGRATION_REPORT.md
 NATIVE_IMPLEMENTATION_PLAN.md 
 PACKAGE_ANALYSIS_REPORT.md
-
-# Build outputs
-build/
-
-# IDE files
-.idea/
-.vscode/
-*.iml
 
 # Example app builds
 example/build/
@@ -35,7 +62,6 @@ example/web/build/
 # Temporary files
 *.log
 *.tmp
-.DS_Store
 
 # Git-ignored mock files
 lib/plugin_mixin.dart

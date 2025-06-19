@@ -15,7 +15,7 @@ class OperationResult<T> {
   final Duration executionTime;
   final Object? originalException;
   final StackTrace? stackTrace;
-  
+
   const OperationResult._({
     required this.isSuccess,
     this.data,
@@ -24,7 +24,7 @@ class OperationResult<T> {
     this.originalException,
     this.stackTrace,
   });
-  
+
   factory OperationResult.success(T data, Duration executionTime) {
     return OperationResult._(
       isSuccess: true,
@@ -32,7 +32,7 @@ class OperationResult<T> {
       executionTime: executionTime,
     );
   }
-  
+
   factory OperationResult.failure(
     String error,
     Duration executionTime, {
@@ -47,7 +47,7 @@ class OperationResult<T> {
       stackTrace: stackTrace,
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'isSuccess': isSuccess,
@@ -68,7 +68,7 @@ class OperationConfig {
   final String? errorCode;
   final bool throwOnError;
   final String? category;
-  
+
   const OperationConfig({
     this.timeout,
     this.maxRetries,
@@ -78,20 +78,20 @@ class OperationConfig {
     this.throwOnError = true,
     this.category,
   });
-  
+
   static const OperationConfig defaultConfig = OperationConfig();
-  
+
   static const OperationConfig quickOperation = OperationConfig(
     timeout: Duration(seconds: 5),
     recordMetrics: false,
   );
-  
+
   static const OperationConfig longOperation = OperationConfig(
     timeout: Duration(minutes: 2),
     maxRetries: 3,
     retryDelay: Duration(seconds: 1),
   );
-  
+
   static const OperationConfig criticalOperation = OperationConfig(
     timeout: Duration(seconds: 30),
     maxRetries: 5,
@@ -102,8 +102,9 @@ class OperationConfig {
 
 /// Wrapper for executing operations with consistent error handling, logging, and metrics
 class OperationWrapper {
-  static final PerformanceMonitor _performanceMonitor = PerformanceMonitor.instance;
-  
+  static final PerformanceMonitor _performanceMonitor =
+      PerformanceMonitor.instance;
+
   /// Execute a synchronous operation with error handling and logging
   static OperationResult<T> execute<T>({
     required String operationName,
@@ -112,31 +113,31 @@ class OperationWrapper {
     OperationConfig config = OperationConfig.defaultConfig,
   }) {
     final stopwatch = Stopwatch()..start();
-    
+
     try {
       logger.fine('$operationName starting');
-      
+
       final result = operation();
-      
+
       stopwatch.stop();
-      logger.fine('$operationName completed in ${stopwatch.elapsedMilliseconds}ms');
-      
+      logger.fine(
+          '$operationName completed in ${stopwatch.elapsedMilliseconds}ms');
+
       if (config.recordMetrics) {
         _recordMetric(operationName, stopwatch.elapsed, true, config);
       }
-      
+
       return OperationResult.success(result, stopwatch.elapsed);
-      
     } catch (e, stackTrace) {
       stopwatch.stop();
-      
+
       final errorMessage = '$operationName failed: ${e.toString()}';
       logger.severe(errorMessage, e, stackTrace);
-      
+
       if (config.recordMetrics) {
         _recordMetric(operationName, stopwatch.elapsed, false, config);
       }
-      
+
       if (config.throwOnError) {
         throw MCPOperationFailedException.withContext(
           errorMessage,
@@ -145,7 +146,7 @@ class OperationWrapper {
           errorCode: config.errorCode,
         );
       }
-      
+
       return OperationResult.failure(
         errorMessage,
         stopwatch.elapsed,
@@ -154,7 +155,7 @@ class OperationWrapper {
       );
     }
   }
-  
+
   /// Execute an asynchronous operation with error handling, logging, and timeout
   static Future<OperationResult<T>> executeAsync<T>({
     required String operationName,
@@ -163,38 +164,38 @@ class OperationWrapper {
     OperationConfig config = OperationConfig.defaultConfig,
   }) async {
     final stopwatch = Stopwatch()..start();
-    
+
     try {
       logger.fine('$operationName starting');
-      
+
       Future<T> future = operation();
-      
+
       // Apply timeout if specified
       if (config.timeout != null) {
         future = future.timeout(config.timeout!);
       }
-      
+
       final result = await future;
-      
+
       stopwatch.stop();
-      logger.fine('$operationName completed in ${stopwatch.elapsedMilliseconds}ms');
-      
+      logger.fine(
+          '$operationName completed in ${stopwatch.elapsedMilliseconds}ms');
+
       if (config.recordMetrics) {
         _recordMetric(operationName, stopwatch.elapsed, true, config);
       }
-      
+
       return OperationResult.success(result, stopwatch.elapsed);
-      
     } catch (e, stackTrace) {
       stopwatch.stop();
-      
+
       final errorMessage = '$operationName failed: ${e.toString()}';
       logger.severe(errorMessage, e, stackTrace);
-      
+
       if (config.recordMetrics) {
         _recordMetric(operationName, stopwatch.elapsed, false, config);
       }
-      
+
       if (config.throwOnError) {
         throw MCPOperationFailedException.withContext(
           errorMessage,
@@ -203,7 +204,7 @@ class OperationWrapper {
           errorCode: config.errorCode,
         );
       }
-      
+
       return OperationResult.failure(
         errorMessage,
         stopwatch.elapsed,
@@ -212,7 +213,7 @@ class OperationWrapper {
       );
     }
   }
-  
+
   /// Execute an operation with retry logic
   static Future<OperationResult<T>> executeWithRetry<T>({
     required String operationName,
@@ -222,17 +223,19 @@ class OperationWrapper {
   }) async {
     final maxRetries = config.maxRetries ?? 0;
     final retryDelay = config.retryDelay ?? Duration(seconds: 1);
-    
+
     for (int attempt = 0; attempt <= maxRetries; attempt++) {
-      final attemptName = maxRetries > 0 ? '$operationName (attempt ${attempt + 1}/${maxRetries + 1})' : operationName;
-      
+      final attemptName = maxRetries > 0
+          ? '$operationName (attempt ${attempt + 1}/${maxRetries + 1})'
+          : operationName;
+
       final result = await executeAsync<T>(
         operationName: attemptName,
         operation: operation,
         logger: logger,
         config: config.copyWith(throwOnError: false),
       );
-      
+
       if (result.isSuccess || attempt == maxRetries) {
         if (!result.isSuccess && config.throwOnError) {
           throw MCPOperationFailedException.withContext(
@@ -244,18 +247,19 @@ class OperationWrapper {
         }
         return result;
       }
-      
+
       // Wait before retry
       if (attempt < maxRetries) {
-        logger.warning('$operationName failed, retrying in ${retryDelay.inMilliseconds}ms...');
+        logger.warning(
+            '$operationName failed, retrying in ${retryDelay.inMilliseconds}ms...');
         await Future.delayed(retryDelay);
       }
     }
-    
+
     // This should never be reached
     throw StateError('Unexpected end of retry loop');
   }
-  
+
   /// Execute multiple operations concurrently
   static Future<List<OperationResult<T>>> executeConcurrent<T>({
     required String groupName,
@@ -264,30 +268,29 @@ class OperationWrapper {
     OperationConfig config = OperationConfig.defaultConfig,
     bool failFast = false,
   }) async {
-    logger.fine('$groupName: Starting ${operations.length} concurrent operations');
-    
-    final futures = operations.map((op) => 
-      executeAsync<T>(
-        operationName: '${groupName}.${op.name}',
-        operation: op.operation,
-        logger: logger,
-        config: config.copyWith(throwOnError: false),
-      )
-    );
-    
+    logger.fine(
+        '$groupName: Starting ${operations.length} concurrent operations');
+
+    final futures = operations.map((op) => executeAsync<T>(
+          operationName: '$groupName.${op.name}',
+          operation: op.operation,
+          logger: logger,
+          config: config.copyWith(throwOnError: false),
+        ));
+
     if (failFast) {
       final results = await Future.wait(futures);
       final failed = results.where((r) => !r.isSuccess).toList();
-      
+
       if (failed.isNotEmpty && config.throwOnError) {
         throw MCPOperationFailedException.withContext(
-          '${groupName}: ${failed.length} operations failed',
+          '$groupName: ${failed.length} operations failed',
           null,
           null,
           errorCode: config.errorCode,
         );
       }
-      
+
       return results;
     } else {
       // Wait for all to complete, even if some fail
@@ -295,25 +298,27 @@ class OperationWrapper {
         futures,
         eagerError: false,
       );
-      
+
       final failed = results.where((r) => !r.isSuccess).toList();
       if (failed.isNotEmpty) {
-        logger.warning('$groupName: ${failed.length}/${results.length} operations failed');
+        logger.warning(
+            '$groupName: ${failed.length}/${results.length} operations failed');
       }
-      
+
       return results;
     }
   }
-  
+
   /// Record performance metric
-  static void _recordMetric(String operationName, Duration duration, bool success, OperationConfig config) {
+  static void _recordMetric(String operationName, Duration duration,
+      bool success, OperationConfig config) {
     final metric = TimerMetric(
       name: 'operation.execution',
       duration: duration,
       operation: operationName,
       success: success,
     );
-    
+
     _performanceMonitor.recordTypedMetric(metric);
   }
 }
@@ -344,7 +349,7 @@ extension OperationConfigExtension on OperationConfig {
 /// Mixin for adding operation wrapper functionality to classes
 mixin OperationWrapperMixin {
   Logger get logger;
-  
+
   /// Execute a synchronous operation
   OperationResult<T> executeOperation<T>({
     required String operationName,
@@ -358,7 +363,7 @@ mixin OperationWrapperMixin {
       config: config,
     );
   }
-  
+
   /// Execute an asynchronous operation
   Future<OperationResult<T>> executeAsyncOperation<T>({
     required String operationName,
@@ -372,7 +377,7 @@ mixin OperationWrapperMixin {
       config: config,
     );
   }
-  
+
   /// Execute operation with retry
   Future<OperationResult<T>> executeWithRetry<T>({
     required String operationName,

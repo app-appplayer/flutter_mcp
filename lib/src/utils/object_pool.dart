@@ -20,7 +20,7 @@ class ObjectPool<T> {
     required void Function(T) reset,
     int initialSize = 0,
     int maxSize = 100,
-  }) : _create = create,
+  })  : _create = create,
         _reset = reset,
         _maxSize = maxSize {
     // Pre-populate the pool
@@ -68,7 +68,8 @@ class ObjectPool<T> {
 
   /// Trims the pool to half its current size
   void trim() {
-    if (_pool.length > 10) { // Only trim if it's worth it
+    if (_pool.length > 10) {
+      // Only trim if it's worth it
       final targetSize = _pool.length ~/ 2;
       while (_pool.length > targetSize) {
         _pool.removeFirst();
@@ -85,4 +86,3 @@ class ObjectPool<T> {
   /// Total number of objects created by this pool
   int get totalCreated => _totalCreated;
 }
-

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/utils/circuit_breaker.dart';
 import 'package:synchronized/synchronized.dart';
+import 'dart:async';
 
 void main() {
   group('CircuitBreaker Thread Safety Tests', () {

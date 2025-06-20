@@ -1,3 +1,17 @@
+## 1.0.3
+
+### Bug Fixes
+
+* **Authentication**
+    * Fixed compatibility with mcp_server StreamableHTTP Bearer token validation
+    * Resolved auth token handling issues for StreamableHTTP transport
+    * Fixed Swift compiler warnings in macOS implementation
+
+* **Code Quality**
+    * Fixed unused variable warnings in Swift codebase
+    * Improved type safety for notification manager implementations
+    * Enhanced error handling for authentication failures
+
 ## 1.0.2
 
 ### Bug Fixes

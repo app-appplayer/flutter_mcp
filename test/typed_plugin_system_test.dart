@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/plugins/typed_plugin_system.dart';
 import 'package:flutter_mcp/src/plugins/typed_plugin_interfaces.dart';
+import 'package:flutter_mcp/src/events/event_models.dart';
 import 'package:flutter_mcp/src/events/event_system.dart';
 import 'package:flutter_mcp/src/metrics/typed_metrics.dart';
 

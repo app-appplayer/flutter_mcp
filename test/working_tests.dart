@@ -1,6 +1,6 @@
-// Run working tests for Flutter MCP
-//
-// This file imports and runs tests that are known to work
+/// Run working tests for Flutter MCP
+///
+/// This file imports and runs tests that are known to work
 
 import 'core_implementation_test.dart' as core_implementation;
 import 'mcp_plugin_test.dart' as plugin;

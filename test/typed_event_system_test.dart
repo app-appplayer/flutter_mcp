@@ -171,7 +171,7 @@ void main() {
       final legacyEvents = <Map<String, dynamic>>[];
 
       // Subscribe to typed events
-      final typedToken = eventSystem.subscribe<MemoryEvent>((event) {
+      final typedToken = await eventSystem.subscribe<MemoryEvent>((event) {
         typedEvents.add(event);
         print('Received via typed subscription: ${event.currentMB}MB');
       });

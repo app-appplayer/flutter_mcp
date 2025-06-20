@@ -9,11 +9,20 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     // Services
     private let keychainService = KeychainService()
-    private let notificationManager = NotificationManager()
+    private let notificationManager: Any
     private let trayIconManager = TrayIconManager()
     private let permissionManager = PermissionManager()
     private var backgroundTimer: Timer?
     private var isBackgroundServiceRunning = false
+    
+    override init() {
+        if #available(macOS 10.14, *) {
+            notificationManager = NotificationManager()
+        } else {
+            notificationManager = LegacyNotificationManager()
+        }
+        super.init()
+    }
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let instance = FlutterMcpPlugin()
@@ -113,12 +122,14 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private func initialize(call: FlutterMethodCall, result: @escaping FlutterResult) {
         // Initialize components based on config
-        if let config = call.arguments as? [String: Any] {
+        if call.arguments is [String: Any] {
             // Apply configuration
         }
         
         // Set up notification delegate
-        notificationManager.setupDelegate()
+        if #available(macOS 10.14, *) {
+            (notificationManager as! NotificationManager).setupDelegate()
+        }
         
         result(nil)
     }
@@ -443,7 +454,11 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         trayIconManager.hideTrayIcon()
         
         // Cancel all notifications
-        notificationManager.cancelAllNotifications()
+        if #available(macOS 10.14, *) {
+            (notificationManager as! NotificationManager).cancelAllNotifications()
+        } else {
+            (notificationManager as! LegacyNotificationManager).cancelAllNotifications()
+        }
         
         result(nil)
     }

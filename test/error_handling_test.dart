@@ -53,6 +53,7 @@ void main() {
             maxRetries: 2,
             operationName: 'test-operation',
           );
+          fail('Should have thrown MCPOperationFailedException');
         } catch (e) {
           expect(e, isA<MCPOperationFailedException>());
         }
@@ -325,10 +326,12 @@ void main() {
 
       test('should respect maxDelay limit', () async {
         final timestamps = <DateTime>[];
+        var attempts = 0;
 
         try {
           await ErrorRecovery.tryWithExponentialBackoff(
             () async {
+              attempts++;
               timestamps.add(DateTime.now());
               throw Exception('Max delay test');
             },

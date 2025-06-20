@@ -12,6 +12,7 @@ import 'package:flutter_mcp/src/security/credential_manager.dart';
 import 'package:flutter_mcp/src/platform/storage/secure_storage.dart';
 import 'package:flutter_mcp/src/utils/memory_manager.dart';
 import 'package:flutter_mcp/src/utils/performance_monitor.dart' as perf;
+import 'package:flutter_mcp/src/events/event_system.dart';
 import 'package:flutter_mcp/src/utils/circuit_breaker.dart';
 
 import 'core_implementation_test.mocks.dart';

@@ -1,12 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/src/events/event_system.dart';
+import 'package:flutter_mcp/src/events/event_models.dart';
 
 // Test event types
 class TestEvent extends Event {
   final String message;
   final int value;
 
-  TestEvent({required this.message, required this.value, super.timestamp});
+  TestEvent({required this.message, required this.value, DateTime? timestamp})
+      : super(timestamp: timestamp);
 
   String get eventType => 'test.event';
 
@@ -20,7 +22,8 @@ class TestEvent extends Event {
 class AnotherTestEvent extends Event {
   final String data;
 
-  AnotherTestEvent({required this.data, super.timestamp});
+  AnotherTestEvent({required this.data, DateTime? timestamp})
+      : super(timestamp: timestamp);
 
   String get eventType => 'test.another';
 

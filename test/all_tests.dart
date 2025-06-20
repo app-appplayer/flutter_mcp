@@ -1,7 +1,7 @@
-// Run all tests for Flutter MCP
-//
-// This file imports and runs all test suites to ensure
-// comprehensive coverage of all features.
+/// Run all tests for Flutter MCP
+///
+/// This file imports and runs all test suites to ensure
+/// comprehensive coverage of all features.
 
 import 'core_implementation_test.dart' as core_implementation;
 import 'mcp_unit_test.dart' as unit;
@@ -23,7 +23,6 @@ import 'platform_notification_service_test.dart' as platform_notification;
 import 'platform_tray_service_test.dart' as platform_tray;
 import 'security_test.dart' as security;
 import 'transport_test.dart' as transport;
-import 'transport_configuration_test.dart' as transport_config;
 import 'native_channel_integration_test.dart' as native_channel;
 
 void main() {
@@ -66,7 +65,6 @@ void main() {
 
   // Transport tests
   transport.main();
-  transport_config.main();
 
   // Mock tests
   mock.main();

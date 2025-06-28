@@ -162,15 +162,25 @@ void main() {
         await FlutterMCP.instance.createServer(
           name: 'Test Server',
           version: '1.0.0',
-          capabilities: ServerCapabilities(),
+          config: MCPServerConfig(
+            name: 'Test Server',
+            version: '1.0.0',
+            transportType: 'stdio',
+            capabilities: ServerCapabilities(),
+          ),
         );
 
         // Create client - clientId is not used in this test
         await FlutterMCP.instance.createClient(
           name: 'Test Client',
           version: '1.0.0',
-          transportCommand: 'echo',
-          transportArgs: ['hello'],
+          config: MCPClientConfig(
+            name: 'Test Client',
+            version: '1.0.0',
+            transportType: 'stdio',
+            transportCommand: 'echo',
+            transportArgs: ['hello'],
+          ),
         );
 
         // Skip LLM creation as test_provider is not registered
@@ -445,7 +455,12 @@ void main() {
           await FlutterMCP.instance.createServer(
             name: '', // Invalid name
             version: '1.0.0',
-            capabilities: ServerCapabilities(),
+            config: MCPServerConfig(
+              name: '',
+              version: '1.0.0',
+              transportType: 'stdio',
+              capabilities: ServerCapabilities(),
+            ),
           );
         } catch (e) {
           // The actual error might be MCPOperationFailedException due to stream issues
@@ -459,8 +474,13 @@ void main() {
           await FlutterMCP.instance.createClient(
             name: 'Test Client',
             version: '1.0.0',
-            transportCommand: 'non_existent_command',
-            transportArgs: [],
+            config: MCPClientConfig(
+              name: 'Test Client',
+              version: '1.0.0',
+              transportType: 'stdio',
+              transportCommand: 'non_existent_command',
+              transportArgs: [],
+            ),
           );
         } catch (e) {
           expect(e, isA<MCPException>());
@@ -562,7 +582,12 @@ void main() {
           serverId = await FlutterMCP.instance.createServer(
             name: 'Workflow Server',
             version: '1.0.0',
-            capabilities: ServerCapabilities(),
+            config: MCPServerConfig(
+              name: 'Workflow Server',
+              version: '1.0.0',
+              transportType: 'stdio',
+              capabilities: ServerCapabilities(),
+            ),
           );
         } catch (e) {
           print('Server creation failed (expected due to stream issues): $e');

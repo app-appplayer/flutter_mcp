@@ -72,6 +72,11 @@ void main() {
         name: 'Test Server',
         version: '1.0.0',
         useStdioTransport: true,
+        config: MCPServerConfig(
+          name: 'Test Server',
+          version: '1.0.0',
+          transportType: 'stdio',
+        ),
       );
 
       expect(serverId, isNotNull);
@@ -83,8 +88,12 @@ void main() {
       final serverId = await mcp.createServer(
         name: 'Test SSE Server',
         version: '1.0.0',
-        useStdioTransport: false,
-        ssePort: 0, // Let system choose available port
+        config: MCPServerConfig(
+          name: 'Test SSE Server',
+          version: '1.0.0',
+          transportType: 'sse',
+          ssePort: 0, // Let system choose available port
+        ),
       );
 
       expect(serverId, isNotNull);
@@ -95,7 +104,12 @@ void main() {
       final clientId = await mcp.createClient(
         name: 'Test Client',
         version: '1.0.0',
-        transportCommand: 'echo',
+        config: MCPClientConfig(
+          name: 'Test Client',
+          version: '1.0.0',
+          transportType: 'stdio',
+          transportCommand: 'echo',
+        ),
       );
 
       expect(clientId, isNotNull);
@@ -112,7 +126,12 @@ void main() {
       final clientId = await mcp.createClient(
         name: 'Test SSE Client',
         version: '1.0.0',
-        serverUrl: 'http://localhost:$randomPort',
+        config: MCPClientConfig(
+          name: 'Test SSE Client',
+          version: '1.0.0',
+          transportType: 'sse',
+          serverUrl: 'http://localhost:$randomPort',
+        ),
       );
 
       expect(clientId, isNotNull);
@@ -128,7 +147,12 @@ void main() {
         () async => await mcp.createClient(
           name: 'Test Client',
           version: '1.0.0',
-          transportCommand: 'invalid_command_that_does_not_exist',
+          config: MCPClientConfig(
+            name: 'Test Client',
+            version: '1.0.0',
+            transportType: 'stdio',
+            transportCommand: 'invalid_command_that_does_not_exist',
+          ),
         ),
         throwsA(isA<MCPOperationFailedException>()),
       );
@@ -139,13 +163,21 @@ void main() {
       final server1 = await mcp.createServer(
         name: 'Server 1',
         version: '1.0.0',
-        useStdioTransport: true,
+        config: MCPServerConfig(
+          name: 'Server 1',
+          version: '1.0.0',
+          transportType: 'stdio',
+        ),
       );
 
       final server2 = await mcp.createServer(
         name: 'Server 2',
         version: '1.0.0',
-        useStdioTransport: true,
+        config: MCPServerConfig(
+          name: 'Server 2',
+          version: '1.0.0',
+          transportType: 'stdio',
+        ),
       );
 
       expect(server1, isNot(equals(server2)));
@@ -154,13 +186,23 @@ void main() {
       final client1 = await mcp.createClient(
         name: 'Client 1',
         version: '1.0.0',
-        transportCommand: 'echo',
+        config: MCPClientConfig(
+          name: 'Client 1',
+          version: '1.0.0',
+          transportType: 'stdio',
+          transportCommand: 'echo',
+        ),
       );
 
       final client2 = await mcp.createClient(
         name: 'Client 2',
         version: '1.0.0',
-        transportCommand: 'echo',
+        config: MCPClientConfig(
+          name: 'Client 2',
+          version: '1.0.0',
+          transportType: 'stdio',
+          transportCommand: 'echo',
+        ),
       );
 
       expect(client1, isNot(equals(client2)));
@@ -383,6 +425,11 @@ void main() {
       final serverId = await mcp.createServer(
         name: 'Success Server',
         version: '1.0.0',
+        config: MCPServerConfig(
+          name: 'Success Server',
+          version: '1.0.0',
+          transportType: 'stdio',
+        ),
       );
 
       // ID should follow expected format

@@ -1,3 +1,23 @@
+## 1.0.4
+
+### Improvements
+
+* **Dependency Updates**
+    * Updated to use latest versions of mcp_client (1.0.1), mcp_server (1.0.2), and mcp_llm (1.0.2)
+    * All underlying MCP packages now achieve 100% MCP 2025-03-26 standard compliance
+    * Improved compatibility with Python MCP SDK for cross-language interoperability
+
+* **MCP Standard Compliance**
+    * Enhanced validation test coverage for all MCP features
+    * Fixed Content type handling in client verification code
+    * Improved advanced MCP feature testing including OAuth, dynamic tools, and resource subscriptions
+    * All transports (STDIO, SSE, StreamableHTTP) now pass 100% of validation tests
+
+* **Type Safety**
+    * Fixed type conversion issues with Content objects
+    * Added safe text extraction methods for better compatibility
+    * Improved null safety throughout the codebase
+
 ## 1.0.3
 
 ### Bug Fixes

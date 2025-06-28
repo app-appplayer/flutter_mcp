@@ -1,7 +1,0 @@
-dependency_overrides:
-  mcp_llm:
-    path: ../mcp_llm
-  mcp_server:
-    path: ../mcp_server
-  mcp_client:
-    path: ../mcp_client

@@ -373,7 +373,6 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    setState(() => _isRunning = true);
     _updateStatus('Starting ${_mcpMode}...');
 
     try {
@@ -442,6 +441,7 @@ class _HomePageState extends State<HomePage> {
           endpointInfo = 'HTTP server listening at $baseUrl:$port$endpoint';
         }
 
+        setState(() => _isRunning = true);
         _updateStatus('✅ MCP Server running - $endpointInfo');
 
       } else {
@@ -510,15 +510,24 @@ class _HomePageState extends State<HomePage> {
         _updateStatus('🔄 Connecting to $connectionInfo...');
 
         // Connect client
-        try {
-          if (_clientId != null) {
-            await FlutterMCP.instance.connectClient(_clientId!);
+        if (_clientId != null) {
+          await FlutterMCP.instance.connectClient(_clientId!);
+          
+          // Validate connection by checking client info
+          try {
+            final clientInfo = FlutterMCP.instance.getClientDetails(_clientId!);
+            if (clientInfo.isEmpty || clientInfo['connected'] != true) {
+              throw Exception('Client connected but not ready');
+            }
+            
+            setState(() => _isRunning = true);
             _updateStatus('✅ MCP Client connected - $connectionInfo');
+          } catch (validationError) {
+            _logger.error('Connection validation failed: $validationError');
+            // Clean up the failed connection
+            await FlutterMCP.instance.clientManager.closeClient(_clientId!);
+            throw Exception('Connection validation failed: $validationError');
           }
-        } catch (connectError) {
-          _logger.error('Failed to connect client: $connectError');
-          _updateStatus('❌ Connection failed - Check if server is running at $connectionInfo');
-          throw connectError;
         }
       }
 
@@ -548,7 +557,16 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       _logger.error('Failed to start $_mcpMode: $e');
       _updateStatus('❌ Error: ${e.toString()}');
-      setState(() => _isRunning = false);
+      setState(() {
+        _isRunning = false;
+        // Clean up any created resources
+        if (_clientId != null) {
+          _clientId = null;
+        }
+        if (_serverId != null) {
+          _serverId = null;
+        }
+      });
     }
   }
 

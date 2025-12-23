@@ -18,6 +18,7 @@ Support makemind via [PayPal](https://www.paypal.com/ncp/payment/F7G56QD9LSJ92)
 - [`flutter_mcp_ui_core`](https://pub.dev/packages/flutter_mcp_ui_core): Core models, constants, and utilities for Flutter MCP UI system. 
 - [`flutter_mcp_ui_runtime`](https://pub.dev/packages/flutter_mcp_ui_runtime): Comprehensive runtime for building dynamic, reactive UIs through JSON specifications.
 - [`flutter_mcp_ui_generator`](https://pub.dev/packages/flutter_mcp_ui_generator): JSON generation toolkit for creating UI definitions with templates and fluent API. 
+- [`mcp_flow_runtime`](https://pub.dev/packages/mcp_flow_runtime): Declarative runtime for hardware control and IoT orchestration using MCP Flow DSL.
 
 ---
 
@@ -57,7 +58,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_mcp: ^1.0.4
+  flutter_mcp: ^1.0.5
 ```
 
 Or install via command line:
@@ -896,76 +897,85 @@ This native approach provides better performance, reduced dependencies, and plat
 
 ## Documentation
 
-Comprehensive documentation is available in the [doc](https://github.com/app-appplayer/flutter_mcp/tree/main/doc) directory:
+Comprehensive documentation is available in the [doc](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp) directory:
 
 ### 📚 Getting Started
-- [Installation Guide](doc/guides/installation.md) - Step-by-step installation instructions
-- [Getting Started](doc/guides/getting-started.md) - Quick start guide
-- [Architecture Overview](doc/guides/architecture.md) - System architecture and design patterns
-- [Best Practices](doc/guides/best-practices.md) - Recommended patterns and practices
+- [Installation Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/installation.md) - Step-by-step installation instructions
+- [Getting Started](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/getting-started.md) - Quick start guide
+- [Architecture Overview](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/architecture.md) - System architecture and design patterns
+- [Best Practices](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/best-practices.md) - Recommended patterns and practices
 
 ### 🔧 API Reference
-- [Core API](doc/api/core.md) - Main FlutterMCP class and initialization
-- [Client Manager](doc/api/client-manager.md) - MCP client management
-- [Server Manager](doc/api/server-manager.md) - MCP server management
-- [LLM Manager](doc/api/llm-manager.md) - LLM integration and management
-- [Plugin System](doc/api/plugin-system.md) - Plugin development and integration
-- [Platform Services](doc/api/platform-services.md) - Platform-specific features
-- [Background Service](doc/api/background-service.md) - Background task management
-- [Security API](doc/api/security-api.md) - Security and encryption features
-- [Utilities](doc/api/utilities.md) - Helper functions and utilities
+- [Flutter MCP API Reference](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/flutter-mcp-api.md) - Complete API reference
+- [Core API](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/core.md) - Main FlutterMCP class and initialization
+- [Client Manager](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/client-manager.md) - MCP client management
+- [Server Manager](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/server-manager.md) - MCP server management
+- [LLM Manager](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/llm-manager.md) - LLM integration and management
+- [Plugin System](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/plugin-system.md) - Plugin development and integration
+- [Platform Services](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/platform-services.md) - Platform-specific features
+- [Background Service](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/background-service.md) - Background task management
+- [Security API](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/security-api.md) - Security and encryption features
+- [Utilities](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/utilities.md) - Helper functions and utilities
 
 ### 💡 Examples
-- [Simple Connection](doc/examples/simple-connection.md) - Basic MCP connection example
-- [Multiple Servers](doc/examples/multiple-servers.md) - Managing multiple MCP servers
-- [Plugin Development](doc/examples/plugin-development.md) - Creating custom plugins
-- [Background Jobs](doc/examples/background-jobs.md) - Scheduling background tasks
-- [Real-time Updates](doc/examples/realtime-updates.md) - Implementing real-time features
-- [State Management](doc/examples/state-management.md) - Managing application state
-- [Security Examples](doc/examples/security-examples.md) - Implementing security features
+- [Simple Connection](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/simple-connection.md) - Basic MCP connection example
+- [Multiple Servers](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/multiple-servers.md) - Managing multiple MCP servers
+- [Plugin Development](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/plugin-development.md) - Creating custom plugins
+- [Background Jobs](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/background-jobs.md) - Scheduling background tasks
+- [Real-time Updates](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/realtime-updates.md) - Implementing real-time features
+- [State Management](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/state-management.md) - Managing application state
+- [Security Examples](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/security-examples.md) - Implementing security features
 
 ### 🚀 Platform Integration
-- [Android Integration](doc/examples/android-integration.md) - Android-specific features
-- [iOS Integration](doc/examples/ios-integration.md) - iOS-specific features
-- [Desktop Applications](doc/examples/desktop-applications.md) - Windows, macOS, Linux features
-- [Web Applications](doc/examples/web-applications.md) - Web platform features
+- [Android Integration](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/android-integration.md) - Android-specific features
+- [iOS Integration](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/ios-integration.md) - iOS-specific features
+- [Desktop Applications](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/desktop-applications.md) - Windows, macOS, Linux features
+- [Web Applications](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/web-applications.md) - Web platform features
 
 ### 🤖 LLM Integrations
-- [Anthropic Claude](doc/integrations/anthropic-claude.md) - Claude integration guide
-- [OpenAI GPT](doc/integrations/openai-gpt.md) - GPT integration guide
-- [Google Gemini](doc/integrations/google-gemini.md) - Gemini integration guide
-- [Local LLM](doc/integrations/local-llm.md) - Local LLM deployment guide
+- [Anthropic Claude](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/anthropic-claude.md) - Claude integration guide
+- [OpenAI GPT](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/openai-gpt.md) - GPT integration guide
+- [Google Gemini](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/google-gemini.md) - Gemini integration guide
+- [Local LLM](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/local-llm.md) - Local LLM deployment guide
 
 ### 🛠️ Advanced Topics
-- [Error Handling](doc/advanced/error-handling.md) - Comprehensive error handling
-- [Memory Management](doc/advanced/memory-management.md) - Memory optimization techniques
-- [Performance Tuning](doc/advanced/performance-tuning.md) - Performance optimization
-- [Security](doc/advanced/security.md) - Security best practices
-- [Testing](doc/advanced/testing.md) - Testing strategies and examples
+- [Security Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/security/security-guide.md) - Comprehensive security features
+- [OAuth Integration](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/security/oauth-integration.md) - OAuth 2.1 authentication
+- [Batch Processing](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/batch-processing.md) - Parallel processing patterns
+- [Circuit Breaker](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/circuit-breaker.md) - Resilience patterns
+- [Caching Strategies](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/caching-strategies.md) - Performance optimization
+- [Parallel Execution](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/parallel-execution.md) - Parallel processing patterns
+- [Error Handling](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/error-handling.md) - Comprehensive error handling
+- [Memory Management](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/memory-management.md) - Memory optimization techniques
+- [Performance Tuning](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/performance-tuning.md) - Performance optimization
+- [Testing](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/testing.md) - Testing strategies and examples
+
+### 🔍 Monitoring & Health
+- [Health Monitoring](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/monitoring/health-checks.md) - System health monitoring
 
 ### 🔍 Troubleshooting
-- [Common Issues](doc/troubleshooting/common-issues.md) - Solutions to common problems
-- [Debug Mode](doc/troubleshooting/debug-mode.md) - Debugging techniques
-- [Error Codes](doc/troubleshooting/error-codes.md) - Error code reference
-- [Performance Issues](doc/troubleshooting/performance.md) - Performance troubleshooting
-- [Migration Guide](doc/troubleshooting/migration.md) - Version migration guide
+- [Common Issues](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/common-issues.md) - Solutions to common problems
+- [Debug Mode](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/debug-mode.md) - Debugging techniques
+- [Error Codes](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/error-codes.md) - Error code reference
+- [Performance Issues](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/performance.md) - Performance troubleshooting
+- [Migration Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/migration.md) - Version migration guide
 
 ### 🧩 Plugin Development
-- [Plugin Lifecycle](doc/plugins/lifecycle.md) - Understanding plugin lifecycle
-- [Plugin Communication](doc/plugins/communication.md) - Inter-plugin communication
-- [Plugin Development Guide](doc/plugins/development.md) - Creating custom plugins
-- [Plugin Examples](doc/plugins/examples.md) - Sample plugin implementations
+- [Plugin Lifecycle](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/lifecycle.md) - Understanding plugin lifecycle
+- [Plugin Communication](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/communication.md) - Inter-plugin communication
+- [Plugin Development Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/development.md) - Creating custom plugins
+- [Plugin Examples](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/examples.md) - Sample plugin implementations
 
 ### 📱 Platform Guides
-- [Android](doc/platform/android.md) - Android platform guide
-- [iOS](doc/platform/ios.md) - iOS platform guide
-- [Windows](doc/platform/windows.md) - Windows platform guide
-- [macOS](doc/platform/macos.md) - macOS platform guide
-- [Linux](doc/platform/linux.md) - Linux platform guide
-- [Web](doc/platform/web.md) - Web platform guide
+- [Android](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/android.md) - Android platform guide
+- [iOS](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/ios.md) - iOS platform guide
+- [Windows](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/windows.md) - Windows platform guide
+- [macOS](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/macos.md) - macOS platform guide
+- [Linux](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/linux.md) - Linux platform guide
+- [Web](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/web.md) - Web platform guide
 
 ### 🤝 Contributing
-- [Contributing Guide](doc/CONTRIBUTING.md) - How to contribute to the project
+- [Contributing Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/CONTRIBUTING.md) - How to contribute to the project
 
 ## License
 

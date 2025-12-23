@@ -8,6 +8,8 @@ Comprehensive guide to optimizing Flutter MCP application performance.
 
 ```dart
 // lib/performance/performance_monitor.dart
+import 'dart:async';
+
 class MCPPerformanceMonitor {
   static final MCPPerformanceMonitor _instance = MCPPerformanceMonitor._();
   factory MCPPerformanceMonitor() => _instance;
@@ -586,6 +588,8 @@ class BatchedMCPClient {
 
 ```dart
 // lib/optimization/memory_cache.dart
+import 'dart:async';
+
 class MemoryEfficientCache<K, V> {
   final int maxSize;
   final int maxMemory;
@@ -777,6 +781,8 @@ class CachedMCPClient {
 
 ```dart
 // lib/optimization/object_pool.dart
+import 'dart:collection';
+
 class ObjectPool<T> {
   final T Function() factory;
   final void Function(T)? reset;

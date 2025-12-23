@@ -45,6 +45,7 @@ my_mcp_plugin/
 ```dart
 // lib/src/plugin.dart
 import 'package:flutter_mcp/flutter_mcp.dart';
+import 'package:flutter/widgets.dart';
 
 class MyCustomPlugin extends MCPPlugin {
   @override
@@ -752,7 +753,7 @@ await harness.dispose();
      sdk: '>=3.0.0 <4.0.0'
    
    dependencies:
-     flutter_mcp: ^0.1.0
+     flutter_mcp: ^1.0.4
    
    dev_dependencies:
      test: ^1.24.0
@@ -993,6 +994,8 @@ Here's a complete example of a translation plugin:
 // lib/src/translation_plugin.dart
 import 'package:flutter_mcp/flutter_mcp.dart';
 import 'package:translator/translator.dart';
+import 'dart:async';
+import 'dart:convert';
 
 class TranslationPlugin extends MCPToolPlugin {
   late final GoogleTranslator _translator;

@@ -16,7 +16,7 @@ Add Flutter MCP to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_mcp: ^0.1.0
+  flutter_mcp: ^1.0.4
 ```
 
 Or install using command line:

@@ -9,7 +9,7 @@ A comprehensive guide to troubleshooting common issues with Flutter MCP.
 **Problem**: Flutter cannot resolve the flutter_mcp package dependencies.
 
 ```
-Because flutter_mcp depends on http ^1.0.0 which depends on...
+Because flutter_mcp depends on mcp_client ^1.0.0 which depends on...
 ```
 
 **Solution**:
@@ -26,8 +26,8 @@ Because flutter_mcp depends on http ^1.0.0 which depends on...
 3. If using a specific version, check compatibility:
    ```yaml
    dependencies:
-     flutter_mcp: ^1.0.0
-     http: ^1.0.0  # Ensure compatible versions
+     flutter_mcp: ^1.0.4
+     mcp_client: ^1.0.0  # Ensure compatible versions
    ```
 
 ### Platform-Specific Build Errors
@@ -61,14 +61,69 @@ post_install do |installer|
 end
 ```
 
+## Initialization Issues
+
+### "Flutter MCP is not initialized" Error
+
+**Problem**: Getting error when trying to use MCP features.
+
+```
+MCPException: Flutter MCP is not initialized
+```
+
+**Solution**:
+
+1. Always initialize before use:
+   ```dart
+   void main() async {
+     WidgetsFlutterBinding.ensureInitialized();
+     
+     // Initialize MCP first
+     await FlutterMCP.instance.init(
+       MCPConfig(
+         appName: 'My App',
+         appVersion: '1.0.0',
+         autoStart: false,
+       ),
+     );
+     
+     runApp(MyApp());
+   }
+   ```
+
+2. Check initialization status:
+   ```dart
+   if (FlutterMCP.instance.isInitialized) {
+     // Safe to use MCP features
+     final clientId = await FlutterMCP.instance.createClient(...);
+   } else {
+     // Handle not initialized state
+   }
+   ```
+
+3. For widgets, ensure initialization in initState:
+   ```dart
+   @override
+   void initState() {
+     super.initState();
+     _initializeMCP();
+   }
+   
+   Future<void> _initializeMCP() async {
+     if (!FlutterMCP.instance.isInitialized) {
+       await FlutterMCP.instance.init(MCPConfig(...));
+     }
+   }
+   ```
+
 ## Connection Issues
 
-### MCP Server Connection Failed
+### MCP Client Connection Failed
 
 **Problem**: Cannot connect to MCP server.
 
 ```dart
-MCPException: Failed to connect to server at localhost:8080
+MCPConnectionException: Failed to connect to server
 ```
 
 **Solution**:
@@ -82,108 +137,137 @@ MCPException: Failed to connect to server at localhost:8080
    lsof -i :8080
    ```
 
-2. Check server configuration:
+2. Use correct transport type:
    ```dart
-   final config = McpConfig(
-     servers: [
-       ServerConfig(
-         id: 'main-server',
-         url: 'ws://localhost:8080',  // Ensure correct protocol
-         reconnectDelay: Duration(seconds: 5),
-         maxReconnectAttempts: 3,
-       ),
-     ],
+   // Explicitly specify transport type
+   final clientId = await FlutterMCP.instance.createClient(
+     name: 'My Client',
+     version: '1.0.0',
+     serverUrl: 'http://localhost:8080/sse',
+     transportType: 'sse',  // Must match server
    );
    ```
 
 3. Handle connection errors:
    ```dart
    try {
-     await mcp.initialize(config: config);
+     await FlutterMCP.instance.connectClient(clientId);
    } on MCPConnectionException catch (e) {
      print('Connection failed: ${e.message}');
-     // Implement fallback or retry logic
+     // Implement retry logic
    }
    ```
 
-### SSL/TLS Certificate Issues
+### Transport Type Mismatch
 
-**Problem**: SSL handshake fails with self-signed certificates.
+**Problem**: Client and server use different transport types.
 
 **Solution**:
 
-1. For development only - bypass certificate validation:
+1. For SSE servers:
    ```dart
-   // WARNING: Only for development!
-   import 'dart:io';
-   
-   class MyHttpOverrides extends HttpOverrides {
-     @override
-     HttpClient createHttpClient(SecurityContext? context) {
-       return super.createHttpClient(context)
-         ..badCertificateCallback = (cert, host, port) => true;
-     }
-   }
-   
-   void main() {
-     HttpOverrides.global = MyHttpOverrides();
-     runApp(MyApp());
-   }
+   final clientId = await FlutterMCP.instance.createClient(
+     name: 'SSE Client',
+     version: '1.0.0',
+     serverUrl: 'http://localhost:8080/sse',
+     transportType: 'sse',
+   );
    ```
 
-2. For production - add trusted certificates:
+2. For StreamableHttp servers:
    ```dart
-   final securityContext = SecurityContext()
-     ..setTrustedCertificates('path/to/ca-cert.pem');
-   
-   final config = McpConfig(
-     securityContext: securityContext,
+   final clientId = await FlutterMCP.instance.createClient(
+     name: 'StreamableHttp Client',
+     version: '1.0.0',
+     serverUrl: 'http://localhost:8080/mcp',
+     transportType: 'streamablehttp',
+   );
+   ```
+
+3. For stdio servers:
+   ```dart
+   final clientId = await FlutterMCP.instance.clientManager.createClient(
+     MCPClientConfig(
+       name: 'Stdio Client',
+       version: '1.0.0',
+       transportType: 'stdio',
+       transportCommand: 'node',
+       transportArgs: ['server.js'],
+     ),
    );
    ```
 
 ## Runtime Errors
 
-### Out of Memory
+### Resource Not Found
 
-**Problem**: App crashes with out of memory error.
+**Problem**: Cannot find client/server/LLM by ID.
 
-```
-E/flutter: [ERROR:flutter/runtime/dart_vm_initializer.cc(41)] 
-Unhandled Exception: Out of Memory
+```dart
+MCPException: Client with ID 'xxx' not found
 ```
 
 **Solution**:
 
-1. Implement proper resource cleanup:
+1. Store IDs properly:
    ```dart
-   class _MyWidgetState extends State<MyWidget> {
-     FlutterMCP? _mcp;
+   class MCPService {
+     String? _clientId;
      
-     @override
-     void dispose() {
-       _mcp?.dispose();  // Always dispose MCP instances
-       super.dispose();
+     Future<void> connect() async {
+       _clientId = await FlutterMCP.instance.createClient(...);
+       await FlutterMCP.instance.connectClient(_clientId!);
+     }
+     
+     Future<void> callTool(String tool, Map<String, dynamic> args) async {
+       if (_clientId == null) {
+         throw MCPException('Not connected');
+       }
+       return await FlutterMCP.instance.clientManager.callTool(
+         _clientId!,
+         tool,
+         args,
+       );
      }
    }
    ```
 
-2. Limit concurrent operations:
+2. Check resource existence:
    ```dart
-   final mcp = FlutterMCP(
-     config: McpConfig(
-       maxConcurrentOperations: 5,
-       memoryLimit: 100 * 1024 * 1024, // 100MB
-     ),
-   );
+   final clientInfo = FlutterMCP.instance.clientManager.getClientInfo(clientId);
+   if (clientInfo == null) {
+     print('Client not found');
+     return;
+   }
    ```
 
-3. Use memory monitoring:
+### Memory Leaks
+
+**Problem**: App memory usage keeps growing.
+
+**Solution**:
+
+1. Always clean up resources:
    ```dart
-   mcp.monitoring.onMemoryWarning.listen((usage) {
-     if (usage > 0.8) {  // 80% usage
-       _cleanupResources();
+   @override
+   void dispose() {
+     if (_clientId != null) {
+       FlutterMCP.instance.clientManager.closeClient(_clientId!);
      }
-   });
+     super.dispose();
+   }
+   ```
+
+2. Enable memory monitoring:
+   ```dart
+   await FlutterMCP.instance.init(
+     MCPConfig(
+       appName: 'My App',
+       appVersion: '1.0.0',
+       highMemoryThresholdMB: 512,
+       enablePerformanceMonitoring: true,
+     ),
+   );
    ```
 
 ### Timeout Errors
@@ -196,17 +280,17 @@ MCPTimeoutException: Operation timed out after 30 seconds
 
 **Solution**:
 
-1. Adjust timeout settings:
+1. Adjust timeout in client config:
    ```dart
-   final config = McpConfig(
-     requestTimeout: Duration(seconds: 60),
-     servers: [
-       ServerConfig(
-         id: 'server',
-         url: 'ws://localhost:8080',
-         connectionTimeout: Duration(seconds: 10),
-       ),
-     ],
+   final clientId = await FlutterMCP.instance.clientManager.createClient(
+     MCPClientConfig(
+       name: 'Client',
+       version: '1.0.0',
+       transportType: 'sse',
+       serverUrl: 'http://localhost:8080/sse',
+       timeout: Duration(seconds: 60),
+       sseReadTimeout: Duration(minutes: 5),
+     ),
    );
    ```
 
@@ -229,45 +313,6 @@ MCPTimeoutException: Operation timed out after 30 seconds
    }
    ```
 
-### Serialization Errors
-
-**Problem**: JSON serialization/deserialization fails.
-
-```
-FormatException: Unexpected character (at character 1)
-```
-
-**Solution**:
-
-1. Validate JSON structure:
-   ```dart
-   try {
-     final result = await mcp.client.callTool(
-       serverId: 'server',
-       name: 'tool',
-       arguments: {'data': jsonData},
-     );
-   } on FormatException catch (e) {
-     print('Invalid JSON: $e');
-     // Log the actual response for debugging
-   }
-   ```
-
-2. Use proper type conversions:
-   ```dart
-   class MyModel {
-     final String name;
-     final int? age;  // Nullable for optional fields
-     
-     factory MyModel.fromJson(Map<String, dynamic> json) {
-       return MyModel(
-         name: json['name'] as String,
-         age: json['age'] as int?,  // Safe cast
-       );
-     }
-   }
-   ```
-
 ## Platform-Specific Issues
 
 ### Android
@@ -280,40 +325,26 @@ FormatException: Unexpected character (at character 1)
 
 1. Update manifest permissions:
    ```xml
-   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-   <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+   <uses-permission android:name="android.permission.WAKE_LOCK" />
    ```
 
-2. Handle battery optimizations:
+2. Configure background service properly:
    ```dart
-   import 'package:battery_optimization/battery_optimization.dart';
-   
-   Future<void> requestBatteryOptimizationExemption() async {
-     final isIgnoring = await BatteryOptimization.isIgnoringBatteryOptimizations();
-     if (!isIgnoring) {
-       await BatteryOptimization.openBatteryOptimizationSettings();
-     }
-   }
+   await FlutterMCP.instance.init(
+     MCPConfig(
+       appName: 'My App',
+       appVersion: '1.0.0',
+       useBackgroundService: true,
+       background: BackgroundConfig(
+         notificationChannelId: 'mcp_background',
+         notificationChannelName: 'MCP Background Service',
+         notificationDescription: 'Keeps MCP running',
+         keepAlive: true,
+       ),
+     ),
+   );
    ```
-
-#### ProGuard Issues
-
-**Problem**: App crashes in release mode due to code obfuscation.
-
-**Solution**:
-
-Add ProGuard rules:
-```proguard
-# Keep Flutter MCP classes
--keep class com.example.flutter_mcp.** { *; }
--keep class io.flutter.plugin.** { *; }
-
-# Keep JSON serialization
--keepattributes *Annotation*
--keep class * implements com.google.gson.TypeAdapterFactory
--keep class * implements com.google.gson.JsonSerializer
--keep class * implements com.google.gson.JsonDeserializer
-```
 
 ### iOS
 
@@ -344,142 +375,83 @@ Add ProGuard rules:
          <key>NSIncludesSubdomains</key>
          <true/>
          <key>NSExceptionAllowsInsecureHTTPLoads</key>
-         <true/>
+         <false/>
        </dict>
      </dict>
    </dict>
    ```
 
-#### Background Task Limitations
-
-**Problem**: Background tasks terminate after 30 seconds on iOS.
-
-**Solution**:
-
-1. Use background task API properly:
-   ```swift
-   // ios/Runner/AppDelegate.swift
-   import BackgroundTasks
-   
-   @UIApplicationMain
-   @objc class AppDelegate: FlutterAppDelegate {
-     override func application(
-       _ application: UIApplication,
-       didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-     ) -> Bool {
-       BGTaskScheduler.shared.register(
-         forTaskWithIdentifier: "com.example.mcp.refresh",
-         using: nil
-       ) { task in
-         self.handleAppRefresh(task: task as! BGAppRefreshTask)
-       }
-       return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-     }
-   }
-   ```
-
 ### Desktop
 
-#### Permission Issues
+#### System Tray Issues
 
-**Problem**: Cannot access files or network on desktop platforms.
+**Problem**: System tray icon not showing on desktop.
 
 **Solution**:
 
-1. macOS - add entitlements:
-   ```xml
-   <!-- macos/Runner/DebugProfile.entitlements -->
-   <key>com.apple.security.network.client</key>
-   <true/>
-   <key>com.apple.security.files.user-selected.read-write</key>
-   <true/>
-   ```
-
-2. Linux - check AppArmor/SELinux policies:
-   ```bash
-   # Check if AppArmor is blocking
-   sudo aa-status
-   
-   # Temporarily disable for testing
-   sudo aa-complain /path/to/your/app
-   ```
-
-3. Windows - run as administrator or adjust permissions:
+1. Enable tray in configuration:
    ```dart
-   // Check for admin rights
-   import 'dart:io';
-   
-   bool isRunningAsAdmin() {
-     if (!Platform.isWindows) return true;
-     
-     try {
-       // Try to access a protected directory
-       Directory('C:\\Windows\\System32\\config').listSync();
-       return true;
-     } catch (e) {
-       return false;
-     }
-   }
+   await FlutterMCP.instance.init(
+     MCPConfig(
+       appName: 'Desktop App',
+       appVersion: '1.0.0',
+       useTray: true,
+       tray: TrayConfig(
+         iconPath: 'assets/icons/tray_icon.png',
+         tooltip: 'My MCP App',
+         menuItems: [
+           TrayMenuItem(label: 'Show Window'),
+           TrayMenuItem.separator(),
+           TrayMenuItem(label: 'Quit'),
+         ],
+       ),
+     ),
+   );
+   ```
+
+2. Ensure icon asset is included:
+   ```yaml
+   # pubspec.yaml
+   flutter:
+     assets:
+       - assets/icons/tray_icon.png
    ```
 
 ## Performance Issues
 
-### Slow Server Responses
+### Slow Client Creation
 
-**Problem**: Server takes too long to respond.
+**Problem**: Creating clients takes too long.
 
 **Solution**:
 
-1. Implement request caching:
+1. Use simplified client creation for common cases:
    ```dart
-   class CachedMCPClient {
-     final FlutterMCP mcp;
-     final Map<String, CacheEntry> _cache = {};
-     final Duration cacheDuration;
-     
-     CachedMCPClient({
-       required this.mcp,
-       this.cacheDuration = const Duration(minutes: 5),
-     });
-     
-     Future<ToolResult> callTool({
-       required String serverId,
-       required String name,
-       required Map<String, dynamic> arguments,
-     }) async {
-       final key = '$serverId:$name:${jsonEncode(arguments)}';
-       final cached = _cache[key];
-       
-       if (cached != null && !cached.isExpired) {
-         return cached.result;
-       }
-       
-       final result = await mcp.client.callTool(
-         serverId: serverId,
-         name: name,
-         arguments: arguments,
-       );
-       
-       _cache[key] = CacheEntry(
-         result: result,
-         timestamp: DateTime.now(),
-         duration: cacheDuration,
-       );
-       
-       return result;
-     }
-   }
+   // Fast creation with defaults
+   final clientId = await FlutterMCP.instance.createClient(
+     name: 'Quick Client',
+     version: '1.0.0',
+     serverUrl: 'http://localhost:8080/sse',
+   );
    ```
 
-2. Use connection pooling:
+2. Pre-create clients during initialization:
    ```dart
-   final config = McpConfig(
-     connectionPool: ConnectionPoolConfig(
-       maxConnections: 5,
-       maxIdleTime: Duration(minutes: 5),
-       connectionTimeout: Duration(seconds: 10),
-     ),
-   );
+   class MCPService {
+     final Map<String, String> _clientPool = {};
+     
+     Future<void> initialize() async {
+       // Pre-create clients
+       for (int i = 0; i < 5; i++) {
+         final clientId = await FlutterMCP.instance.createClient(...);
+         _clientPool['client_$i'] = clientId;
+       }
+     }
+     
+     String getAvailableClient() {
+       return _clientPool.values.first;
+     }
+   }
    ```
 
 ### UI Freezing
@@ -488,24 +460,7 @@ Add ProGuard rules:
 
 **Solution**:
 
-1. Use isolates for heavy operations:
-   ```dart
-   import 'dart:isolate';
-   
-   Future<String> processInIsolate(String data) async {
-     final receivePort = ReceivePort();
-     
-     await Isolate.spawn((SendPort sendPort) {
-       // Heavy processing here
-       final result = processData(data);
-       sendPort.send(result);
-     }, receivePort.sendPort);
-     
-     return await receivePort.first as String;
-   }
-   ```
-
-2. Implement proper state management:
+1. Use proper state management:
    ```dart
    class MCPViewModel extends ChangeNotifier {
      bool _isLoading = false;
@@ -522,7 +477,7 @@ Add ProGuard rules:
        notifyListeners();
        
        try {
-         _result = await mcp.client.callTool(...);
+         _result = await FlutterMCP.instance.clientManager.callTool(...);
        } catch (e) {
          _error = e.toString();
        } finally {
@@ -533,139 +488,108 @@ Add ProGuard rules:
    }
    ```
 
+2. Show loading indicators:
+   ```dart
+   @override
+   Widget build(BuildContext context) {
+     return Consumer<MCPViewModel>(
+       builder: (context, viewModel, child) {
+         if (viewModel.isLoading) {
+           return CircularProgressIndicator();
+         }
+         if (viewModel.error != null) {
+           return Text('Error: ${viewModel.error}');
+         }
+         return Text('Result: ${viewModel.result}');
+       },
+     );
+   }
+   ```
+
 ## Debugging Tips
 
 ### Enable Verbose Logging
 
 ```dart
 void main() {
-  // Enable debug logging
-  FlutterMCP.enableDebugLogging = true;
-  
-  // Set log level
-  Logger.root.level = Level.ALL;
-  Logger.root.onRecord.listen((record) {
-    print('${record.level.name}: ${record.time}: ${record.message}');
-  });
+  // Configure logging
+  FlutterMcpLogging.configure(
+    level: Level.FINE,
+    enableDebugLogging: true,
+  );
   
   runApp(MyApp());
 }
 ```
 
-### Use Development Tools
+### Get Diagnostic Information
 
 ```dart
-// Enable development mode
-final config = McpConfig(
-  developmentMode: true,
-  debugOptions: DebugOptions(
-    logNetworkTraffic: true,
-    logPerformanceMetrics: true,
-    enableInspector: true,
-  ),
-);
+// Get overall status
+final status = FlutterMCP.instance.getStatus();
+print('Status: $status');
 
-// Access debug information
-mcp.debug.getNetworkLogs().then((logs) {
-  logs.forEach(print);
-});
+// Get specific manager status
+final clientStatus = FlutterMCP.instance.clientManagerStatus;
+final serverStatus = FlutterMCP.instance.serverManagerStatus;
+final llmStatus = FlutterMCP.instance.llmManagerStatus;
+
+// Get detailed resource info
+final clientDetails = FlutterMCP.instance.getClientDetails(clientId);
+final serverDetails = FlutterMCP.instance.getServerDetails(serverId);
+final llmDetails = FlutterMCP.instance.getLlmDetails(llmId);
 ```
 
-### Implement Error Boundaries
+### Monitor Events
 
 ```dart
-class ErrorBoundary extends StatefulWidget {
-  final Widget child;
-  
-  const ErrorBoundary({Key? key, required this.child}) : super(key: key);
-  
-  @override
-  State<ErrorBoundary> createState() => _ErrorBoundaryState();
-}
+// Monitor client events
+FlutterMCP.instance.clientManager.clientStream.listen((clients) {
+  print('Active clients: ${clients.length}');
+  for (final client in clients) {
+    print('Client ${client.id}: ${client.status}');
+  }
+});
 
-class _ErrorBoundaryState extends State<ErrorBoundary> {
-  bool hasError = false;
-  String? errorMessage;
-  
-  @override
-  void initState() {
-    super.initState();
-    
-    // Catch Flutter errors
-    FlutterError.onError = (FlutterErrorDetails details) {
-      setState(() {
-        hasError = true;
-        errorMessage = details.exception.toString();
-      });
-    };
+// Monitor server events
+FlutterMCP.instance.serverManager.serverStream.listen((servers) {
+  print('Active servers: ${servers.length}');
+  for (final server in servers) {
+    print('Server ${server.id}: ${server.status}');
   }
-  
-  @override
-  Widget build(BuildContext context) {
-    if (hasError) {
-      return Center(
-        child: Text('Error: $errorMessage'),
-      );
-    }
-    
-    return widget.child;
-  }
-}
+});
 ```
 
 ## Getting Help
 
-### Diagnostic Information
+### Collecting Diagnostic Information
 
 When reporting issues, include:
 
-1. **System Information**:
+1. **Flutter MCP version**:
    ```dart
-   Future<Map<String, dynamic>> collectDiagnostics() async {
-     return {
-       'platform': Platform.operatingSystem,
-       'dart_version': Platform.version,
-       'flutter_version': await getFlutterVersion(),
-       'mcp_version': FlutterMCP.version,
-       'config': mcp.config.toJson(),
-       'server_status': await mcp.getServerStatus(),
-     };
-   }
+   print('Flutter MCP version: ${FlutterMCP.version}');
    ```
 
-2. **Error Logs**:
+2. **Configuration**:
    ```dart
-   // Capture and save error logs
-   FlutterError.onError = (details) {
-     File('error_log.txt').writeAsStringSync(
-       '${DateTime.now()}: ${details.exception}\n${details.stack}\n',
-       mode: FileMode.append,
-     );
-   };
+   final config = FlutterMCP.instance.config;
+   print('Config: ${config?.toJson()}');
    ```
 
-3. **Network Traces**:
-   ```dart
-   // Enable network logging
-   mcp.client.onRequest.listen((request) {
-     print('Request: ${request.toJson()}');
-   });
-   
-   mcp.client.onResponse.listen((response) {
-     print('Response: ${response.toJson()}');
-   });
-   ```
+3. **Error logs** with stack traces
+
+4. **Minimal reproducible example**
 
 ### Community Resources
 
-- GitHub Issues: [github.com/flutter-mcp/issues](https://github.com/flutter-mcp/issues)
-- Discord Community: [discord.gg/flutter-mcp](https://discord.gg/flutter-mcp)
-- Stack Overflow: Tag with `flutter-mcp`
+- GitHub Issues: [github.com/app-appplayer/flutter_mcp/issues](https://github.com/app-appplayer/flutter_mcp/issues)
 - Documentation: [flutter-mcp.dev](https://flutter-mcp.dev)
+- pub.dev: [pub.dev/packages/flutter_mcp](https://pub.dev/packages/flutter_mcp)
 
 ## See Also
 
-- [Debug Mode](/doc/troubleshooting/debug-mode.md)
-- [Error Codes Reference](/doc/troubleshooting/error-codes.md)
-- [Performance Tuning](/doc/troubleshooting/performance.md)
-- [Migration Guide](/doc/troubleshooting/migration.md)
+- [Debug Mode](debug-mode.md)
+- [Error Codes Reference](error-codes.md)
+- [Performance Tuning](performance.md)
+- [Migration Guide](migration.md)

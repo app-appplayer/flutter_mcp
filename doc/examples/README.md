@@ -64,7 +64,7 @@ This directory contains example applications demonstrating various Flutter MCP f
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/flutter_mcp.git
+   git clone https://github.com/app-appplayer/flutter_mcp.git
    cd flutter_mcp/examples
    ```
 

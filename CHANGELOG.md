@@ -1,3 +1,11 @@
+## 1.0.5
+
+### Bug Fixes
+
+* **Linux Compatibility**
+    * Fixed appindicator library detection for modern Linux distributions
+    * Added fallback support for both ayatana-appindicator3 and legacy appindicator3
+
 ## 1.0.4
 
 ### Improvements

@@ -45,7 +45,11 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBNOTIFY REQUIRED libnotify)
 pkg_check_modules(LIBSECRET REQUIRED libsecret-1)
-pkg_check_modules(APPINDICATOR REQUIRED appindicator3-0.1)
+# Check for ayatana-appindicator first (modern Ubuntu/Debian), fall back to legacy appindicator
+pkg_check_modules(APPINDICATOR ayatana-appindicator3-0.1)
+if(NOT APPINDICATOR_FOUND)
+  pkg_check_modules(APPINDICATOR REQUIRED appindicator3-0.1)
+endif()
 
 target_include_directories(${PLUGIN_NAME} PRIVATE 
   ${LIBNOTIFY_INCLUDE_DIRS}

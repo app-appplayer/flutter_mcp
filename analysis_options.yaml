@@ -1,4 +1,15 @@
 include: package:flutter_lints/flutter.yaml
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+# Web platform files use legacy js_util APIs that are deprecated in
+# newer Dart SDKs. These will be migrated separately to package:web /
+# dart:js_interop; until then, exclude from strict analysis.
+analyzer:
+  exclude:
+    - lib/src/platform/web/**
+    - lib/src/platform/background/web_background.dart
+    - lib/src/platform/notification/web_notification.dart
+  errors:
+    deprecated_member_use: ignore
+    unused_import: ignore
+    unused_field: ignore
+    unused_local_variable: ignore

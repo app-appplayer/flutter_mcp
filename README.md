@@ -1,27 +1,5 @@
 # Flutter MCP
 
-## 🙌 Support This Project
-
-If you find this package useful, consider supporting ongoing development on PayPal.
-
-[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/ncp/payment/F7G56QD9LSJ92)  
-Support makemind via [PayPal](https://www.paypal.com/ncp/payment/F7G56QD9LSJ92)
-
----
-
-### 🔗 MCP Dart Package Family
-
-- [`mcp_server`](https://pub.dev/packages/mcp_server): Exposes tools, resources, and prompts to LLMs. Acts as the AI server.
-- [`mcp_client`](https://pub.dev/packages/mcp_client): Connects Flutter/Dart apps to MCP servers. Acts as the client interface.
-- [`mcp_llm`](https://pub.dev/packages/mcp_llm): Bridges LLMs (Claude, OpenAI, etc.) to MCP clients/servers. Acts as the LLM brain.
-- [`flutter_mcp`](https://pub.dev/packages/flutter_mcp): Complete Flutter plugin for MCP integration with platform features.
-- [`flutter_mcp_ui_core`](https://pub.dev/packages/flutter_mcp_ui_core): Core models, constants, and utilities for Flutter MCP UI system. 
-- [`flutter_mcp_ui_runtime`](https://pub.dev/packages/flutter_mcp_ui_runtime): Comprehensive runtime for building dynamic, reactive UIs through JSON specifications.
-- [`flutter_mcp_ui_generator`](https://pub.dev/packages/flutter_mcp_ui_generator): JSON generation toolkit for creating UI definitions with templates and fluent API. 
-- [`mcp_flow_runtime`](https://pub.dev/packages/mcp_flow_runtime): Declarative runtime for hardware control and IoT orchestration using MCP Flow DSL.
-
----
-
 A Flutter plugin for integrating Large Language Models (LLMs) with [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). This plugin provides comprehensive integration between MCP components and platform-specific features like background execution, notifications, system tray, and lifecycle management.
 
 ## Features
@@ -51,21 +29,6 @@ A Flutter plugin for integrating Large Language Models (LLMs) with [Model Contex
   - Cross-platform support: Android, iOS, macOS, Windows, Linux, Web
 
 ## Getting Started
-
-### Installation
-
-Add the package to your `pubspec.yaml`:
-
-```yaml
-dependencies:
-  flutter_mcp: ^1.0.5
-```
-
-Or install via command line:
-
-```bash
-flutter pub add flutter_mcp
-```
 
 ### Platform Setup (Optional)
 

@@ -149,7 +149,9 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         }
         
         let delay = TimeInterval(delayMillis) / 1000.0
-        backgroundTaskManager.scheduleTask(identifier: taskId, delay: delay)
+        let data = args["data"] as? [String: Any]
+        backgroundTaskManager.scheduleTask(
+            identifier: taskId, delay: delay, data: data)
         result(nil)
     }
     

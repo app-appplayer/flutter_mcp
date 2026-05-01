@@ -20,7 +20,6 @@ import 'mcp_perfomance_test.dart' as performance;
 import 'platform_integration_test.dart' as platform;
 import 'platform_background_service_test.dart' as platform_background;
 import 'platform_notification_service_test.dart' as platform_notification;
-import 'platform_tray_service_test.dart' as platform_tray;
 import 'security_test.dart' as security;
 import 'transport_test.dart' as transport;
 import 'native_channel_integration_test.dart' as native_channel;
@@ -41,7 +40,6 @@ void main() {
   // Platform-specific tests
   platform_background.main();
   platform_notification.main();
-  platform_tray.main();
   native_channel.main();
 
   // Feature-specific tests

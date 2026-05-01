@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
+import 'package:logging/logging.dart';
 
-/// Flutter MCP HTTP 연결 예제
-/// 
-/// 이 예제는 HTTP URL을 통해 MCP 서버에 연결하는 올바른 방법을 보여줍니다.
-/// Flutter MCP 1.0.4 버전 기준입니다.
+/// Flutter MCP HTTP connection example.
+///
+/// Demonstrates the supported way to talk to an MCP server over HTTP.
+/// Each `MCPClientConfig` must declare its `transportType` explicitly —
+/// the runtime never infers it from the URL.
+final _log = Logger('flutter_mcp.http_connection_example');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 1. Flutter MCP 초기화 (필수!)
+  FlutterMcpLogging.configure(level: Level.INFO);
+
   try {
     await FlutterMCP.instance.init(
       MCPConfig(
@@ -20,9 +24,9 @@ void main() async {
         useTray: false,
       ),
     );
-    print('✅ Flutter MCP initialized successfully');
+    _log.info('Flutter MCP initialized successfully');
   } catch (e) {
-    print('❌ Failed to initialize Flutter MCP: $e');
+    _log.severe('Failed to initialize Flutter MCP: $e');
     return;
   }
 
@@ -62,61 +66,45 @@ class _HttpConnectionExampleState extends State<HttpConnectionExample> {
     super.dispose();
   }
 
-  /// 방법 1: config 없이 직접 serverUrl 전달 (권장)
-  Future<void> _connectDirectly() async {
+  /// Connect with a fully-described `MCPClientConfig`. The transport
+  /// type is picked by inspecting the path the user typed; you would
+  /// normally know which transport you're targeting and hard-code it.
+  Future<void> _connect() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) {
-      setState(() => _status = '❌ URL is empty');
+      setState(() => _status = 'URL is empty');
       return;
     }
 
-    setState(() => _status = '🔄 Connecting...');
+    setState(() => _status = 'Connecting...');
 
     try {
-      // 직접 파라미터로 전달 - config 없이
-      _clientId = await FlutterMCP.instance.createClient(
-        name: 'HTTP Client (Direct)',
-        version: '1.0.0',
-        serverUrl: url,
-      );
-
-      // 연결
-      await FlutterMCP.instance.connectClient(_clientId!);
-      
-      setState(() => _status = '✅ Connected successfully via direct parameters');
-    } catch (e) {
-      setState(() => _status = '❌ Error: $e');
-    }
-  }
-
-  /// 방법 2: MCPClientConfig 사용 (transportType 필수!)
-  Future<void> _connectWithConfig() async {
-    final url = _urlController.text.trim();
-    if (url.isEmpty) {
-      setState(() => _status = '❌ URL is empty');
-      return;
-    }
-
-    setState(() => _status = '🔄 Connecting with config...');
-
-    try {
-      // URL에서 transport type 결정
+      // Pick a transport based on the URL convention. In production
+      // pick this once for your deployment, not at runtime.
       String transportType;
+      String? endpoint;
+      String serverUrl = url;
       if (url.contains('/sse')) {
         transportType = 'sse';
+        // Strip the path so MCPClientConfig can re-append `endpoint`.
+        final uri = Uri.parse(url);
+        serverUrl = uri.replace(path: '').toString();
+        endpoint = uri.path;
       } else if (url.contains('/mcp')) {
         transportType = 'streamablehttp';
+        final uri = Uri.parse(url);
+        serverUrl = uri.replace(path: '').toString();
+        endpoint = uri.path;
       } else {
-        // 기본값
         transportType = 'sse';
       }
 
-      // Config 생성 - transportType 반드시 명시!
       final config = MCPClientConfig(
-        name: 'HTTP Client (Config)',
+        name: 'HTTP Client',
         version: '1.0.0',
-        transportType: transportType,  // 필수!
-        serverUrl: url,
+        transportType: transportType,
+        serverUrl: serverUrl,
+        endpoint: endpoint,
       );
 
       _clientId = await FlutterMCP.instance.createClient(
@@ -125,12 +113,12 @@ class _HttpConnectionExampleState extends State<HttpConnectionExample> {
         config: config,
       );
 
-      // 연결
       await FlutterMCP.instance.connectClient(_clientId!);
-      
-      setState(() => _status = '✅ Connected successfully via config (transport: $transportType)');
+
+      setState(() => _status =
+          'Connected via $transportType to $serverUrl${endpoint ?? ''}');
     } catch (e) {
-      setState(() => _status = '❌ Error: $e');
+      setState(() => _status = 'Error: $e');
     }
   }
 
@@ -144,7 +132,7 @@ class _HttpConnectionExampleState extends State<HttpConnectionExample> {
         _status = 'Disconnected';
       });
     } catch (e) {
-      setState(() => _status = '❌ Disconnect error: $e');
+      setState(() => _status = 'Disconnect error: $e');
     }
   }
 
@@ -159,7 +147,7 @@ class _HttpConnectionExampleState extends State<HttpConnectionExample> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 상태 표시
+            // Connection status.
             Card(
               color: _clientId != null ? Colors.green[50] : Colors.grey[100],
               child: Padding(
@@ -180,19 +168,20 @@ class _HttpConnectionExampleState extends State<HttpConnectionExample> {
             ),
             const SizedBox(height: 20),
 
-            // URL 입력
+            // URL input.
             TextField(
               controller: _urlController,
               decoration: const InputDecoration(
                 labelText: 'Server URL',
                 hintText: 'http://localhost:8080/sse',
                 border: OutlineInputBorder(),
-                helperText: 'SSE: /sse endpoint, StreamableHTTP: /mcp endpoint',
+                helperText:
+                    'SSE: /sse endpoint, StreamableHTTP: /mcp endpoint',
               ),
             ),
             const SizedBox(height: 20),
 
-            // 연결 방법 설명
+            // Help.
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
@@ -200,43 +189,35 @@ class _HttpConnectionExampleState extends State<HttpConnectionExample> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '📌 중요: transportType 명시',
+                      'Note: transportType must be specified',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 8),
-                    Text('• 방법 1: config 없이 serverUrl만 전달 (권장)'),
-                    Text('• 방법 2: MCPClientConfig 사용 시 transportType 필수'),
+                    Text(
+                        '• MCPClientConfig requires transportType (no auto-inference).'),
+                    Text(
+                        '• Pick transportType once for your deployment, not from the URL.'),
                     SizedBox(height: 8),
-                    Text('Transport Types:'),
+                    Text('Transport types:'),
                     Text('  - sse: Server-Sent Events'),
                     Text('  - streamablehttp: Streamable HTTP'),
-                    Text('  - stdio: Standard I/O (로컬 프로세스용)'),
+                    Text('  - stdio: Standard I/O (local subprocess)'),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 20),
 
-            // 버튼들
+            // Action buttons.
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _clientId == null ? _connectDirectly : null,
+                    onPressed: _clientId == null ? _connect : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                     ),
-                    child: const Text('Connect (Direct)'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _clientId == null ? _connectWithConfig : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                    ),
-                    child: const Text('Connect (Config)'),
+                    child: const Text('Connect'),
                   ),
                 ),
                 const SizedBox(width: 8),

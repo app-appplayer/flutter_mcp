@@ -1,32 +1,53 @@
 # Flutter MCP
 
-A Flutter plugin for integrating Large Language Models (LLMs) with [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). This plugin provides comprehensive integration between MCP components and platform-specific features like background execution, notifications, system tray, and lifecycle management.
+A Flutter plugin that integrates [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) clients, servers, and Large Language Model (LLM) providers into a single agent runtime, plus the platform plumbing (background execution, notifications, system tray, lifecycle, secure storage, scheduling) that turns it into a deployable cross-platform app.
+
+Built on `mcp_client`, `mcp_server`, and `mcp_llm` 2.x.
 
 ## Features
 
-- **MCP Integration**:
-  - Built-in MCP client, server, and LLM capabilities (no need for separate packages)
-  - Support for multiple simultaneous MCP clients and servers
-  - LLM integration with MCP components
-  - Enhanced batch processing with priority-based deduplication
+### MCP integration
+- Multiple simultaneous MCP **clients** and **servers** managed by ID
+- Multi-revision MCP support — `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (negotiated automatically per session)
+- Built-in **LLM provider layer** with multi-provider routing
+- **Sampling** — server-initiated `sampling/createMessage` auto-bridged to the host LLM
+- **Elicitation** (`2025-06-18+`) — server-initiated user-input requests with a pluggable handler
+- **Roots** — typed roots configuration; server-initiated `roots/list` answered by the client
+- **Completion** — `completion/complete` handlers with `context` field (previously-resolved arguments)
+- **OAuth Resource Server** (RFC 9728) — `/.well-known/oauth-protected-resource` from `MCPServerConfig.protectedResource`
+- **Structured tool output** — `Tool.outputSchema` + `CallToolResult.structuredContent`, plus `ResourceLinkContent`
 
-- **Platform Features**:
-  - Background service execution with task queuing
-  - Local notifications with enhanced configuration
-  - System tray support with dynamic menu management (desktop platforms)
-  - Application lifecycle management with health monitoring
-  - Secure storage for credentials and configuration
+### Platform features
+- Background service execution with task queuing
+- Local notifications with platform-native rendering
+- System tray (desktop) with dynamic menus
+- Lifecycle hooks and health monitoring
+- Secure storage backed by platform keychain / credential manager
+- Job scheduler (interval + cron)
 
-- **Advanced Capabilities**:
-  - **Real-time Health Monitoring**: Component-level health tracking with event-driven updates
-  - **Enhanced Error Handling**: Circuit breaker pattern with automatic recovery strategies
-  - **Resource Management**: Automatic cleanup with leak detection and memory optimization
-  - **Performance Monitoring**: Advanced metrics with aggregation, anomaly detection, and threshold alerts
-  - **Plugin System**: Version management, sandboxing, and dependency resolution
-  - **Security Features**: Comprehensive audit logging, encryption management, and risk assessment
-  - **Type Safety**: Typed platform channels eliminating manual JSON handling
-  - **Dynamic Configuration**: Runtime config updates with validation and rollback support
-  - Cross-platform support: Android, iOS, macOS, Windows, Linux, Web
+### Operational
+- Real-time health monitoring with event-driven updates
+- Circuit breaker pattern with automatic recovery
+- Resource manager with leak detection
+- Performance monitor with aggregation, thresholds, and anomaly detection
+- Plugin system with version management, sandboxing, dependency resolution
+- Security audit log + encryption manager
+- Typed platform channels (no manual JSON handling)
+- Dynamic configuration with validation and rollback
+- Cross-platform: Android, iOS, macOS, Windows, Linux, Web
+
+## Protocol Versions
+
+Flutter MCP supports the four MCP specification revisions exposed by
+`mcp_client` and `mcp_server` 2.x. Negotiation is automatic — the
+session ends up on the highest version both peers understand.
+
+| Version | Notes |
+|---|---|
+| `2024-11-05` | Original; JSON-RPC batching available |
+| `2025-03-26` | Earlier 2025 revision; JSON-RPC batching available |
+| `2025-06-18` | Adds elicitation, structured tool output, resource links, OAuth Resource Server, MCP-Protocol-Version header. Removes JSON-RPC batching |
+| `2025-11-25` | Adds icons, sampling tool calling (`tools` / `toolChoice`), URL-mode elicitation, OIDC Discovery, Client ID Metadata Documents |
 
 ## Getting Started
 
@@ -48,22 +69,10 @@ flutter_mcp:
       - microphone    # For audio recording
 ```
 
-##### Additional Permissions (Coming Soon)
-In future versions, you'll be able to request additional Android permissions through pubspec.yaml:
+These configurations are applied automatically at build time — no
+manual `AndroidManifest.xml` edits required.
 
-```yaml
-flutter_mcp:
-  android:
-    permissions:
-      - camera        # For camera access
-      - location      # For location services
-      - microphone    # For audio recording
-      - storage       # For file access
-```
-
-These configurations are automatically applied during build time. No manual AndroidManifest.xml changes needed!
-
-### Basic Usage
+### Quick Start
 
 ```dart
 import 'package:flutter/material.dart';
@@ -71,83 +80,61 @@ import 'package:flutter_mcp/flutter_mcp.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Flutter MCP
+
   await FlutterMCP.instance.init(
     MCPConfig(
       appName: 'My MCP App',
-      appVersion: '1.0.0',
+      appVersion: '<your.app.version>',
       useBackgroundService: true,
       useNotification: true,
       useTray: true,
       autoStart: true,
-      enablePerformanceMonitoring: true, // Enable performance monitoring
-      highMemoryThresholdMB: 512, // Set memory threshold for automatic cleanup
-      // Auto-start server configuration
-      autoStartServer: [
-        MCPServerConfig(
-          name: 'MCP Server',
-          version: '1.0.0',
-          capabilities: ServerCapabilities(
-            tools: true,
-            resources: true,
-            prompts: true,
+      // Optional: declare LLM clients/servers + MCP clients/servers up front.
+      autoStartLlmClient: [
+        MCPLlmClientConfig(
+          providerName: 'openai',
+          config: LlmConfiguration(
+            apiKey: 'your-api-key',
+            model: 'gpt-4o',
           ),
-          integrateLlm: MCPLlmIntegration(
-            providerName: 'your-provider',
-            config: LlmConfiguration(
-              apiKey: 'your-api-key',
-              model: 'your-model',
-            ),
-          ),
+          isDefault: true,
         ),
       ],
-      // Auto-start client configuration
       autoStartClient: [
         MCPClientConfig(
-          name: 'MCP Client',
-          version: '1.0.0',
-          capabilities: ClientCapabilities(
-            sampling: true,
-            roots: true,
-          ),
-          integrateLlm: MCPLlmIntegration(
-            existingLlmId: 'llm_1',
-          ),
+          name: 'My Client',
+          version: '<your.client.version>',
+          transportType: 'streamablehttp',
+          serverUrl: 'http://localhost:8080',
+          endpoint: '/mcp',
+          // autoBridgeSampling defaults to true — incoming
+          // sampling/createMessage requests will be answered by the host
+          // LLM registered above.
         ),
       ],
-      // Scheduled tasks
       schedule: [
-        MCPJob.every(
-          Duration(minutes: 15),
-          task: () {
-            // This runs every 15 minutes
-          },
-        ),
+        MCPJob.every(Duration(minutes: 15), task: () {
+          // runs every 15 minutes
+        }),
       ],
-      // System tray configuration
       tray: TrayConfig(
         tooltip: 'My MCP App',
         menuItems: [
-          TrayMenuItem(label: 'Show', onTap: () {
-            // Show window code
-          }),
+          TrayMenuItem(label: 'Show', onTap: () { /* show window */ }),
           TrayMenuItem.separator(),
-          TrayMenuItem(label: 'Exit', onTap: () {
-            // Exit app code
-          }),
+          TrayMenuItem(label: 'Exit', onTap: () { /* exit */ }),
         ],
       ),
     ),
   );
-  
+
   runApp(MyApp());
 }
 ```
 
 ### Manual Component Creation
 
-You can also manually create and manage MCP components:
+For finer-grained control, create and wire components yourself:
 
 ```dart
 import 'package:logging/logging.dart';
@@ -155,27 +142,38 @@ import 'package:logging/logging.dart';
 // Create a logger
 final logger = Logger('flutter_mcp.example');
 
-// Create a server
+// Create a server (Streamable HTTP transport)
 final serverId = await FlutterMCP.instance.createServer(
   name: 'MCP Server',
-  version: '1.0.0',
+  version: '<your.version>',
   capabilities: ServerCapabilities(
-    tools: true,
-    resources: true,
-    prompts: true,
+    tools: ToolsCapability(),
+    resources: ResourcesCapability(),
+    prompts: PromptsCapability(),
+  ),
+  config: MCPServerConfig(
+    name: 'MCP Server',
+    version: '<your.version>',
+    transportType: 'streamablehttp',
+    streamableHttpPort: 8080,
   ),
 );
 
-// Create a client
+// Create a client (Streamable HTTP transport)
 final clientId = await FlutterMCP.instance.createClient(
   name: 'MCP Client',
-  version: '1.0.0',
-  transportCommand: 'server',
-  transportArgs: ['--port', '8080'],
+  version: '<your.version>',
+  config: MCPClientConfig(
+    name: 'MCP Client',
+    version: '<your.version>',
+    transportType: 'streamablehttp',
+    serverUrl: 'http://localhost:8080',
+    endpoint: '/mcp',
+  ),
 );
 
-// Create an LLM
-final llmId = await FlutterMCP.instance.createLlm(
+// Create LLM client and LLM server (each returns (llmId, role-specific id))
+final (llmId, llmClientId) = await FlutterMCP.instance.createLlmClient(
   providerName: 'openai',
   config: LlmConfiguration(
     apiKey: 'your-api-key',
@@ -183,26 +181,33 @@ final llmId = await FlutterMCP.instance.createLlm(
   ),
 );
 
-// Connect components
-await FlutterMCP.instance.integrateServerWithLlm(
-  serverId: serverId,
-  llmId: llmId,
+final (_, llmServerId) = await FlutterMCP.instance.createLlmServer(
+  providerName: 'openai',
+  config: LlmConfiguration(
+    apiKey: 'your-api-key',
+    model: 'gpt-4o',
+  ),
 );
 
-await FlutterMCP.instance.integrateClientWithLlm(
-  clientId: clientId,
-  llmId: llmId,
+// Wire MCP components into the LLM
+await FlutterMCP.instance.addMcpServerToLlmServer(
+  llmServerId: llmServerId,
+  mcpServerId: serverId,
+);
+
+await FlutterMCP.instance.addMcpClientToLlmClient(
+  llmClientId: llmClientId,
+  mcpClientId: clientId,
 );
 
 // Start components
 FlutterMCP.instance.connectServer(serverId);
 await FlutterMCP.instance.connectClient(clientId);
 
-// Use components with memory-efficient caching
+// Use components
 final response = await FlutterMCP.instance.chat(
   llmId,
   'Hello, how are you today?',
-  useCache: true, // Enable caching for repeated questions
 );
 logger.info('AI: ${response.text}');
 
@@ -219,6 +224,118 @@ responseStream.listen((chunk) {
 // Clean up when done
 await FlutterMCP.instance.shutdown();
 ```
+
+## Spec Capabilities
+
+### Sampling — server-initiated, host-LLM bridge
+
+`MCPClientConfig.autoBridgeSampling` defaults to `true`: any
+`sampling/createMessage` request from the server is fulfilled by the
+default LLM client registered through `createLlmClient`. Override per
+client by setting `autoBridgeSampling: false` or by passing an explicit
+`ClientCapabilities()` without the `sampling` flag.
+
+To call sampling from a server tool handler:
+
+```dart
+final result = await FlutterMCP.instance.requestClientSampling(
+  serverId: serverId,
+  sessionId: sessionId,
+  params: {
+    'messages': [
+      {'role': 'user', 'content': {'type': 'text', 'text': 'summarise X'}},
+    ],
+    'systemPrompt': 'You are a concise summariser.',
+  },
+);
+```
+
+### Elicitation — server requests user input (`2025-06-18+`)
+
+```dart
+// Client side: register a handler.
+FlutterMCP.instance.setElicitationHandler((params) async {
+  final result = await showElicitationDialog(params);
+  return result.cancelled
+      ? {'action': 'cancel'}
+      : {'action': 'accept', 'content': result.values};
+});
+
+// Server side: ask the connected client.
+final answer = await FlutterMCP.instance.requestClientElicitation(
+  serverId: serverId,
+  sessionId: sessionId,
+  params: {
+    'message': 'Confirm overwrite?',
+    'requestedSchema': {
+      'type': 'object',
+      'properties': {'confirm': {'type': 'boolean'}},
+      'required': ['confirm'],
+    },
+  },
+);
+```
+
+### Roots
+
+```dart
+final clientId = await FlutterMCP.instance.createClient(
+  name: 'My Client',
+  version: '<your.version>',
+  config: MCPClientConfig(
+    name: 'My Client',
+    version: '<your.version>',
+    transportType: 'streamablehttp',
+    serverUrl: 'http://localhost:8080',
+    initialRoots: const [
+      Root(uri: 'file:///workspace/project', name: 'project'),
+    ],
+  ),
+);
+FlutterMCP.instance.addClientRoot(clientId, Root(uri: 'file:///tmp', name: 'tmp'));
+
+// Server side
+final roots = await FlutterMCP.instance.requestClientRoots(
+  serverId: serverId,
+  sessionId: sessionId,
+);
+```
+
+### Completion
+
+```dart
+FlutterMCP.instance.addServerCompletion(
+  serverId: serverId,
+  refType: 'prompt',
+  refKey: 'analyze',
+  handler: (ref, argument, context) async => {
+    'values': suggestionsFor(argument['value'] as String),
+  },
+);
+```
+
+### OAuth Resource Server (RFC 9728)
+
+```dart
+final serverId = await FlutterMCP.instance.createServer(
+  name: 'My Server',
+  version: '<your.version>',
+  config: MCPServerConfig(
+    name: 'My Server',
+    version: '<your.version>',
+    transportType: 'streamablehttp',
+    streamableHttpPort: 8080,
+    protectedResource: const MCPProtectedResourceConfig(
+      resource: 'https://api.example.com/mcp',
+      authorizationServers: ['https://auth.example.com'],
+      scopesSupported: ['mcp:read', 'mcp:tools'],
+      bearerMethodsSupported: ['header'],
+    ),
+  ),
+);
+```
+
+`/.well-known/oauth-protected-resource` is served automatically.
 
 ## Platform Support
 
@@ -248,10 +365,10 @@ Transport is the core communication mechanism in MCP. Flutter MCP supports three
 ```dart
 final serverId = await FlutterMCP.instance.createServer(
   name: 'STDIO Server',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPServerConfig(
     name: 'STDIO Server',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'stdio',  // Required: must be explicitly specified
   ),
 );
@@ -261,10 +378,10 @@ final serverId = await FlutterMCP.instance.createServer(
 ```dart
 final serverId = await FlutterMCP.instance.createServer(
   name: 'SSE Server',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPServerConfig(
     name: 'SSE Server',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'sse',    // Required: must be explicitly specified
     ssePort: 8080,           // Required for SSE
     host: 'localhost',       // Optional: default 'localhost'
@@ -281,10 +398,10 @@ final serverId = await FlutterMCP.instance.createServer(
 ```dart
 final serverId = await FlutterMCP.instance.createServer(
   name: 'StreamableHTTP Server',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPServerConfig(
     name: 'StreamableHTTP Server',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'streamablehttp',  // Required: must be explicitly specified
     streamableHttpPort: 8080,         // Required for StreamableHTTP
     host: 'localhost',                // Optional: default 'localhost'
@@ -311,10 +428,10 @@ final serverId = await FlutterMCP.instance.createServer(
 ```dart
 final clientId = await FlutterMCP.instance.createClient(
   name: 'STDIO Client',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPClientConfig(
     name: 'STDIO Client',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'stdio',        // Required: must be explicitly specified
     transportCommand: 'python',    // Required for STDIO
     transportArgs: ['server.py', '--mode', 'mcp'],  // Optional: command arguments
@@ -326,10 +443,10 @@ final clientId = await FlutterMCP.instance.createClient(
 ```dart
 final clientId = await FlutterMCP.instance.createClient(
   name: 'SSE Client',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPClientConfig(
     name: 'SSE Client',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'sse',              // Required: must be explicitly specified
     serverUrl: 'http://localhost:8080', // Required for SSE
     endpoint: '/sse',                  // Optional: will be appended to serverUrl
@@ -347,10 +464,10 @@ final clientId = await FlutterMCP.instance.createClient(
 ```dart
 final clientId = await FlutterMCP.instance.createClient(
   name: 'StreamableHTTP Client',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPClientConfig(
     name: 'StreamableHTTP Client',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'streamablehttp',    // Required: must be explicitly specified
     serverUrl: 'http://localhost:8080', // Required for StreamableHTTP (base URL only)
     endpoint: '/mcp',                   // Optional: server should use the same endpoint
@@ -368,7 +485,7 @@ final clientId = await FlutterMCP.instance.createClient(
 
 ### Important Notes
 
-1. **Transport Type is Required**: Starting from v1.0.1, `transportType` must be explicitly specified. Automatic inference has been removed to prevent unexpected behavior.
+1. **Transport Type is Required**: `transportType` must be explicitly specified. Automatic inference has been removed to prevent unexpected behavior.
 
 2. **URL Handling**:
    - For **SSE**: The `endpoint` is appended to `serverUrl` if provided
@@ -390,10 +507,10 @@ final clientId = await FlutterMCP.instance.createClient(
 // 1. Create and start a StreamableHTTP server
 final serverId = await FlutterMCP.instance.createServer(
   name: 'My Server',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPServerConfig(
     name: 'My Server',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'streamablehttp',
     streamableHttpPort: 8080,
     endpoint: '/mcp',  // Server listens at http://localhost:8080/mcp
@@ -404,10 +521,10 @@ await FlutterMCP.instance.connectServer(serverId);
 // 2. Create and connect a client to the server
 final clientId = await FlutterMCP.instance.createClient(
   name: 'My Client',
-  version: '1.0.0',
+  version: '<your.version>',
   config: MCPClientConfig(
     name: 'My Client',
-    version: '1.0.0',
+    version: '<your.version>',
     transportType: 'streamablehttp',
     serverUrl: 'http://localhost:8080',  // Base URL only
     endpoint: '/mcp',  // Must match server's endpoint
@@ -457,7 +574,7 @@ Map<String, bool> results = await FlutterMCP.instance.requestRequiredPermissions
 ```dart
 MCPConfig(
   appName: 'My App',
-  appVersion: '1.0.0',
+  appVersion: '<your.app.version>',
   useBackgroundService: true,
   useNotification: true,
   useTray: true,
@@ -573,12 +690,9 @@ final processedDocs = await FlutterMCP.instance.processDocumentsInChunks(
 ### Memory-Aware Caching
 
 ```dart
-// Chat with memory-aware caching for faster responses
-// The cache will automatically reduce in size during high memory conditions
 final response = await FlutterMCP.instance.chat(
   llmId,
   userMessage,
-  useCache: true,
 );
 ```
 
@@ -589,10 +703,18 @@ import 'package:logging/logging.dart';
 
 final logger = Logger('flutter_mcp.example');
 
-// Get system performance metrics
+// Get system performance metrics. Only available when
+// MCPConfig(enablePerformanceMonitoring: true) was passed to init().
 final status = FlutterMCP.instance.getSystemStatus();
-logger.info('Memory usage: ${status['performanceMetrics']['resources']['memory.usageMB']['current']}MB');
-logger.info('LLM response time: ${status['performanceMetrics']['timers']['llm.chat']['avg_ms']}ms');
+final metrics = status['performanceMetrics'] as Map<String, dynamic>?;
+final memory = metrics?['resources']?['memory.usageMB']?['current'];
+if (memory != null) logger.info('Memory usage: ${memory}MB');
+
+// Per-operation timers are keyed by the call site (`operation.<context>`)
+// — inspect the map to discover what's been recorded.
+final timers = metrics?['timers'] as Map<String, dynamic>?;
+timers?.forEach((name, stats) =>
+    logger.info('$name: avg=${stats['avg_ms']}ms count=${stats['count']}'));
 ```
 
 ### Secure Storage
@@ -747,15 +869,32 @@ final exportData = webMonitor.exportData();
 
 ## Architecture
 
-For a detailed understanding of the Flutter MCP architecture, please refer to [ARCHITECTURE.md](ARCHITECTURE.md).
+Flutter MCP wraps `mcp_client`, `mcp_server`, and `mcp_llm` 2.x in a
+manager-based runtime and adds native platform integration.
 
-### Key Architectural Features
+### MCP core
+- **MCP Client / Server / LLM** — protocol implementations and provider
+  layer; no separate package installation required.
+- **Multi-revision negotiation** — `2024-11-05` through `2025-11-25`,
+  selected per session.
+- **Spec request handlers** — sampling, elicitation, roots, completion,
+  cancellation, progress.
 
-- **Modular Design**: Clean separation between MCP components and platform services
-- **Cross-Platform**: Native implementations for all supported platforms
-- **Plugin System**: Extensible architecture for custom functionality
-- **Performance Optimized**: Memory management and real-time monitoring
-- **Configuration-Driven**: YAML/JSON configuration with task automation
+### Native platform layer
+- **Background services** — Kotlin (Android), Swift (iOS / macOS), C++
+  (Windows / Linux).
+- **Notifications** — platform-native notification systems.
+- **System tray** — desktop platforms (Windows, macOS, Linux).
+- **Secure storage** — direct integration with platform keychain /
+  credential systems.
+- **File system** — `path_provider` for cross-platform file access.
+
+### Operational layer
+- Modular separation of MCP components and platform services
+- Plugin system with version management, sandboxing, dependency
+  resolution
+- Performance monitor with aggregation, thresholds, anomaly detection
+- Configuration-driven (YAML/JSON) with validation and rollback
 
 ## Testing
 
@@ -811,7 +950,7 @@ await FlutterMCP.instance.init(MCPConfig(
 ```dart
 // Check platform support before using features
 if (PlatformUtils.supportsNotifications) {
-  await FlutterMCP.instance.showNotification(
+  await FlutterMCP.instance.platformServices.showNotification(
     title: 'Test',
     body: 'Platform supports notifications',
   );
@@ -827,118 +966,26 @@ try {
 } catch (e) {
   final logger = Logger('flutter_mcp.example');
   logger.error('Configuration error: $e');
-  // Fallback to default configuration
-  await FlutterMCP.instance.init(MCPConfig.defaultConfig());
+  // Fallback to a minimal configuration with platform features disabled.
+  await FlutterMCP.instance.init(MCPConfig(
+    appName: 'My App',
+    appVersion: '1.0.0',
+    useBackgroundService: false,
+    useNotification: false,
+    useTray: false,
+  ));
 }
 ```
+
+## Resources
+
+- [In-package documentation](doc/) — architecture, transports, spec features, plugins, platform services, observability, migration
+- [`mcp_client`](https://pub.dev/packages/mcp_client), [`mcp_server`](https://pub.dev/packages/mcp_server), [`mcp_llm`](https://pub.dev/packages/mcp_llm) — underlying MCP packages
+- [CHANGELOG](CHANGELOG.md) — including breaking changes when upgrading from 1.x
 
 ## Issues and Feedback
 
 Please file any issues, bugs, or feature requests in our [issue tracker](https://github.com/app-appplayer/flutter_mcp/issues).
-
-## Architecture
-
-### MCP Core Integration
-Flutter MCP includes built-in MCP protocol support:
-
-- **MCP Client**: Built-in client implementation with transport layer support
-- **MCP Server**: Built-in server implementation with capability management  
-- **MCP LLM**: Built-in LLM integration layer for MCP protocol communication
-
-These capabilities are included in the flutter_mcp package - no additional dependencies needed!
-
-### Native Platform Implementation
-Version 1.0.0 implements platform-specific features using native code instead of external Flutter packages:
-
-- **Background Services**: Native Android (Kotlin), iOS (Swift), Windows (C++), Linux (C++), and macOS (Swift) implementations
-- **Notifications**: Platform-native notification systems with full customization support
-- **System Tray**: Native system tray integration for desktop platforms (Windows, macOS, Linux)
-- **Secure Storage**: Direct integration with platform keychain/credential systems
-- **File System**: Uses `path_provider`: ^2.1.5 for cross-platform file access
-
-This native approach provides better performance, reduced dependencies, and platform-optimized user experiences.
-
-## Documentation
-
-Comprehensive documentation is available in the [doc](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp) directory:
-
-### 📚 Getting Started
-- [Installation Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/installation.md) - Step-by-step installation instructions
-- [Getting Started](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/getting-started.md) - Quick start guide
-- [Architecture Overview](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/architecture.md) - System architecture and design patterns
-- [Best Practices](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/guides/best-practices.md) - Recommended patterns and practices
-
-### 🔧 API Reference
-- [Flutter MCP API Reference](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/flutter-mcp-api.md) - Complete API reference
-- [Core API](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/core.md) - Main FlutterMCP class and initialization
-- [Client Manager](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/client-manager.md) - MCP client management
-- [Server Manager](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/server-manager.md) - MCP server management
-- [LLM Manager](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/llm-manager.md) - LLM integration and management
-- [Plugin System](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/plugin-system.md) - Plugin development and integration
-- [Platform Services](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/platform-services.md) - Platform-specific features
-- [Background Service](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/background-service.md) - Background task management
-- [Security API](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/security-api.md) - Security and encryption features
-- [Utilities](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/api/utilities.md) - Helper functions and utilities
-
-### 💡 Examples
-- [Simple Connection](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/simple-connection.md) - Basic MCP connection example
-- [Multiple Servers](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/multiple-servers.md) - Managing multiple MCP servers
-- [Plugin Development](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/plugin-development.md) - Creating custom plugins
-- [Background Jobs](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/background-jobs.md) - Scheduling background tasks
-- [Real-time Updates](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/realtime-updates.md) - Implementing real-time features
-- [State Management](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/state-management.md) - Managing application state
-- [Security Examples](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/security-examples.md) - Implementing security features
-
-### 🚀 Platform Integration
-- [Android Integration](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/android-integration.md) - Android-specific features
-- [iOS Integration](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/ios-integration.md) - iOS-specific features
-- [Desktop Applications](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/desktop-applications.md) - Windows, macOS, Linux features
-- [Web Applications](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/examples/web-applications.md) - Web platform features
-
-### 🤖 LLM Integrations
-- [Anthropic Claude](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/anthropic-claude.md) - Claude integration guide
-- [OpenAI GPT](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/openai-gpt.md) - GPT integration guide
-- [Google Gemini](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/google-gemini.md) - Gemini integration guide
-- [Local LLM](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/integrations/local-llm.md) - Local LLM deployment guide
-
-### 🛠️ Advanced Topics
-- [Security Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/security/security-guide.md) - Comprehensive security features
-- [OAuth Integration](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/security/oauth-integration.md) - OAuth 2.1 authentication
-- [Batch Processing](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/batch-processing.md) - Parallel processing patterns
-- [Circuit Breaker](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/circuit-breaker.md) - Resilience patterns
-- [Caching Strategies](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/caching-strategies.md) - Performance optimization
-- [Parallel Execution](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/parallel-execution.md) - Parallel processing patterns
-- [Error Handling](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/error-handling.md) - Comprehensive error handling
-- [Memory Management](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/memory-management.md) - Memory optimization techniques
-- [Performance Tuning](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/performance-tuning.md) - Performance optimization
-- [Testing](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/advanced/testing.md) - Testing strategies and examples
-
-### 🔍 Monitoring & Health
-- [Health Monitoring](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/monitoring/health-checks.md) - System health monitoring
-
-### 🔍 Troubleshooting
-- [Common Issues](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/common-issues.md) - Solutions to common problems
-- [Debug Mode](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/debug-mode.md) - Debugging techniques
-- [Error Codes](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/error-codes.md) - Error code reference
-- [Performance Issues](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/performance.md) - Performance troubleshooting
-- [Migration Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/troubleshooting/migration.md) - Version migration guide
-
-### 🧩 Plugin Development
-- [Plugin Lifecycle](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/lifecycle.md) - Understanding plugin lifecycle
-- [Plugin Communication](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/communication.md) - Inter-plugin communication
-- [Plugin Development Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/development.md) - Creating custom plugins
-- [Plugin Examples](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/plugins/examples.md) - Sample plugin implementations
-
-### 📱 Platform Guides
-- [Android](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/android.md) - Android platform guide
-- [iOS](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/ios.md) - iOS platform guide
-- [Windows](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/windows.md) - Windows platform guide
-- [macOS](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/macos.md) - macOS platform guide
-- [Linux](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/linux.md) - Linux platform guide
-- [Web](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/platform/web.md) - Web platform guide
-
-### 🤝 Contributing
-- [Contributing Guide](https://github.com/app-appplayer/makemind/blob/main/doc/flutter_mcp/CONTRIBUTING.md) - How to contribute to the project
 
 ## License
 

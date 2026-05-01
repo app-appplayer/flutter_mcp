@@ -68,6 +68,15 @@ class FlutterMcpPlugin: FlutterPlugin, MethodCallHandler, ActivityAware,
       }
       
       // Background service
+      // `initializeBackgroundService` is the entry point used by
+      // AndroidEnhancedBackgroundService.platformInitialize. The legacy
+      // `initialize` carries the entire MCPConfig and pre-dates the
+      // enhanced service abstraction; we accept both and route them to
+      // the same configure path so older callers keep working.
+      "initializeBackgroundService" -> {
+        val config = call.argument<Map<String, Any>>("config")
+        configureBackgroundService(config, result)
+      }
       "startBackgroundService" -> {
         startBackgroundService(result)
       }
@@ -80,7 +89,10 @@ class FlutterMcpPlugin: FlutterPlugin, MethodCallHandler, ActivityAware,
       }
       "scheduleBackgroundTask" -> {
         val taskId = call.argument<String>("taskId")
-        val delayMillis = call.argument<Long>("delayMillis")
+        // Flutter on Android marshals small ints as Integer, not Long, so
+        // call.argument<Long>(...) throws ClassCastException for values
+        // that fit in 32 bits. Pull as Number and widen.
+        val delayMillis = (call.argument<Any>("delayMillis") as? Number)?.toLong()
         val data = call.argument<Map<String, Any>>("data")
         scheduleBackgroundTask(taskId, delayMillis, data, result)
       }
@@ -111,7 +123,18 @@ class FlutterMcpPlugin: FlutterPlugin, MethodCallHandler, ActivityAware,
       "cancelAllNotifications" -> {
         cancelAllNotifications(result)
       }
-      
+      // updateNotification — used by AndroidEnhancedBackgroundService
+      // to refresh the foreground-service notification text. Accept
+      // and treat as a no-op when the underlying showNotification path
+      // has not been called yet; otherwise delegate.
+      "updateNotification" -> {
+        val id = call.argument<String>("id") ?: "default"
+        val title = call.argument<String>("title") ?: ""
+        val body = call.argument<String>("body") ?: ""
+        val icon = call.argument<String>("icon")
+        showNotification(title, body, icon, id, result)
+      }
+
       // Secure storage
       "secureStore" -> {
         val key = call.argument<String>("key") ?: ""

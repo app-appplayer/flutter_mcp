@@ -1,6 +1,7 @@
 #include "notification_manager.h"
 #include <shellapi.h>
 #include <strsafe.h>
+#include <vector>
 
 namespace flutter_mcp {
 
@@ -62,7 +63,7 @@ void NotificationManager::ShowBalloonNotification(const NotificationData& data) 
   NOTIFYICONDATA nid = {0};
   nid.cbSize = sizeof(NOTIFYICONDATA);
   nid.hWnd = data.hwnd;
-  nid.uID = NOTIFICATION_ID_BASE + std::hash<std::string>{}(data.id);
+  nid.uID = static_cast<UINT>(NOTIFICATION_ID_BASE + std::hash<std::string>{}(data.id));
   nid.uFlags = NIF_INFO | NIF_MESSAGE;
   nid.uCallbackMessage = WM_TRAYNOTIFY;
   
@@ -92,7 +93,7 @@ void NotificationManager::CancelNotification(const std::string& id) {
     NOTIFYICONDATA nid = {0};
     nid.cbSize = sizeof(NOTIFYICONDATA);
     nid.hWnd = it->second->hwnd;
-    nid.uID = NOTIFICATION_ID_BASE + std::hash<std::string>{}(id);
+    nid.uID = static_cast<UINT>(NOTIFICATION_ID_BASE + std::hash<std::string>{}(id));
     
     Shell_NotifyIcon(NIM_DELETE, &nid);
     

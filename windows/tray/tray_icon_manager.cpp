@@ -172,9 +172,9 @@ LRESULT CALLBACK TrayIconManager::WindowProc(HWND hwnd, UINT msg, WPARAM wparam,
       return 0;
 
     case WM_COMMAND:
-      if (wparam >= MENU_ITEM_BASE_ID && 
+      if (wparam >= MENU_ITEM_BASE_ID &&
           wparam < MENU_ITEM_BASE_ID + instance_->menu_items_.size()) {
-        int index = wparam - MENU_ITEM_BASE_ID;
+        int index = static_cast<int>(wparam - MENU_ITEM_BASE_ID);
         if (instance_->menu_callback_ && !instance_->menu_items_[index].is_separator) {
           instance_->menu_callback_(instance_->menu_items_[index].id);
         }

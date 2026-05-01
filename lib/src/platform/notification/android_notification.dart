@@ -76,12 +76,13 @@ class AndroidNotificationManager implements NotificationManager {
         'icon': _defaultIcon,
       });
 
-      // Request notification permission
-      final hasPermission =
-          await _channel.invokeMethod<bool>('requestNotificationPermission');
-      if (hasPermission != true) {
-        _logger.warning('Notification permission not granted');
-      }
+      // Notification permission is intentionally NOT requested here.
+      // On Android 13+ (TIRAMISU) the runtime POST_NOTIFICATIONS prompt
+      // blocks until the user responds; requesting it from the
+      // initialize() path can hang headless test runs and surprises end
+      // users with a permission dialog at app start. Host apps should
+      // call FlutterMCP.instance.platformServices.requestPermission(
+      //     'notification') from a UI affordance.
 
       _logger.fine('Android notification manager initialized successfully');
     } catch (e, stackTrace) {

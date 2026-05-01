@@ -5,16 +5,32 @@
 #include <sys/utsname.h>
 #include <libnotify/notify.h>
 #include <libsecret/secret.h>
-#include <appindicator3-0.1/libappindicator/app-indicator.h>
+// Pick whichever AppIndicator header the host system provides. On modern
+// Ubuntu/Debian only the Ayatana fork ships; older distros still carry
+// the legacy libappindicator package.
+#if defined(__has_include)
+#  if __has_include(<libayatana-appindicator/app-indicator.h>)
+#    include <libayatana-appindicator/app-indicator.h>
+#  elif __has_include(<libappindicator/app-indicator.h>)
+#    include <libappindicator/app-indicator.h>
+#  else
+#    error "AppIndicator headers not found (install libayatana-appindicator3-dev or libappindicator3-dev)"
+#  endif
+#else
+#  include <libappindicator/app-indicator.h>
+#endif
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstring>
-#include <memory>
+#include <functional>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <chrono>
+#include <utility>
 
 #include "flutter_mcp_plugin_private.h"
 
@@ -22,13 +38,14 @@
   (G_TYPE_CHECK_INSTANCE_CAST((obj), flutter_mcp_plugin_get_type(), \
                               FlutterMcpPlugin))
 
-// Secret schema for secure storage
+// Secret schema for secure storage. The trailing sentinel needs an
+// explicit cast in C++ since SecretSchemaAttributeType is a typed enum.
 static const SecretSchema flutter_mcp_schema = {
     "com.example.flutter_mcp",
     SECRET_SCHEMA_NONE,
     {
         { "key", SECRET_SCHEMA_ATTRIBUTE_STRING },
-        { "NULL", 0 },
+        { "NULL", static_cast<SecretSchemaAttributeType>(0) },
     }
 };
 
@@ -37,7 +54,7 @@ struct _FlutterMcpPlugin {
   
   FlMethodChannel* channel;
   FlEventChannel* event_channel;
-  FlEventSink* event_sink;
+  gboolean event_listening;
   
   // Tray icon
   AppIndicator* app_indicator;
@@ -61,12 +78,12 @@ G_DEFINE_TYPE(FlutterMcpPlugin, flutter_mcp_plugin, g_object_get_type())
 // Forward declarations
 static void method_call_cb(FlMethodChannel* channel, FlMethodCall* method_call,
                            gpointer user_data);
-static void event_listen_cb(FlEventChannel* channel,
-                            FlValue* args,
-                            gpointer user_data);
-static void event_cancel_cb(FlEventChannel* channel,
-                            FlValue* args,
-                            gpointer user_data);
+static FlMethodErrorResponse* event_listen_cb(FlEventChannel* channel,
+                                              FlValue* args,
+                                              gpointer user_data);
+static FlMethodErrorResponse* event_cancel_cb(FlEventChannel* channel,
+                                              FlValue* args,
+                                              gpointer user_data);
 static void send_event(FlutterMcpPlugin* self, const gchar* event_type,
                        FlValue* data);
 
@@ -155,13 +172,13 @@ static void flutter_mcp_plugin_class_init(FlutterMcpPluginClass* klass) {
 static void flutter_mcp_plugin_init(FlutterMcpPlugin* self) {
   self->app_indicator = nullptr;
   self->tray_menu = nullptr;
-  self->event_sink = nullptr;
+  self->event_listening = FALSE;
   self->background_running = false;
   self->background_interval_ms = 60000; // Default 1 minute
 }
 
 // Method implementations
-static FlMethodResponse* get_platform_version() {
+FlMethodResponse* get_platform_version() {
   struct utsname uname_data = {};
   uname(&uname_data);
   g_autofree gchar* version = g_strdup_printf("Linux %s", uname_data.version);
@@ -309,15 +326,16 @@ static FlMethodResponse* secure_store(FlValue* args) {
   const gchar* value = fl_value_get_string(value_value);
   
   GError* error = nullptr;
-  gboolean result = secret_password_store_sync(&flutter_mcp_schema,
-                                               SECRET_COLLECTION_DEFAULT,
-                                               key,
-                                               value,
-                                               nullptr,
-                                               &error,
-                                               "key", key,
-                                               nullptr);
-  
+  // The boolean return is redundant — failure is reported via `error`.
+  secret_password_store_sync(&flutter_mcp_schema,
+                             SECRET_COLLECTION_DEFAULT,
+                             key,
+                             value,
+                             nullptr,
+                             &error,
+                             "key", key,
+                             nullptr);
+
   if (error) {
     g_autofree gchar* error_msg = g_strdup(error->message);
     g_error_free(error);
@@ -625,12 +643,7 @@ static FlMethodResponse* request_permission(FlValue* args) {
   if (g_strcmp0(permission, "notification") == 0) {
     // Initialize notification system if not already done
     if (!notify_is_initted()) {
-      GError* error = nullptr;
-      if (notify_init("Flutter MCP")) {
-        granted = TRUE;
-      } else {
-        granted = FALSE;
-      }
+      granted = notify_init("Flutter MCP") ? TRUE : FALSE;
     } else {
       granted = TRUE;
     }
@@ -649,6 +662,43 @@ static FlMethodResponse* request_permission(FlValue* args) {
   }
   
   g_autoptr(FlValue) result = fl_value_new_bool(granted);
+  return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+}
+
+// Batch variant — Dart side calls 'requestPermissions' (plural) when
+// asking for several permissions at once. The Dart contract expects a
+// Map<String, bool> reply.
+static FlMethodResponse* request_permissions(FlValue* args) {
+  if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing arguments", nullptr));
+  }
+
+  FlValue* permissions_value = fl_value_lookup_string(args, "permissions");
+  if (!permissions_value || fl_value_get_type(permissions_value) != FL_VALUE_TYPE_LIST) {
+    return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing permissions list", nullptr));
+  }
+
+  g_autoptr(FlValue) result = fl_value_new_map();
+  size_t count = fl_value_get_length(permissions_value);
+  for (size_t i = 0; i < count; ++i) {
+    FlValue* item = fl_value_get_list_value(permissions_value, i);
+    if (fl_value_get_type(item) != FL_VALUE_TYPE_STRING) continue;
+    const gchar* name = fl_value_get_string(item);
+
+    // Reuse single-permission logic via a synthetic 1-key map.
+    g_autoptr(FlValue) single = fl_value_new_map();
+    fl_value_set_string_take(single, "permission", fl_value_new_string(name));
+    g_autoptr(FlMethodResponse) sub = request_permission(single);
+    gboolean granted = FALSE;
+    if (FL_IS_METHOD_SUCCESS_RESPONSE(sub)) {
+      FlValue* sub_result = fl_method_success_response_get_result(FL_METHOD_SUCCESS_RESPONSE(sub));
+      if (sub_result && fl_value_get_type(sub_result) == FL_VALUE_TYPE_BOOL) {
+        granted = fl_value_get_bool(sub_result);
+      }
+    }
+    fl_value_set_string_take(result, name, fl_value_new_bool(granted));
+  }
+
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
@@ -728,6 +778,8 @@ static void method_call_cb(FlMethodChannel* channel, FlMethodCall* method_call,
     response = check_permission(args);
   } else if (strcmp(method, "requestPermission") == 0) {
     response = request_permission(args);
+  } else if (strcmp(method, "requestPermissions") == 0) {
+    response = request_permissions(args);
   } else if (strcmp(method, "shutdown") == 0) {
     response = shutdown(self);
   } else {
@@ -737,31 +789,36 @@ static void method_call_cb(FlMethodChannel* channel, FlMethodCall* method_call,
   fl_method_call_respond(method_call, response, nullptr);
 }
 
-// Event channel handlers
-static void event_listen_cb(FlEventChannel* channel,
-                            FlValue* args,
-                            gpointer user_data) {
+// Event channel handlers. Flutter Linux exposes events through
+// fl_event_channel_send rather than a separate sink object — we just
+// track whether a listener is currently attached so emit() can no-op
+// when nobody is listening.
+static FlMethodErrorResponse* event_listen_cb(FlEventChannel* channel,
+                                              FlValue* args,
+                                              gpointer user_data) {
   FlutterMcpPlugin* self = FLUTTER_MCP_PLUGIN(user_data);
-  self->event_sink = fl_event_channel_get_event_sink(channel);
+  self->event_listening = TRUE;
+  return nullptr;
 }
 
-static void event_cancel_cb(FlEventChannel* channel,
-                            FlValue* args,
-                            gpointer user_data) {
+static FlMethodErrorResponse* event_cancel_cb(FlEventChannel* channel,
+                                              FlValue* args,
+                                              gpointer user_data) {
   FlutterMcpPlugin* self = FLUTTER_MCP_PLUGIN(user_data);
-  self->event_sink = nullptr;
+  self->event_listening = FALSE;
+  return nullptr;
 }
 
 // Send event to Flutter
 static void send_event(FlutterMcpPlugin* self, const gchar* event_type,
                        FlValue* data) {
-  if (self->event_sink) {
-    g_autoptr(FlValue) event = fl_value_new_map();
-    fl_value_set_string_take(event, "type", fl_value_new_string(event_type));
-    fl_value_set_string_take(event, "data", fl_value_ref(data));
-    
-    fl_event_sink_add(self->event_sink, event);
+  if (!self->event_listening || self->event_channel == nullptr) {
+    return;
   }
+  g_autoptr(FlValue) event = fl_value_new_map();
+  fl_value_set_string_take(event, "type", fl_value_new_string(event_type));
+  fl_value_set_string_take(event, "data", fl_value_ref(data));
+  fl_event_channel_send(self->event_channel, event, nullptr, nullptr);
 }
 
 void flutter_mcp_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
@@ -790,6 +847,9 @@ void flutter_mcp_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
                                        event_cancel_cb,
                                        g_object_ref(plugin),
                                        g_object_unref);
-  
-  fl_plugin_registrar_set_destroy_notify(registrar, G_OBJECT(plugin), g_object_unref);
+
+  // The registrar holds a strong ref via the method/event channels; the
+  // plugin instance itself is owned by the channels' user_data. Drop our
+  // local creation ref so the destroy callback chain can run normally.
+  g_object_unref(plugin);
 }

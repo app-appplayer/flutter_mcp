@@ -64,14 +64,13 @@ class IOSNotificationManager implements NotificationManager {
         'priority': _defaultPriority.index,
       });
 
-      // Request notification permission
-      final hasPermission =
-          await _channel.invokeMethod<bool>('requestNotificationPermission');
-      if (hasPermission != true) {
-        _logger.warning('Notification permission not granted');
-      } else {
-        _logger.fine('iOS notification permissions granted');
-      }
+      // Notification permission is intentionally NOT requested here.
+      // App Store review rejects apps that request authorization without
+      // a user-visible reason at launch, and the system dialog will block
+      // FlutterMCP.init() until the user responds. Host apps should call
+      // FlutterMCP.instance.platformServices.requestPermission(
+      //     'notification') from a UI affordance (e.g. an onboarding
+      // step or a "Enable notifications" button).
 
       _logger.fine('iOS notification manager initialized successfully');
     } catch (e, stackTrace) {

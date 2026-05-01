@@ -5,6 +5,7 @@
 #include <wincrypt.h>
 #include <string>
 #include <map>
+#include <vector>
 
 namespace flutter_mcp {
 

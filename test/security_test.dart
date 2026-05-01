@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
 import 'package:flutter_mcp/src/security/oauth_manager.dart';
@@ -299,16 +301,13 @@ void main() {
     });
 
     test('Secure random generation', () {
-      // Test that random values are sufficiently random
-      final random1 = DateTime.now().microsecondsSinceEpoch.toString();
-
-      // Wait a bit
-      final random2 = DateTime.now().microsecondsSinceEpoch.toString();
-
-      // Values should be different
+      // Test that random values are sufficiently random. Use Random.secure
+      // rather than DateTime.now microseconds — Windows clock resolution
+      // can collapse two adjacent calls into the same microsecond.
+      final r = Random.secure();
+      final random1 = List.generate(16, (_) => r.nextInt(1 << 8)).join(',');
+      final random2 = List.generate(16, (_) => r.nextInt(1 << 8)).join(',');
       expect(random1, isNot(equals(random2)));
-
-      // Values should have sufficient entropy (length)
       expect(random1.length, greaterThanOrEqualTo(10));
     });
   });

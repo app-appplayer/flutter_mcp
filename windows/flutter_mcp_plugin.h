@@ -19,12 +19,9 @@ class NotificationManager;
 class SecureStorageService;
 class BackgroundService;
 
-struct TrayMenuItem {
-  std::string id;
-  std::string label;
-  bool is_separator = false;
-  bool disabled = false;
-};
+// `TrayMenuItem` is defined in tray/tray_icon_manager.h. Including the
+// canonical struct here would cause a multiple-definition compile error
+// in any TU that pulls both headers (e.g. flutter_mcp_plugin.cpp).
 
 class FlutterMcpPlugin : public flutter::Plugin {
  public:

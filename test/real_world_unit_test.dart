@@ -4,7 +4,6 @@ import 'package:flutter_mcp/src/utils/memory_manager.dart';
 import 'package:flutter_mcp/src/events/event_system.dart';
 import 'package:flutter_mcp/src/utils/resource_manager.dart';
 import 'package:flutter_mcp/flutter_mcp.dart'; // For MCPHealthStatus and MCPHealthCheckResult
-import 'package:flutter_mcp/src/core/batch_manager.dart';
 import 'package:flutter_mcp/src/utils/diagnostic_utils.dart';
 import 'package:flutter_mcp/src/utils/input_validator.dart';
 
@@ -137,33 +136,6 @@ void main() {
         expect(MCPHealthStatus.healthy.name, 'healthy');
         expect(MCPHealthStatus.degraded.name, 'degraded');
         expect(MCPHealthStatus.unhealthy.name, 'unhealthy');
-      });
-    });
-
-    group('Batch Processing', () {
-      test('should process requests in batches', () async {
-        final batchManager = MCPBatchManager.instance;
-
-        // Create test requests
-        final requests = List.generate(10, (i) => () async => 'Result $i');
-
-        // Process batch
-        final results = await batchManager.processBatch<String>(
-          llmId: 'test-llm',
-          requests: requests,
-          operationName: 'test-batch',
-        );
-
-        expect(results.length, 10);
-        expect(results[0], 'Result 0');
-        expect(results[9], 'Result 9');
-      });
-
-      test('should get batch statistics', () {
-        final batchManager = MCPBatchManager.instance;
-
-        final stats = batchManager.getStatistics('test-llm');
-        expect(stats['error'], contains('No batch processor'));
       });
     });
 

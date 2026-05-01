@@ -6,7 +6,6 @@ import 'package:mcp_server/mcp_server.dart' as mcp_server;
 import 'package:mcp_llm/mcp_llm.dart' as mcp_llm;
 
 import 'package:flutter_mcp/flutter_mcp.dart';
-import 'package:flutter_mcp/src/core/batch_manager.dart';
 // Health monitor import removed - using simple implementation
 import 'package:flutter_mcp/src/security/credential_manager.dart';
 import 'package:flutter_mcp/src/platform/storage/secure_storage.dart';
@@ -188,61 +187,6 @@ void main() {
         // Test status
         final status = llmManager.getStatus();
         expect(status['total'], equals(1));
-      });
-    });
-
-    group('Batch Manager Tests', () {
-      test('should process batch requests', () async {
-        final batchManager = MCPBatchManager.instance;
-
-        // Initialize batch manager
-        final mockLlm = mcp_llm.MCPLlm();
-        batchManager.initializeBatchManager('test_llm', mockLlm);
-
-        // Test batch processing
-        final results = await batchManager.processBatch<String>(
-          llmId: 'test_llm',
-          requests: [
-            () async => 'result1',
-            () async => 'result2',
-            () async => 'result3',
-          ],
-        );
-
-        expect(results, hasLength(3));
-        expect(results, contains('result1'));
-        expect(results, contains('result2'));
-        expect(results, contains('result3'));
-
-        // Test statistics
-        final stats = batchManager.getStatistics('test_llm');
-        expect(stats['llmId'], equals('test_llm'));
-        // Allow for async processing - the processor might not have recorded stats yet
-        expect(stats, containsPair('llmId', 'test_llm'));
-      });
-
-      test('should handle batch errors with retry', () async {
-        final batchManager = MCPBatchManager.instance;
-        final mockLlm = mcp_llm.MCPLlm();
-        batchManager.initializeBatchManager('error_llm', mockLlm);
-
-        int callCount = 0;
-        final results = await batchManager.processBatch<String>(
-          llmId: 'error_llm',
-          requests: [
-            () async {
-              callCount++;
-              if (callCount < 3) {
-                throw Exception('Temporary error');
-              }
-              return 'success_after_retry';
-            },
-          ],
-        );
-
-        expect(results, hasLength(1));
-        expect(results.first, equals('success_after_retry'));
-        expect(callCount, greaterThanOrEqualTo(3));
       });
     });
 

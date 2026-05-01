@@ -17,13 +17,13 @@ void main() async {
   runApp(const MCPDemoApp());
 }
 
-/// Initialize MCP with v1.0.0 configuration and native features
+/// Initialize MCP with native platform features.
 Future<void> initMCP() async {
   // Configure logging
   FlutterMcpLogging.configure(level: Level.FINE, enableDebugLogging: true);
   final logger = Logger('flutter_mcp.demo_app');
 
-  logger.info('Initializing MCP v1.0.0 with native features...');
+  logger.info('Initializing Flutter MCP with native features...');
 
   try {
     await FlutterMCP.instance.init(
@@ -31,8 +31,8 @@ Future<void> initMCP() async {
         appName: 'MCP Demo',
         appVersion: '1.0.0',
         autoStart: false,
-        enablePerformanceMonitoring: true, // v1.0.0 feature
-        highMemoryThresholdMB: 512, // v1.0.0 memory management
+        enablePerformanceMonitoring: true,
+        highMemoryThresholdMB: 512,
 
         // Native platform features
         useBackgroundService: true,
@@ -103,7 +103,7 @@ class MCPDemoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter MCP v1.0.0 Demo',
+      title: 'Flutter MCP Demo',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -618,7 +618,6 @@ class _HomePageState extends State<HomePage> {
     try {
       final status = FlutterMCP.instance.getSystemStatus();
       final health = await FlutterMCP.instance.getSystemHealth();
-      final batchStats = FlutterMCP.instance.getBatchStatistics();
 
       if (!mounted) return;
 
@@ -640,12 +639,6 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 Text('Status: ${health['status'] ?? 'unknown'}'),
                 Text('Message: ${health['message'] ?? 'N/A'}'),
-                const Divider(),
-                const Text('Batch Processing:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('Total: ${batchStats['totalBatches'] ?? 0}'),
-                Text(
-                    'Success Rate: ${(batchStats['successRate'] ?? 0).toStringAsFixed(1)}%'),
               ],
             ),
           ),
@@ -659,30 +652,6 @@ class _HomePageState extends State<HomePage> {
       );
     } catch (e) {
       _updateStatus('Failed to get status');
-    }
-  }
-
-  Future<void> _testBatchProcessing() async {
-    if (_llmId == null) {
-      _updateStatus('Start services with API key first');
-      return;
-    }
-
-    _updateStatus('Testing batch processing...');
-
-    try {
-      final results = await FlutterMCP.instance.processBatch(
-        llmId: _llmId!,
-        requests: [
-          () async => '1 + 1 = ?',
-          () async => 'Capital of France?',
-          () async => 'Color of sky?',
-        ],
-      );
-
-      _updateStatus('✅ Batch completed: ${results.length} results');
-    } catch (e) {
-      _updateStatus('❌ Batch failed: $e');
     }
   }
 
@@ -852,14 +821,9 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Flutter MCP v1.0.0'),
+        title: const Text('Flutter MCP'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.batch_prediction),
-            onPressed: _testBatchProcessing,
-            tooltip: 'Test Batch Processing',
-          ),
           IconButton(
             icon: const Icon(Icons.phone_android),
             onPressed: () {
@@ -879,7 +843,7 @@ class _HomePageState extends State<HomePage> {
                 MaterialPageRoute(builder: (context) => const V1FeaturesDemo()),
               );
             },
-            tooltip: 'v1.0.0 Features',
+            tooltip: 'Advanced features',
           ),
           IconButton(
             icon: const Icon(Icons.info),

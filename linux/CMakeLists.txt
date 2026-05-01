@@ -45,9 +45,14 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBNOTIFY REQUIRED libnotify)
 pkg_check_modules(LIBSECRET REQUIRED libsecret-1)
-# Check for ayatana-appindicator first (modern Ubuntu/Debian), fall back to legacy appindicator
+# Check for ayatana-appindicator first (modern Ubuntu/Debian), fall back to legacy appindicator.
+# The two flavours ship different header paths (libayatana-appindicator/ vs.
+# libappindicator/), so we expose the choice as a compile-time macro that the
+# .cc switches on.
 pkg_check_modules(APPINDICATOR ayatana-appindicator3-0.1)
-if(NOT APPINDICATOR_FOUND)
+if(APPINDICATOR_FOUND)
+  target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_MCP_USE_AYATANA_APPINDICATOR=1)
+else()
   pkg_check_modules(APPINDICATOR REQUIRED appindicator3-0.1)
 endif()
 

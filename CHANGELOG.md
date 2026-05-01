@@ -1,3 +1,77 @@
+## [2.0.0] - 2026-05-01 - MCP spec compliance + 2025-11-25 alignment
+
+Big-Bang upgrade aligning Flutter MCP with the `mcp_client` / `mcp_server`
+/ `mcp_llm` 2.0 release wave. Adds support for protocol revisions
+`2025-06-18` and `2025-11-25` (in addition to the previously supported
+`2024-11-05` and `2025-03-26`); negotiation is automatic per session.
+
+### Breaking
+- **JSON-RPC batching surface removed.** `processBatch`, `batchChat`,
+  `getBatchStatistics`, `EnhancedBatchManager`, `BatchConfig`,
+  `BatchRequestPriority`, and the corresponding API doc entries are
+  gone. JSON-RPC batching was dropped from the spec in 2025-06-18 and
+  `mcp_llm` 2.0 no longer ships a `BatchRequestManager`. Iterate with
+  `Future.wait`, or use `mcp_llm`'s `ParallelExecutor` / `MultiLlm`.
+- **Sampling direction reversed.** `Client.createMessage(...)` (a 1.x
+  bug — sampling is server-initiated per spec) is removed upstream.
+  Servers initiate via `Server.requestClientSampling`, surfaced here as
+  `FlutterMCP.requestClientSampling`. Clients fulfil via
+  `Client.onSamplingRequest`; Flutter MCP wires this automatically to
+  the host LLM when `MCPClientConfig.autoBridgeSampling` is true
+  (default).
+- **Roots direction reversed.** `Client.listRoots()` is removed. Servers
+  call `requestClientRoots`; clients configure roots via
+  `MCPClientConfig.initialRoots` and the new `addClientRoot` /
+  `removeClientRoot` proxies.
+- **Cancellation is a notification.** `cancelOperation` (non-spec
+  request) is replaced by spec `notifications/cancelled` on the
+  underlying client.
+- **`client.healthCheck()` removed.** The non-spec `health/check`
+  JSON-RPC method is gone. Use the `HealthMonitor` for in-process
+  monitoring or expose `/health` at the transport layer.
+- **JSON-RPC `auth/*` removed.** Replaced by RFC 9728 OAuth Protected
+  Resource Metadata at `/.well-known/oauth-protected-resource`.
+  Configure via `MCPServerConfig.protectedResource`
+  (new `MCPProtectedResourceConfig` value class).
+- **List-changed notifications** use the spec names
+  (`notifications/{tools,resources,prompts}/list_changed`).
+
+### Added
+- `MCPClientConfig.initialRoots`, `autoBridgeSampling`,
+  `elicitationHandler`, `listRootsHandler`.
+- `MCPServerConfig.protectedResource` and `MCPProtectedResourceConfig`.
+- `FlutterMCP.setElicitationHandler(handler)` — global fallback handler
+  for `elicitation/create` requests.
+- `FlutterMCP.addClientRoot` / `removeClientRoot` / `getClientRoots`.
+- `FlutterMCP.requestClientSampling` / `requestClientRoots` /
+  `requestClientElicitation` — server-initiated request proxies for use
+  inside tool handlers.
+- `FlutterMCP.addServerCompletion` / `removeServerCompletion` —
+  `completion/complete` handler registration; the 2025-06-18 `context`
+  field (previously-resolved arguments) is forwarded to the handler.
+- Re-exports: `Root` (from `mcp_client`), `CompletionHandler` (from
+  `mcp_server`).
+
+### Spec features now reachable
+- Spec metadata fields on `Tool` / `Resource` / `Prompt` /
+  `ResourceTemplate`: `title`, `icons`, `_meta`, `outputSchema`.
+- `CallToolResult.structuredContent` — typed tool output (2025-06-18+).
+- `ResourceLinkContent` — `resource_link` content type.
+- `AudioContent` (2025-03-26+).
+- `MCP-Protocol-Version` HTTP header negotiation (handled by the
+  underlying transports).
+
+### Documentation
+- New: `docs/advanced/sampling.md`, `docs/advanced/elicitation.md`,
+  `docs/advanced/structured-tool-output.md`.
+- Rewritten: `docs/troubleshooting/migration.md` (1.x → 2.0 section),
+  `docs/security/oauth-integration.md` (RFC 9728 server-side block).
+- Removed: `docs/advanced/batch-processing.md` (obsolete — wire
+  protocol gone).
+- Stripped literal `1.0.0` version examples from README and docs.
+
+---
+
 ## [1.0.6] - 2026-04-28
 
 ### Changed

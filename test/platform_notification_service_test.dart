@@ -143,7 +143,7 @@ void main() {
     });
 
     group('iOS Notification Service', () {
-      test('Should request notification permissions', () async {
+      test('Should NOT request notification permissions during init', () async {
         final manager = IOSNotificationManager();
 
         await manager.initialize(NotificationConfig(
@@ -151,11 +151,12 @@ void main() {
           priority: NotificationPriority.high,
         ));
 
-        // iOS should request permissions during initialization
+        // Permission is intentionally NOT requested during initialize —
+        // host apps must defer the system dialog to a UI affordance.
         expect(
             methodCalls
                 .any((call) => call.method == 'requestNotificationPermission'),
-            isTrue);
+            isFalse);
       });
 
       test('Should handle iOS notification categories', () async {
@@ -397,12 +398,10 @@ void main() {
 
         final manager = IOSNotificationManager();
         await manager.initialize(NotificationConfig());
-
-        // Should log warning but not throw
-        expect(
-            methodCalls
-                .any((call) => call.method == 'requestNotificationPermission'),
-            isTrue);
+        // Host code path: explicit permission request should propagate
+        // the denial result without throwing.
+        final granted = await manager.requestPermission();
+        expect(granted, isFalse);
       });
 
       test('Should handle notification show failures', () async {

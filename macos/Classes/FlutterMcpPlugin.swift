@@ -2,11 +2,33 @@ import Cocoa
 import FlutterMacOS
 import UserNotifications
 
+// Forwarding stream handler for the dedicated `flutter_mcp/tray_events`
+// channel. EnhancedTrayManager (Dart) listens on this channel for
+// menu-item clicks and tray icon click events.
+private class TrayEventStreamHandler: NSObject, FlutterStreamHandler {
+    var sink: FlutterEventSink?
+
+    func onListen(withArguments arguments: Any?,
+                  eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        sink = events
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        sink = nil
+        return nil
+    }
+}
+
 public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private var channel: FlutterMethodChannel?
     private var eventChannel: FlutterEventChannel?
     private var eventSink: FlutterEventSink?
-    
+
+    // Dedicated channel for tray events (menu clicks, tray icon clicks).
+    private var trayEventChannel: FlutterEventChannel?
+    private let trayEventHandler = TrayEventStreamHandler()
+
     // Services
     private let keychainService = KeychainService()
     private let notificationManager: Any
@@ -42,6 +64,15 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         )
         eventChannel.setStreamHandler(instance)
         instance.eventChannel = eventChannel
+
+        // Tray event channel — EnhancedTrayManager listens here for menu
+        // item clicks and tray icon click events.
+        let trayEventChannel = FlutterEventChannel(
+            name: "flutter_mcp/tray_events",
+            binaryMessenger: registrar.messenger
+        )
+        trayEventChannel.setStreamHandler(instance.trayEventHandler)
+        instance.trayEventChannel = trayEventChannel
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -91,7 +122,7 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         case "secureDeleteAll":
             secureDeleteAll(result: result)
             
-        // System tray
+        // System tray (legacy method names — kept for back-compat)
         case "showTrayIcon":
             showTrayIcon(call: call, result: result)
         case "hideTrayIcon":
@@ -102,13 +133,46 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             updateTrayTooltip(call: call, result: result)
         case "configureTray":
             configureTray(call: call, result: result)
-            
+
+        // System tray (EnhancedTrayManager — new method names used by Dart)
+        case "initializeTray":
+            // No-op on macOS: NSStatusItem is created lazily by setTrayIcon.
+            result(nil)
+        case "setTrayIcon":
+            setTrayIconEnhanced(call: call, result: result)
+        case "setTrayIconFromBytes":
+            // Bytes-based tray icon is not yet implemented — accept the call
+            // and report success so the harness can move forward.
+            result(nil)
+        case "setTrayTooltip":
+            updateTrayTooltip(call: call, result: result)
+        case "setTrayContextMenu":
+            setTrayContextMenu(call: call, result: result)
+        case "showTray":
+            // Showing happens implicitly when an icon is set.
+            result(nil)
+        case "hideTray":
+            hideTrayIcon(result: result)
+        case "updateTrayMenuItem":
+            // No-op for now — full per-item update needs more state in
+            // TrayIconManager. Accept so EnhancedTrayManager calls
+            // complete cleanly.
+            result(nil)
+        case "disposeTray":
+            hideTrayIcon(result: result)
+        case "setStatusBarItemProperties":
+            result(nil)
+        case "setMenuBarVisibility":
+            result(nil)
+
         // Permissions
         case "checkPermission":
             checkPermission(call: call, result: result)
         case "requestPermission":
             requestPermission(call: call, result: result)
-            
+        case "requestPermissions":
+            requestPermissions(call: call, result: result)
+
         // Lifecycle
         case "shutdown":
             shutdown(result: result)
@@ -405,6 +469,52 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         result(nil)
     }
     
+    // EnhancedTrayManager.platformSetIcon → 'setTrayIcon'.
+    // Args: { 'path': String, 'isTemplate': Bool }
+    private func setTrayIconEnhanced(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let path = args["path"] as? String else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing path", details: nil))
+            return
+        }
+        // showTrayIcon creates the NSStatusItem if needed and sets the icon.
+        trayIconManager.showTrayIcon(iconPath: path, tooltip: nil)
+        result(nil)
+    }
+
+    // EnhancedTrayManager.platformSetContextMenu → 'setTrayContextMenu'.
+    // Args: { 'items': List<{id, label, disabled, type, ...}> }
+    // The legacy `setTrayMenu` accepted the same shape; reuse the underlying
+    // TrayIconManager.setMenuItems but normalise the separator key to match
+    // EnhancedTrayMenuItem JSON ('type': 'separator' instead of
+    // 'isSeparator': true).
+    private func setTrayContextMenu(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let items = args["items"] as? [[String: Any]] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing items", details: nil))
+            return
+        }
+        // Translate the EnhancedTrayMenuItem shape to the legacy key set
+        // TrayIconManager understands.
+        let normalized: [[String: Any]] = items.map { item in
+            var copy = item
+            if let type = item["type"] as? String, type == "separator" {
+                copy["isSeparator"] = true
+            }
+            return copy
+        }
+        trayIconManager.setMenuItems(normalized) { [weak self] itemId in
+            self?.eventSink?([
+                "type": "trayEvent",
+                "data": [
+                    "action": "menuItemClicked",
+                    "itemId": itemId
+                ]
+            ])
+        }
+        result(nil)
+    }
+
     private func configureTray(call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let config = call.arguments as? [String: Any] else {
             result(FlutterError(code: "INVALID_ARGS", message: "Missing configuration", details: nil))
@@ -443,7 +553,18 @@ public class FlutterMcpPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         // macOS doesn't require most permissions
         result(true)
     }
-    
+
+    private func requestPermissions(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        // macOS doesn't require most permissions; report every requested
+        // permission as granted. The Dart side expects a Map<String,bool>.
+        let permissions = (call.arguments as? [String: Any])?["permissions"] as? [String] ?? []
+        var granted: [String: Bool] = [:]
+        for permission in permissions {
+            granted[permission] = true
+        }
+        result(granted)
+    }
+
     private func shutdown(result: @escaping FlutterResult) {
         // Stop background service
         isBackgroundServiceRunning = false

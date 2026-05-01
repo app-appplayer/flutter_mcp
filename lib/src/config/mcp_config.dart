@@ -1,6 +1,6 @@
 import 'package:flutter_mcp/src/config/plugin_config.dart';
 import 'package:mcp_client/mcp_client.dart' hide ServerCapabilities;
-import 'package:mcp_server/mcp_server.dart';
+import 'package:mcp_server/mcp_server.dart' hide Root;
 import 'package:mcp_llm/mcp_llm.dart';
 
 import 'background_config.dart';
@@ -55,6 +55,29 @@ class MCPClientConfig {
   /// Additional headers to send with requests
   final Map<String, String>? headers;
 
+  /// Initial roots to register on this client before connecting.
+  /// Implies [ClientCapabilities.roots] when [capabilities] is not supplied.
+  final List<Root>? initialRoots;
+
+  /// When true (default) and [capabilities] is not supplied, the client is
+  /// advertised with `sampling: true` and server-initiated
+  /// `sampling/createMessage` requests are bridged to the host LLM
+  /// (the default LLM client registered via [MCPLlmManager]).
+  /// Set false to opt out — useful when no host LLM will be registered.
+  final bool autoBridgeSampling;
+
+  /// Optional handler for server-initiated `elicitation/create` requests.
+  /// When supplied (and [capabilities] is not), enables the
+  /// `elicitation` capability. The handler receives the spec
+  /// `ElicitRequest.params` map and must return `{action, content?}`.
+  final Future<Map<String, dynamic>> Function(Map<String, dynamic> params)?
+      elicitationHandler;
+
+  /// Optional override for server-initiated `roots/list` requests. When
+  /// not supplied the client returns its locally added roots
+  /// ([initialRoots] plus any [FlutterMCP.addClientRoot] calls).
+  final Future<List<Root>> Function()? listRootsHandler;
+
   /// Creates a new MCP client configuration
   MCPClientConfig({
     required this.name,
@@ -72,7 +95,11 @@ class MCPClientConfig {
     this.useHttp2,
     this.terminateOnClose,
     this.headers,
-  }) : transportType = transportType ?? 
+    this.initialRoots,
+    this.autoBridgeSampling = true,
+    this.elicitationHandler,
+    this.listRootsHandler,
+  }) : transportType = transportType ??
             (throw ArgumentError('transportType must be specified. Valid values: stdio, sse, streamablehttp'));
 
   /// Converts this configuration to JSON
@@ -192,6 +219,13 @@ class MCPServerConfig {
   /// Custom middleware for SSE transport
   final List<dynamic>? middleware;
 
+  /// OAuth 2.0 Protected Resource metadata (RFC 9728, spec 2025-06-18).
+  /// When supplied the server publishes
+  /// `/.well-known/oauth-protected-resource` so clients can discover
+  /// the authorization server(s) without a JSON-RPC `auth/*` round-trip
+  /// (those have been removed from the spec).
+  final MCPProtectedResourceConfig? protectedResource;
+
   /// Creates a new MCP server configuration
   MCPServerConfig({
     required this.name,
@@ -212,6 +246,7 @@ class MCPServerConfig {
     this.isJsonResponseEnabled,
     this.jsonResponseMode,
     this.middleware,
+    this.protectedResource,
   }) : transportType = transportType ??
             (useStdioTransport == true
                 ? 'stdio'
@@ -709,4 +744,35 @@ class MCPConfig {
       extraOptions: extraOptions ?? this.extraOptions,
     );
   }
+}
+
+/// OAuth 2.0 Protected Resource metadata for the server's
+/// `/.well-known/oauth-protected-resource` endpoint (RFC 9728).
+///
+/// Spec 2025-06-18 deprecated the JSON-RPC `auth/*` flow; clients now
+/// discover the authorization server through this static metadata.
+class MCPProtectedResourceConfig {
+  /// Canonical resource URI (the MCP server's externally visible base URL).
+  final String resource;
+
+  /// One or more authorization server issuer URLs that may issue tokens
+  /// for this resource.
+  final List<String> authorizationServers;
+
+  /// Optional list of scope strings supported by this resource.
+  final List<String>? scopesSupported;
+
+  /// Optional list of accepted bearer methods (`header`, `body`, `query`).
+  final List<String>? bearerMethodsSupported;
+
+  /// Optional URL pointing to human-readable documentation for the resource.
+  final String? resourceDocumentation;
+
+  const MCPProtectedResourceConfig({
+    required this.resource,
+    required this.authorizationServers,
+    this.scopesSupported,
+    this.bearerMethodsSupported,
+    this.resourceDocumentation,
+  });
 }

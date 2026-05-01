@@ -36,7 +36,6 @@ import 'src/utils/semantic_cache.dart';
 import 'src/utils/diagnostic_utils.dart';
 import 'src/utils/platform_utils.dart';
 import 'src/core/dependency_injection.dart';
-import 'src/core/enhanced_batch_manager.dart';
 import 'src/security/oauth_manager.dart';
 import 'src/security/credential_manager.dart';
 import 'src/security/security_audit.dart';
@@ -58,6 +57,10 @@ export 'src/config/plugin_config.dart';
 export 'src/config/job.dart';
 export 'src/utils/exceptions.dart';
 export 'src/utils/logger.dart' hide LoggerExtensions;
+export 'src/utils/platform_utils.dart' show PlatformUtils;
+export 'src/utils/web_memory_monitor.dart'
+    show WebMemoryMonitor, WebMemorySnapshot;
+export 'src/config/config_loader.dart' show ConfigLoader, ConfigFormat;
 export 'src/plugins/plugin_system.dart'
     show
         MCPPlugin,
@@ -101,10 +104,14 @@ export 'src/security/encryption_manager.dart'
         EncryptedData,
         EncryptionMetadata;
 export 'package:mcp_client/mcp_client.dart'
-    show ClientCapabilities, Client, ClientTransport;
+    show ClientCapabilities, Client, ClientTransport, Root;
 export 'package:mcp_server/mcp_server.dart'
     show
         ServerCapabilities,
+        ToolsCapability,
+        ResourcesCapability,
+        PromptsCapability,
+        LoggingCapability,
         Server,
         ServerTransport,
         Content,
@@ -116,9 +123,10 @@ export 'package:mcp_server/mcp_server.dart'
         Message,
         MessageRole,
         MCPContentType,
-        CallToolResult;
+        CallToolResult,
+        CompletionHandler;
 export 'package:mcp_llm/mcp_llm.dart'
-    hide Logger, HealthCheckResult, HealthStatus;
+    hide Logger, HealthCheckResult, HealthStatus, CallToolResult;
 export 'src/types/health_types.dart';
 export 'src/events/event_system.dart'
     show EventSystem, Event, EventPriority, EventHandlerConfig;
@@ -256,13 +264,18 @@ class FlutterMCP {
   // Circuit breakers for handling failures
   final Map<String, CircuitBreaker> _circuitBreakers = {};
 
-  // New v1.0.0 features
-  late final EnhancedBatchManager _batchManager;
+  // Optional advanced subsystems (health, OAuth, audit, encryption,
+  // enhanced performance metrics) initialised in [init].
   late final HealthMonitor _healthMonitor;
   late final MCPOAuthManager _oauthManager;
   late final EnhancedPerformanceMonitor _enhancedPerformanceMonitor;
   late final SecurityAuditManager _securityAuditManager;
   late final EncryptionManager _encryptionManager;
+
+  // Global handler for server-initiated `elicitation/create` requests.
+  // Used as a fallback when MCPClientConfig.elicitationHandler is null.
+  Future<Map<String, dynamic>> Function(Map<String, dynamic> params)?
+      _globalElicitationHandler;
 
   // Plugin state
   bool _initialized = false;
@@ -674,8 +687,7 @@ class FlutterMCP {
       _llmManager.initialize(),
     ]);
 
-    // Initialize v1.0.0 features
-    _batchManager = EnhancedBatchManager.instance;
+    // Initialise advanced subsystems.
     _healthMonitor = HealthMonitor.instance;
     _healthMonitor.initialize();
 
@@ -687,10 +699,6 @@ class FlutterMCP {
         await MCPOAuthManager.initialize(credentialManager: credentialManager);
 
     // Register for cleanup with appropriate priorities
-    _resourceManager.registerCallback(
-        'batch_manager', () async => _batchManager.dispose(),
-        priority: ResourceManager.lowPriority);
-
     _resourceManager.registerCallback(
         'health_monitor', () async => _healthMonitor.dispose(),
         priority: ResourceManager.lowPriority);
@@ -1257,15 +1265,51 @@ class FlutterMCP {
             {'transport': 'Missing transport configuration'});
       }
 
-      // Create client using McpClient factory with config
+      // Create client using McpClient factory with config.
+      // Effective capabilities: explicit user value wins; otherwise derive
+      // from config flags so MCPClientConfig.autoBridgeSampling /
+      // initialRoots / elicitationHandler / listRootsHandler advertise
+      // the corresponding spec capabilities at initialize time.
       final clientId = _clientManager.generateId();
+      final effectiveCapabilities = capabilities ??
+          client.ClientCapabilities(
+            sampling: config?.autoBridgeSampling ?? true,
+            roots: (config?.initialRoots?.isNotEmpty ?? false) ||
+                config?.listRootsHandler != null,
+            rootsListChanged:
+                (config?.initialRoots?.isNotEmpty ?? false) ||
+                    config?.listRootsHandler != null,
+            elicitation: config?.elicitationHandler != null,
+          );
       final mcpClient = client.McpClient.createClient(
         client.McpClientConfig(
           name: name,
           version: version,
-          capabilities: capabilities ?? client.ClientCapabilities(),
+          capabilities: effectiveCapabilities,
         ),
       );
+
+      // Register spec request handlers and seed roots before connect
+      // (capabilities are sent during initialize, so the wiring must be in
+      // place before connectClient is called).
+      if (effectiveCapabilities.sampling) {
+        mcpClient.onSamplingRequestMap(_handleSamplingViaHostLlm);
+      }
+      if (effectiveCapabilities.elicitation) {
+        final handler = config?.elicitationHandler ?? _globalElicitationHandler;
+        mcpClient.onElicitationRequest(
+          handler ?? _defaultElicitationDecline,
+        );
+      }
+      if (effectiveCapabilities.roots) {
+        for (final root in config?.initialRoots ?? const <client.Root>[]) {
+          mcpClient.addRoot(root);
+        }
+        final rootsHandler = config?.listRootsHandler;
+        if (rootsHandler != null) {
+          mcpClient.onListRoots(rootsHandler);
+        }
+      }
 
       // Create transport with proper Result handling
       client.ClientTransport? transport;
@@ -1431,6 +1475,20 @@ class FlutterMCP {
           capabilities: capabilities ?? server.ServerCapabilities(),
         ),
       );
+
+      // Apply RFC 9728 OAuth Protected Resource metadata if configured.
+      // The server publishes this at /.well-known/oauth-protected-resource
+      // so clients can discover the authorization server (spec 2025-06-18).
+      final protectedResource = config?.protectedResource;
+      if (protectedResource != null) {
+        mcpServer.configureProtectedResource(
+          resource: protectedResource.resource,
+          authorizationServers: protectedResource.authorizationServers,
+          scopesSupported: protectedResource.scopesSupported,
+          bearerMethodsSupported: protectedResource.bearerMethodsSupported,
+          resourceDocumentation: protectedResource.resourceDocumentation,
+        );
+      }
 
       // Create transport with proper Result handling
       server.ServerTransport? transport;
@@ -2695,6 +2753,248 @@ class FlutterMCP {
       throw MCPOperationFailedException(
           'Failed to connect server: $serverId', e, stackTrace);
     }
+  }
+
+  // ============ Spec request handlers (sampling / elicitation / roots) ============
+
+  /// Bridge a server-initiated `sampling/createMessage` request to the host
+  /// LLM. Used when MCPClientConfig.autoBridgeSampling is true (default).
+  ///
+  /// Translates the spec params to a single-prompt LLM call against the
+  /// default LLM client and returns a CreateMessageResult-shaped map.
+  Future<Map<String, dynamic>> _handleSamplingViaHostLlm(
+      Map<String, dynamic> params) async {
+    final llmClientId = _defaultLlmClientId;
+    if (llmClientId == null) {
+      throw MCPException(
+          'Cannot fulfil sampling/createMessage: no default LLM client. '
+          'Register one with createLlmClient(...) before connecting MCP clients '
+          'with autoBridgeSampling enabled.');
+    }
+    final llmClient = _llmManager.getLlmClientById(llmClientId);
+    if (llmClient == null) {
+      throw MCPException(
+          'Default LLM client not found: $llmClientId');
+    }
+
+    // Spec CreateMessageRequest.params shape:
+    //   messages: [{role, content: {type: "text", text: "..."}}]
+    //   systemPrompt?: string
+    //   modelPreferences?: { ... }
+    //   maxTokens?: int
+    //   temperature?: double
+    final messagesRaw = (params['messages'] as List?) ?? const [];
+    final systemPrompt = params['systemPrompt'] as String?;
+    final maxTokens = params['maxTokens'] as int?;
+    final temperature = params['temperature'] as num?;
+
+    final buffer = StringBuffer();
+    if (systemPrompt != null && systemPrompt.isNotEmpty) {
+      buffer.writeln(systemPrompt);
+      buffer.writeln();
+    }
+    for (final m in messagesRaw) {
+      final msg = m as Map;
+      final role = msg['role'] as String? ?? 'user';
+      final text = _extractSamplingText(msg['content']);
+      if (text.isEmpty) continue;
+      buffer.writeln('[$role] $text');
+    }
+
+    final parameters = <String, dynamic>{};
+    if (maxTokens != null) parameters['max_tokens'] = maxTokens;
+    if (temperature != null) parameters['temperature'] = temperature;
+
+    final response = await llmClient.chat(
+      buffer.toString().trim(),
+      parameters: parameters,
+    );
+
+    return <String, dynamic>{
+      'role': 'assistant',
+      'content': {
+        'type': 'text',
+        'text': response.text,
+      },
+      'model': llmClient.runtimeType.toString(),
+      'stopReason': 'endTurn',
+    };
+  }
+
+  String _extractSamplingText(dynamic content) {
+    if (content == null) return '';
+    if (content is String) return content;
+    if (content is Map) {
+      if (content['type'] == 'text') {
+        return (content['text'] as String?) ?? '';
+      }
+    }
+    if (content is List) {
+      return content.map(_extractSamplingText).join('\n');
+    }
+    return '';
+  }
+
+  // Spec-conforming default for elicitation when no handler is configured —
+  // declines so the server falls back gracefully.
+  Future<Map<String, dynamic>> _defaultElicitationDecline(
+      Map<String, dynamic> params) async {
+    return {'action': 'decline'};
+  }
+
+  /// Set a global handler for server-initiated `elicitation/create`
+  /// requests. Applies to clients created without an explicit
+  /// MCPClientConfig.elicitationHandler. Existing connected clients keep
+  /// the handler that was active when [createClient] ran — call this
+  /// before [createClient] for new clients to pick it up.
+  void setElicitationHandler(
+    Future<Map<String, dynamic>> Function(Map<String, dynamic> params)? handler,
+  ) {
+    _globalElicitationHandler = handler;
+  }
+
+  /// Add a root to a client. Mirrors `Client.addRoot` and triggers the
+  /// `notifications/roots/list_changed` notification when connected.
+  void addClientRoot(String clientId, client.Root root) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpClient = _clientManager.getClient(clientId);
+    if (mcpClient == null) {
+      throw MCPResourceNotFoundException(clientId, 'Client not found');
+    }
+    mcpClient.addRoot(root);
+  }
+
+  /// Remove a root from a client by URI.
+  void removeClientRoot(String clientId, String uri) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpClient = _clientManager.getClient(clientId);
+    if (mcpClient == null) {
+      throw MCPResourceNotFoundException(clientId, 'Client not found');
+    }
+    mcpClient.removeRoot(uri);
+  }
+
+  /// Read a client's current local roots.
+  List<client.Root> getClientRoots(String clientId) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpClient = _clientManager.getClient(clientId);
+    if (mcpClient == null) {
+      throw MCPResourceNotFoundException(clientId, 'Client not found');
+    }
+    return mcpClient.roots;
+  }
+
+  // ============ Server-initiated request proxies ============
+
+  /// Server-initiated `sampling/createMessage`. Forwards to the underlying
+  /// `Server.requestClientSampling`. The connected client must advertise
+  /// the `sampling` capability.
+  Future<Map<String, dynamic>> requestClientSampling({
+    required String serverId,
+    required String sessionId,
+    required Map<String, dynamic> params,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpServer = _serverManager.getServer(serverId);
+    if (mcpServer == null) {
+      throw MCPResourceNotFoundException(serverId, 'Server not found');
+    }
+    return await mcpServer.requestClientSampling(
+      sessionId,
+      params,
+      timeout: timeout,
+    );
+  }
+
+  /// Server-initiated `roots/list`. Returns the connected client's roots.
+  Future<List<server.Root>> requestClientRoots({
+    required String serverId,
+    required String sessionId,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpServer = _serverManager.getServer(serverId);
+    if (mcpServer == null) {
+      throw MCPResourceNotFoundException(serverId, 'Server not found');
+    }
+    return await mcpServer.requestClientRoots(
+      sessionId,
+      timeout: timeout,
+    );
+  }
+
+  /// Server-initiated `elicitation/create` (spec 2025-06-18). Asks the
+  /// connected client to elicit input from the user; client must advertise
+  /// the `elicitation` capability.
+  Future<Map<String, dynamic>> requestClientElicitation({
+    required String serverId,
+    required String sessionId,
+    required Map<String, dynamic> params,
+    Duration timeout = const Duration(seconds: 120),
+  }) async {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpServer = _serverManager.getServer(serverId);
+    if (mcpServer == null) {
+      throw MCPResourceNotFoundException(serverId, 'Server not found');
+    }
+    return await mcpServer.requestClientElicitation(
+      sessionId,
+      params,
+      timeout: timeout,
+    );
+  }
+
+  /// Register a `completion/complete` handler on the server (spec
+  /// `completion/complete`). [refType] is `'prompt'` or `'resource'`;
+  /// pass `'*'` for a wildcard. The handler receives the spec `ref`,
+  /// `argument` and optional `context.arguments` map (2025-06-18+).
+  void addServerCompletion({
+    required String serverId,
+    required String refType,
+    required String refKey,
+    required server.CompletionHandler handler,
+  }) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpServer = _serverManager.getServer(serverId);
+    if (mcpServer == null) {
+      throw MCPResourceNotFoundException(serverId, 'Server not found');
+    }
+    mcpServer.addCompletion(
+      refType: refType,
+      refKey: refKey,
+      handler: handler,
+    );
+  }
+
+  /// Remove a previously registered completion handler.
+  void removeServerCompletion({
+    required String serverId,
+    required String refType,
+    required String refKey,
+  }) {
+    if (!_initialized) {
+      throw MCPException('Flutter MCP is not initialized');
+    }
+    final mcpServer = _serverManager.getServer(serverId);
+    if (mcpServer == null) {
+      throw MCPResourceNotFoundException(serverId, 'Server not found');
+    }
+    mcpServer.removeCompletion(refType: refType, refKey: refKey);
   }
 
   /// Call tool with client with improved error handling and circuit breaker
@@ -5204,146 +5504,6 @@ class FlutterMCP {
   /// Returns true if the feature is supported on the current platform
   bool isFeatureSupported(String feature) {
     return PlatformUtils.isFeatureSupported(feature);
-  }
-
-  // ============ New v1.0.0 Feature Methods ============
-
-  /// Process multiple requests in a batch for improved performance
-  ///
-  /// Leverages the BatchRequestManager to process multiple operations
-  /// with 40-60% performance improvement.
-  ///
-  /// [llmId]: The LLM instance to use for batch processing
-  /// [requests]: List of request functions to execute
-  /// [operationName]: Optional name for tracking the batch operation
-  ///
-  /// Returns: List of results from each request
-  Future<List<T>> processBatch<T>({
-    required String llmId,
-    required List<Future<T> Function()> requests,
-    String? operationName,
-  }) async {
-    if (!_initialized) {
-      throw MCPException('Flutter MCP is not initialized');
-    }
-
-    // Initialize batch manager for the LLM if not already done
-    final llmInfo = _llmManager.getLlmInfo(llmId);
-    if (llmInfo == null) {
-      throw MCPResourceNotFoundException(llmId, 'LLM not found');
-    }
-
-    _batchManager.initializeBatchManager(llmId, llmInfo.mcpLlm);
-
-    // Process requests using enhanced batch manager
-    final futures = <Future<T>>[];
-    for (final request in requests) {
-      futures.add(_batchManager.addToBatch<T>(
-        llmId: llmId,
-        request: request,
-        operationName: operationName,
-      ));
-    }
-
-    return await Future.wait(futures);
-  }
-
-  /// Process multiple chat requests in a batch
-  ///
-  /// [llmId]: The LLM instance to use
-  /// [llmClientId]: The LLM client to use
-  /// [messagesList]: List of message arrays to process
-  /// [options]: Optional parameters for the batch
-  ///
-  /// Returns: List of chat responses
-  Future<List<String>> batchChat({
-    required String llmId,
-    required String llmClientId,
-    required List<List<llm.LlmMessage>> messagesList,
-    Map<String, dynamic>? options,
-  }) async {
-    if (!_initialized) {
-      throw MCPException('Flutter MCP is not initialized');
-    }
-
-    // Ensure LLM is registered with batch manager
-    final llmInstance = _mcpLlmInstances[llmId]?.value;
-    if (llmInstance == null) {
-      throw MCPException('LLM not found: $llmId');
-    }
-
-    _batchManager.initializeBatchManager(llmId, llmInstance);
-
-    // Process chat requests using enhanced batch manager
-    final futures = <Future<String>>[];
-    for (final messages in messagesList) {
-      futures.add(_batchManager.addToBatch<String>(
-        llmId: llmId,
-        request: () async {
-          final llmClient = _llmManager.getLlmClientById(llmClientId);
-          if (llmClient == null) {
-            throw MCPException('LLM client not found: $llmClientId');
-          }
-
-          final response = await llmClient.chat(
-            messages.map((m) => m.content).join('\n'),
-            parameters: options ?? {},
-          );
-
-          return response.text;
-        },
-        operationName: 'batch_chat',
-        priority: BatchRequestPriority.high,
-      ));
-    }
-
-    return await Future.wait(futures);
-  }
-
-  /// Get batch processing statistics
-  ///
-  /// [llmId]: Optional LLM ID to get statistics for specific instance
-  ///
-  /// Returns: Map of batch processing statistics
-  Map<String, dynamic> getBatchStatistics([String? llmId]) {
-    if (!_initialized) {
-      throw MCPException('Flutter MCP is not initialized');
-    }
-
-    if (llmId != null) {
-      final stats = _batchManager.getStatistics(llmId);
-      if (stats == null) {
-        return {};
-      }
-      return {
-        'totalRequests': stats.totalRequests,
-        'successfulRequests': stats.successfulRequests,
-        'failedRequests': stats.failedRequests,
-        'retriedRequests': stats.retriedRequests,
-        'deduplicatedRequests': stats.deduplicatedRequests,
-        'successRate': stats.successRate,
-        'throughput': stats.throughput,
-        'averageWaitTimeMs': stats.averageWaitTime.inMilliseconds,
-        'averageExecutionTimeMs': stats.averageExecutionTime.inMilliseconds,
-        'requestsByPriority':
-            stats.requestsByPriority.map((k, v) => MapEntry(k.name, v)),
-      };
-    } else {
-      final allStats = _batchManager.getAllStatistics();
-      return allStats.map((llmId, stats) => MapEntry(llmId, {
-            'totalRequests': stats.totalRequests,
-            'successfulRequests': stats.successfulRequests,
-            'failedRequests': stats.failedRequests,
-            'retriedRequests': stats.retriedRequests,
-            'deduplicatedRequests': stats.deduplicatedRequests,
-            'successRate': stats.successRate,
-            'throughput': stats.throughput,
-            'averageWaitTimeMs': stats.averageWaitTime.inMilliseconds,
-            'averageExecutionTimeMs': stats.averageExecutionTime.inMilliseconds,
-            'requestsByPriority':
-                stats.requestsByPriority.map((k, v) => MapEntry(k.name, v)),
-          }));
-    }
   }
 
   /// Initialize OAuth authentication for an LLM instance

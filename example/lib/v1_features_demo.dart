@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mcp/flutter_mcp.dart';
 import 'dart:async';
 
-/// Demo page showcasing Flutter MCP v1.0.0 features
+/// Demo page showcasing the advanced runtime features
+/// (health monitoring, performance metrics, OAuth, memory tracking).
 class V1FeaturesDemo extends StatefulWidget {
   const V1FeaturesDemo({Key? key}) : super(key: key);
 
@@ -84,58 +85,6 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
       }
     } catch (e) {
       _addLog('❌ Health check failed: $e');
-    }
-  }
-
-  // 2. Batch Processing Demo
-  Future<void> _demoBatchProcessing() async {
-    _addLog('\n--- Batch Processing Demo ---');
-    _addLog('Creating 10 simulated requests...');
-
-    try {
-      // Check if we have any LLM configured
-      final status = FlutterMCP.instance.getSystemStatus();
-      if ((status['llms'] ?? 0) == 0) {
-        _addLog('❌ No LLM configured. Start services in main screen first.');
-        return;
-      }
-
-      // Create simple test requests
-      final requests = List.generate(
-          10,
-          (i) => () async {
-                await Future.delayed(Duration(milliseconds: 50 + (i * 10)));
-                return 'Result ${i + 1}';
-              });
-
-      final stopwatch = Stopwatch()..start();
-
-      // Process batch - use the first available LLM
-      final llmIds = FlutterMCP.instance.llmManager.getAllLlmIds();
-      if (llmIds.isEmpty) {
-        _addLog('❌ No LLM available');
-        return;
-      }
-
-      final results = await FlutterMCP.instance.processBatch(
-        llmId: llmIds.first,
-        requests: requests,
-      );
-
-      stopwatch.stop();
-
-      _addLog('✅ Batch completed in ${stopwatch.elapsedMilliseconds}ms');
-      _addLog('Results: ${results.length} items processed');
-
-      // Get batch statistics
-      final stats = FlutterMCP.instance.getBatchStatistics();
-      _addLog('Total batches: ${stats['totalBatches'] ?? 0}');
-      _addLog(
-          'Success rate: ${(stats['successRate'] ?? 0).toStringAsFixed(1)}%');
-      _addLog(
-          'Avg processing time: ${(stats['averageProcessingTimeMs'] ?? 0).toStringAsFixed(0)}ms');
-    } catch (e) {
-      _addLog('❌ Batch processing failed: $e');
     }
   }
 
@@ -284,7 +233,7 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Flutter MCP v1.0.0 Features'),
+        title: const Text('Advanced Features'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           Padding(
@@ -306,11 +255,6 @@ class _V1FeaturesDemoState extends State<V1FeaturesDemo> {
                   onPressed: _checkSystemHealth,
                   icon: const Icon(Icons.health_and_safety),
                   label: const Text('Health Check'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _demoBatchProcessing,
-                  icon: const Icon(Icons.batch_prediction),
-                  label: const Text('Batch Processing'),
                 ),
                 ElevatedButton.icon(
                   onPressed: _showPerformanceMetrics,

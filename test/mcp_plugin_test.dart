@@ -188,26 +188,25 @@ void main() {
   // Clean up plugins between tests
   tearDown(() async {
     try {
-      // FlutterMCP가 초기화되었는지 확인
+      // Skip cleanup if FlutterMCP was never initialized.
       if (flutterMcp.isInitialized) {
-        // 모든 플러그인 정보 가져오기
         final pluginInfo = flutterMcp.getAllPluginInfo();
 
-        // 도구 플러그인 정리
+        // Clean up tool plugins.
         if (pluginInfo['tool_plugins'] != null) {
           for (var plugin in pluginInfo['tool_plugins']!) {
             await flutterMcp.unregisterPlugin(plugin['name'] as String);
           }
         }
 
-        // 리소스 플러그인 정리
+        // Clean up resource plugins.
         if (pluginInfo['resource_plugins'] != null) {
           for (var plugin in pluginInfo['resource_plugins']!) {
             await flutterMcp.unregisterPlugin(plugin['name'] as String);
           }
         }
 
-        // 프롬프트 플러그인 정리
+        // Clean up prompt plugins.
         if (pluginInfo['prompt_plugins'] != null) {
           for (var plugin in pluginInfo['prompt_plugins']!) {
             await flutterMcp.unregisterPlugin(plugin['name'] as String);
@@ -215,7 +214,7 @@ void main() {
         }
       }
     } catch (e) {
-      // FlutterMCP가 종료된 경우 무시
+      // Ignore — FlutterMCP may have already been shut down.
     }
   });
 

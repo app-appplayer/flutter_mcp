@@ -36,8 +36,22 @@ class PlatformServices {
   /// Resource cleanup callbacks
   final List<Future<void> Function()> _cleanupCallbacks = [];
 
-  /// Background service running status
-  bool get isBackgroundServiceRunning => _backgroundService?.isRunning ?? false;
+  /// Background service running status. On native platforms the
+  /// authoritative state lives on the platform-channel side
+  /// (the native plugin's flag); the Dart-side `_backgroundService` is
+  /// only used as a fallback on platforms that lack a native impl.
+  bool get isBackgroundServiceRunning {
+    if (PlatformUtils.isNative) {
+      try {
+        return FlutterMcpPlatform.instance.isBackgroundServiceRunning;
+      } catch (_) {
+        // Platform interface accessor itself can throw on
+        // UnimplementedError if it has not been registered yet.
+        return _backgroundService?.isRunning ?? false;
+      }
+    }
+    return _backgroundService?.isRunning ?? false;
+  }
 
   /// Initialize platform services
   Future<void> initialize(MCPConfig config) async {

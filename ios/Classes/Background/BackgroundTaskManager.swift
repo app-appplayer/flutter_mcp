@@ -155,13 +155,8 @@ class BackgroundTaskManager {
     }
 }
 
-// Extension to support background task registration
-extension AppDelegate {
-    override func application(_ application: UIApplication,
-                            didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Register background tasks
-        BackgroundTaskManager.shared.registerBackgroundTasks()
-        
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    }
-}
+// Background-task registration must run before the host app finishes
+// launching. Hosts that opt in should call
+//   BackgroundTaskManager.shared.registerBackgroundTasks()
+// from their own AppDelegate.application(_:didFinishLaunchingWithOptions:)
+// — the plugin can't reach into the host's AppDelegate from here.

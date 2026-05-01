@@ -146,6 +146,30 @@ void FlutterMcpPlugin::HandleMethodCall(
   } else if (method_name.compare("requestPermission") == 0) {
     // Windows doesn't require most permissions
     result->Success(flutter::EncodableValue(true));
+  } else if (method_name.compare("requestPermissions") == 0) {
+    // Batch variant — Dart side expects Map<String, bool>.
+    flutter::EncodableMap granted;
+    const auto* arguments =
+        std::get_if<flutter::EncodableMap>(method_call.arguments());
+    if (arguments != nullptr) {
+      auto it = arguments->find(flutter::EncodableValue("permissions"));
+      if (it != arguments->end()) {
+        const auto* permissions =
+            std::get_if<flutter::EncodableList>(&it->second);
+        if (permissions != nullptr) {
+          for (const auto& entry : *permissions) {
+            const auto* name = std::get_if<std::string>(&entry);
+            if (name != nullptr) {
+              // Windows desktop has no runtime permission gates for
+              // any of the features we expose — report each as granted.
+              granted[flutter::EncodableValue(*name)] =
+                  flutter::EncodableValue(true);
+            }
+          }
+        }
+      }
+    }
+    result->Success(flutter::EncodableValue(granted));
   } else if (method_name.compare("shutdown") == 0) {
     Shutdown(std::move(result));
   } else {
@@ -676,9 +700,15 @@ void FlutterMcpPlugin::SendEvent(const std::string& event_type,
                                 const std::map<std::string, flutter::EncodableValue>& data) {
   std::lock_guard<std::mutex> lock(event_sink_mutex_);
   if (event_sink_) {
+    // Convert the std::map<std::string, EncodableValue> payload into an
+    // EncodableMap (whose keys are EncodableValue, not std::string).
+    flutter::EncodableMap data_map;
+    for (const auto& kv : data) {
+      data_map[flutter::EncodableValue(kv.first)] = kv.second;
+    }
     flutter::EncodableMap event;
     event[flutter::EncodableValue("type")] = flutter::EncodableValue(event_type);
-    event[flutter::EncodableValue("data")] = flutter::EncodableValue(data);
+    event[flutter::EncodableValue("data")] = flutter::EncodableValue(data_map);
     event_sink_->Success(flutter::EncodableValue(event));
   }
 }

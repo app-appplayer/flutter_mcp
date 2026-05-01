@@ -8,7 +8,7 @@ import 'package:flutter_mcp/src/platform/notification/android_notification.dart'
 import 'package:flutter_mcp/src/platform/notification/ios_notification.dart';
 import 'package:flutter_mcp/src/platform/notification/desktop_notification.dart';
 import 'package:flutter_mcp/src/platform/storage/secure_storage.dart';
-import 'package:flutter_mcp/src/platform/tray/macos_tray.dart';
+import 'package:flutter_mcp/src/platform/tray/macos_enhanced_tray.dart';
 import 'package:flutter_mcp/src/platform/tray/windows_tray.dart';
 import 'package:flutter_mcp/src/platform/tray/linux_tray.dart';
 
@@ -192,7 +192,8 @@ void main() {
             isTrue);
       });
 
-      test('iOS notifications should request permissions', () async {
+      test('iOS notifications request permission only on explicit call',
+          () async {
         final manager = IOSNotificationManager();
 
         await manager.initialize(NotificationConfig(
@@ -200,7 +201,15 @@ void main() {
           priority: NotificationPriority.high,
         ));
 
-        // Should request permission during initialization
+        // initialize() must NOT request permissions (App Store guideline:
+        // do not show the system dialog at launch).
+        expect(
+            methodCalls
+                .any((call) => call.method == 'requestNotificationPermission'),
+            isFalse);
+
+        // explicit requestPermission() reaches the native channel.
+        await manager.requestPermission();
         expect(
             methodCalls
                 .any((call) => call.method == 'requestNotificationPermission'),
@@ -278,7 +287,7 @@ void main() {
 
     group('System Tray Native Channels', () {
       test('macOS tray should use native NSStatusItem methods', () async {
-        final trayManager = MacOSTrayManager();
+        final trayManager = MacOSEnhancedTrayManager();
 
         await trayManager.initialize(TrayConfig(
           iconPath: '/path/to/icon.png',
@@ -290,24 +299,29 @@ void main() {
           ],
         ));
 
+        // Verify tray was initialized
+        expect(
+            methodCalls.any((call) => call.method == 'initializeTray'),
+            isTrue);
+
         // Verify icon was set
         expect(
             methodCalls.any((call) =>
-                call.method == 'showTrayIcon' &&
-                call.arguments['iconPath'] == '/path/to/icon.png'),
+                call.method == 'setTrayIcon' &&
+                call.arguments['path'] == '/path/to/icon.png'),
             isTrue);
 
         // Verify tooltip
         expect(
             methodCalls.any((call) =>
-                call.method == 'updateTrayTooltip' &&
+                call.method == 'setTrayTooltip' &&
                 call.arguments['tooltip'] == 'Test App'),
             isTrue);
 
-        // Verify menu
+        // Verify context menu
         expect(
             methodCalls.any((call) =>
-                call.method == 'setTrayMenu' &&
+                call.method == 'setTrayContextMenu' &&
                 (call.arguments['items'] as List).length == 3),
             isTrue);
       });

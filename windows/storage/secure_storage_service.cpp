@@ -80,7 +80,7 @@ bool SecureStorageService::EncryptData(const std::string& plain_text, std::vecto
   DATA_BLOB data_out;
   
   data_in.pbData = (BYTE*)plain_text.c_str();
-  data_in.cbData = plain_text.length() + 1;
+  data_in.cbData = static_cast<DWORD>(plain_text.length() + 1);
   
   // Use Windows DPAPI to encrypt data
   if (CryptProtectData(&data_in, L"flutter_mcp", nullptr, nullptr, nullptr, 0, &data_out)) {
@@ -97,7 +97,7 @@ bool SecureStorageService::DecryptData(const std::vector<BYTE>& encrypted_data, 
   DATA_BLOB data_out;
   
   data_in.pbData = const_cast<BYTE*>(encrypted_data.data());
-  data_in.cbData = encrypted_data.size();
+  data_in.cbData = static_cast<DWORD>(encrypted_data.size());
   
   // Use Windows DPAPI to decrypt data
   if (CryptUnprotectData(&data_in, nullptr, nullptr, nullptr, nullptr, 0, &data_out)) {

@@ -1,142 +1,138 @@
 # Flutter MCP Test Suite
 
-Comprehensive test suite for Flutter MCP v1.0.0 covering all features and functionality.
+Test suite for Flutter MCP 2.0. Covers the public API, the manager
+runtime, transport scaffolding, and the platform integrations that ship
+with the package.
 
-## Test Structure
+## Layout
 
-### Core Tests
-- **flutter_mcp_v1_test.dart** - Main integration tests for v1.0.0 features
-- **v1_features_test.dart** - Specific tests for new v1.0.0 features (batch processing, health monitoring, OAuth)
-- **mcp_unit_test.dart** - Basic unit tests for core components
+The suite is split between VM-only tests (which run with
+`flutter test`) and browser tests (which run with
+`flutter test --platform chrome`).
 
-### Feature Tests
-- **mcp_integration_test.dart** - Integration tests for MCP components
-- **mcp_lifecycle_test.dart** - Lifecycle management tests
-- **mcp_plugin_test.dart** - Plugin system tests
-- **platform_integration_test.dart** - Platform-specific feature tests
+### Core surface
+- `flutter_mcp_facade_test.dart` / `flutter_mcp_facade_extra_test.dart` —
+  diagnostic getters and uninitialized-guard branches.
+- `flutter_mcp_health_test.dart` — `getComponentHealth`,
+  `getSystemHealth`, `connectClient`/`connectServer` error paths.
+- `flutter_mcp_llm_details_test.dart` — `getLlmEnhancedDetails`,
+  `getAllLlmDetails`, LLM lookup helpers.
+- `flutter_mcp_transport_harness_test.dart` — drives `createClient` /
+  `createServer` / `connectClient` / `callTool` / `chat` /
+  `createLlmClient` / `createLlmServer` through a fake-transport harness.
+- `phase2_surface_test.dart` — Phase 2 spec surface (sampling,
+  elicitation, roots, completion, RFC 9728 OAuth Resource Server).
 
-### Storage Tests
-- **mcp_secure_storage_test.dart** - Secure storage functionality tests
-- **mcp_web_storage_test.dart** - Web storage implementation tests
+### Configuration & loaders
+- `mcp_config_serialization_test.dart` — toJson roundtrips for every
+  config class.
+- `config_loader_extras_test.dart`, `config_parser_test.dart`,
+  `config_task_execution_test.dart`, `config_integration_test.dart`,
+  `app_config_test.dart`.
+- `enhanced_background_config_test.dart`, `notification_models_test.dart`.
 
-### Reliability Tests
-- **mcp_circuit_breaker_integration_test.dart** - Circuit breaker pattern tests
-- **mcp_concurrent_operations_test.dart** - Concurrent operation handling tests
-- **mcp_memory_leak_test.dart** - Memory leak detection tests
-- **mcp_timeout_recovery_test.dart** - Timeout and recovery tests
-- **mcp_exception_test.dart** - Exception handling tests
+### Managers + LLM glue
+- `llm_manager_test.dart`, `llm_info_test.dart`, `client_manager`-level
+  paths covered through the harness above.
+- `base_manager_test.dart`, `subscription_manager_test.dart` (+ extras),
+  `subscription_manager_extra_test.dart`.
 
-### Performance Tests
-- **mcp_perfomance_test.dart** - Basic performance tests
-- **mcp_performance_v1_test.dart** - v1.0.0 specific performance tests including:
-  - Batch processing performance (40-60% improvement verification)
-  - Health monitoring overhead
-  - OAuth operations performance
-  - Memory efficiency
+### Platform / native channel
+- `flutter_mcp_method_channel_test.dart`,
+  `flutter_mcp_platform_interface_test.dart`,
+  `method_channel_event_test.dart`,
+  `method_channel_typed_test.dart`,
+  `typed_platform_channel_test.dart`,
+  `platform_messages_test.dart`.
+- `platform_factory_test.dart`, `platform_utils_test.dart`,
+  `platform_services_test.dart`.
+- `desktop_notification_test.dart`, `ios_notification_test.dart`,
+  `android_notification_test.dart`,
+  `desktop_background_test.dart`, `ios_background_test.dart`,
+  `android_background_test.dart`, `macos_enhanced_tray_test.dart`,
+  `enhanced_tray_manager_test.dart`, `tray_manager_test.dart`.
 
-### Security Tests
-- **security_test.dart** - Security-focused tests including:
-  - OAuth token security
-  - Credential storage security
-  - Input sanitization
-  - Error message sanitization
+### Plugins / events / utilities
+- `plugin_system_extras_test.dart`, `mcp_plugin_system_test.dart`,
+  `enhanced_plugin_system_test.dart`, `plugin_config_test.dart`.
+- `event_system_extras_test.dart`, `event_system_improved_test.dart`,
+  `event_system_cleanup_test.dart`, `enhanced_event_system_test.dart`,
+  `typed_event_system_test.dart`,
+  `enhanced_typed_event_system_test.dart`,
+  `typed_event_system_extra_test.dart`, `event_models_test.dart`.
+- `memory_manager_test.dart`, `enhanced_resource_cleanup_test.dart`,
+  `circuit_breaker_test.dart`, `circuit_breaker_thread_safety_test.dart`,
+  `error_recovery_strategies_test.dart`, `error_handling_test.dart`,
+  `exceptions_test.dart`, `exceptions_extras_test.dart`,
+  `operation_wrapper_test.dart`, `lifecycle_manager_test.dart`,
+  `object_pool_test.dart`, `logger_extensions_test.dart`,
+  `noop_platform_services_test.dart`, `diagnostic_utils_test.dart`,
+  `health_types_test.dart`, `mcp_job_test.dart`.
 
-### Mock Tests
-- **mcp_mock_test.dart** - Mock object tests
-- **test_utils.dart** - Shared test utilities
+### Performance + security
+- `enhanced_performance_monitor_test.dart`,
+  `performance_monitoring_comprehensive_test.dart`,
+  `simple_performance_test.dart`, `mcp_perfomance_test.dart`,
+  `typed_metrics_test.dart`, `typed_metrics_extras_test.dart`.
+- `security_comprehensive_test.dart`, `security_audit_extras_test.dart`,
+  `oauth_manager_test.dart`, `encryption_manager_test.dart`,
+  `security_test.dart`.
 
-## Running Tests
+### Browser-only (`@TestOn('browser')`)
+- `web_memory_monitor_web_test.dart`,
+  `web_storage_web_test.dart`,
+  `web_notification_web_test.dart`,
+  `web_background_web_test.dart`.
 
-### Run All Tests
+## Running
+
+### Run everything on the VM
 ```bash
-flutter test test/all_tests.dart
+flutter test
 ```
 
-### Run Specific Test Suite
-```bash
-# Run v1.0.0 feature tests
-flutter test test/flutter_mcp_v1_test.dart
-
-# Run security tests
-flutter test test/security_test.dart
-
-# Run performance tests
-flutter test test/mcp_performance_v1_test.dart
-```
-
-### Run with Coverage
+### Run with coverage
 ```bash
 flutter test --coverage
 genhtml coverage/lcov.info -o coverage/html
 open coverage/html/index.html
 ```
 
-## Test Coverage
-
-The test suite covers:
-
-1. **v1.0.0 Features**
-   - Factory-based creation patterns
-   - Result<T, E> error handling
-   - Batch processing with performance validation
-   - Health monitoring and streaming
-   - OAuth 2.1 authentication flow
-
-2. **Core Functionality**
-   - Client/Server creation and management
-   - LLM integration
-   - Plugin system
-   - Event system
-
-3. **Platform Features**
-   - Background service execution
-   - Notifications
-   - System tray (desktop)
-   - Secure storage
-   - Lifecycle management
-
-4. **Reliability**
-   - Circuit breaker patterns
-   - Memory management
-   - Timeout handling
-   - Error recovery
-   - Concurrent operations
-
-5. **Security**
-   - OAuth token handling
-   - Credential storage
-   - Input validation
-   - Error sanitization
-
-6. **Performance**
-   - Batch processing efficiency
-   - Memory usage monitoring
-   - Operation throughput
-   - Health check overhead
-
-## Writing New Tests
-
-When adding new features, ensure to:
-
-1. Add unit tests for individual components
-2. Add integration tests for feature interactions
-3. Add performance tests for any performance-critical code
-4. Add security tests for any security-sensitive features
-5. Update this README with new test descriptions
-
-## Mock Generation
-
-Some tests require mock generation using Mockito:
-
+### Run the browser suite (web platform code paths)
 ```bash
-flutter pub run build_runner build --delete-conflicting-outputs
+flutter test --platform chrome \
+  test/web_memory_monitor_web_test.dart \
+  test/web_storage_web_test.dart \
+  test/web_notification_web_test.dart \
+  test/web_background_web_test.dart
 ```
 
-## Continuous Integration
+### Run a specific suite
+```bash
+flutter test test/flutter_mcp_transport_harness_test.dart
+flutter test test/phase2_surface_test.dart
+```
 
-Tests are configured to run on:
-- Every pull request
-- Every commit to main branch
-- Nightly for extended test suites
+### Integration test (example app, e2e on host)
+```bash
+cd example
+flutter test integration_test/plugin_integration_test.dart -d macos
+```
 
-Performance benchmarks are tracked over time to detect regressions.
+## Mock generation
+
+A few suites use Mockito; regenerate the generated mocks with:
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
+
+## Notes
+
+- `_mock_transport.dart` is shared infrastructure (a fake
+  `ClientTransport` / `ServerTransport`) used by the transport harness.
+  It is not a standalone test file.
+- Browser tests are tagged `@TestOn('browser')` and skip on the VM run.
+- The harness sets up the `FlutterMCP` singleton once per process; tests
+  group around a single `setUpAll` / `tearDownAll` because the singleton
+  cannot be re-initialised cleanly within one process.

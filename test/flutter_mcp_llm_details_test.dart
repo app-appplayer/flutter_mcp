@@ -10,6 +10,9 @@ import 'package:mcp_llm/mcp_llm.dart' as llm;
 
 class _FakeProvider implements llm.LlmProvider {
   @override
+  bool get supportsPromptCaching => false;
+
+  @override
   Future<void> initialize(llm.LlmConfiguration config) async {}
   @override
   Future<void> close() async {}

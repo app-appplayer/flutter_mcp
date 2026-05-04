@@ -29,6 +29,9 @@ class _FakeProviderFactory implements llm_pkg.LlmProviderFactory {
 
 class _FakeProvider implements llm_pkg.LlmProvider {
   @override
+  bool get supportsPromptCaching => false;
+
+  @override
   Future<void> initialize(llm_pkg.LlmConfiguration config) async {}
   @override
   Future<void> close() async {}

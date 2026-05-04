@@ -1,3 +1,7 @@
+## [2.0.1] - 2026-05-04 - Pin mcp_llm 2.1.0 (prompt caching + cache fixes)
+
+- Bumps `mcp_llm` to `^2.1.0` so consumers receive the prompt-caching fixes (empty text-block guard, 4-breakpoint cap, Gemini cachedContent ↔ systemInstruction conflict strip) baked into mcp_llm 2.1.0.
+
 ## [2.0.0] - 2026-05-01 - MCP spec compliance + 2025-11-25 alignment
 
 Big-Bang upgrade aligning Flutter MCP with the `mcp_client` / `mcp_server`

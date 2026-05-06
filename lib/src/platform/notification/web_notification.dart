@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:universal_html/html.dart';
 
 import '../../config/notification_config.dart' hide NotificationPriority;
@@ -183,11 +184,16 @@ class WebNotificationManager implements NotificationManager {
 
   /// Check if notifications are supported.
   ///
-  /// Probes the static `Notification.permission` getter — present on
-  /// real browsers, throws on the `universal_html` server stub.
+  /// Off-web returns false unconditionally — `universal_html`'s server
+  /// stub for `Notification.permission` always answers `'denied'`,
+  /// which would otherwise misreport `true` here. On web we touch the
+  /// real `Notification.permission` getter; if the runtime hasn't
+  /// implemented `Notification` at all the catch returns false.
+  ///
   /// Replaces the deprecated `dart:js_util` `hasProperty(window,
-  /// 'Notification')` shape.
+  /// 'Notification')` pattern.
   bool _isSupported() {
+    if (!kIsWeb) return false;
     try {
       Notification.permission;
       return true;
@@ -201,14 +207,18 @@ class WebNotificationManager implements NotificationManager {
     // Get the stored data for this notification
     final data = _activeNotifications[id];
 
-    // Try focusing the window when notification is clicked. Replaces
-    // the deprecated `dart:js_util` `callMethod(window, 'focus', [])`
-    // shape — `universal_html`'s `Window` already exposes a typed
-    // `focus()` method.
-    try {
-      window.focus();
-    } catch (e) {
-      _logger.warning('Window focus failed: $e');
+    // Try focusing the window when notification is clicked. Off-web
+    // there is no Window to focus, so skip. On web we go through a
+    // dynamic dispatch because `universal_html`'s server-side `Window`
+    // stub omits `focus()` (the real `dart:html.Window` provides it,
+    // and the dynamic call resolves there at runtime). Replaces the
+    // deprecated `dart:js_util` `callMethod(window, 'focus', [])`.
+    if (kIsWeb) {
+      try {
+        (window as dynamic).focus();
+      } catch (e) {
+        _logger.warning('Window focus failed: $e');
+      }
     }
 
     // Find specific handler for this ID

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:universal_html/html.dart';
 
 import '../../config/background_config.dart';
@@ -441,12 +442,18 @@ class WebBackgroundService implements BackgroundService {
 
   /// Check if the browser supports Web Workers.
   ///
-  /// Probes by constructing a no-op Worker from a `data:` URL and
-  /// terminating it immediately. On real browsers this succeeds; on
-  /// the `universal_html` server stub the constructor throws and we
-  /// fall through to false. Replaces the deprecated `dart:js_util`
-  /// `hasProperty(window, 'Worker')` shape.
+  /// Off-web (`kIsWeb` false) the answer is unconditionally false — the
+  /// `universal_html` server stub provides a `Worker` factory that does
+  /// nothing useful, so probing it would only waste a construction. On
+  /// web we construct a no-op `Worker` from a `data:` URL and
+  /// terminate it; the constructor throws on browsers that don't
+  /// support workers and the catch returns false.
+  ///
+  /// Replaces the deprecated `dart:js_util` `hasProperty(window,
+  /// 'Worker')` pattern that pana flagged as missing for every
+  /// platform.
   bool _supportsWebWorkers() {
+    if (!kIsWeb) return false;
     try {
       final w = Worker('data:application/javascript,');
       w.terminate();

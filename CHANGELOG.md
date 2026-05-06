@@ -3,9 +3,9 @@
 Restores pub.dev platform support — pana 2.0.1 reported 0/6 platforms (80 errors) because two web modules referenced the deprecated `dart:js_util` `hasProperty` / `callMethod` shape, and two unreachable lib files dragged in 70+ more violations of the same pattern.
 
 ### Fixed
-- `WebBackgroundService._supportsWebWorkers` — replaces `hasProperty(window, 'Worker')` with a direct probe (`Worker('data:application/javascript,')` then `terminate()`); the constructor throws on the `universal_html` server stub, so the existing try/catch already returns `false` correctly off-web.
-- `WebNotificationManager._isSupported` — replaces `hasProperty(window, 'Notification')` with a static-getter probe (`Notification.permission`).
-- `WebNotificationManager._handleNotificationTap` — replaces `callMethod(window, 'focus', [])` with `window.focus()` (universal_html's `Window` already exposes the typed method).
+- `WebBackgroundService._supportsWebWorkers` — replaces `hasProperty(window, 'Worker')` with a `kIsWeb` guard plus a direct `Worker('data:application/javascript,')` / `terminate()` probe inside `try`/`catch`. Off-web (`universal_html`'s server stub provides a no-op `Worker` factory) the guard returns `false` immediately so we don't waste a construction.
+- `WebNotificationManager._isSupported` — replaces `hasProperty(window, 'Notification')` with a `kIsWeb` guard plus a `Notification.permission` static-getter probe inside `try`/`catch`. The off-web guard is mandatory because `universal_html`'s server stub hard-codes `Notification.permission` to `'denied'`, which would otherwise misreport `true` from this check.
+- `WebNotificationManager._handleNotificationTap` — replaces `callMethod(window, 'focus', [])` with a `kIsWeb`-guarded `(window as dynamic).focus()` call. The dynamic dispatch is required because `universal_html`'s server-side `Window` stub omits `focus()` (it's only present on the real `dart:html.Window` reached on web), so a static call would fail to compile under server-side analysis.
 - `package:universal_html/js_util.dart` import dropped from both web modules.
 
 ### Removed
@@ -14,6 +14,10 @@ Restores pub.dev platform support — pana 2.0.1 reported 0/6 platforms (80 erro
 ### Changed
 - `pointycastle` constraint bumped from `^3.9.1` to `^4.0.0` so the package resolves against the current stable; encryption tests pass against the new line.
 - `pubspec.yaml` `description` shortened to fit pub.dev's 180-character recommendation.
+
+### Verified
+- `flutter analyze lib/` — 0 issues.
+- `flutter test` — 1807 pass / 0 fail / 4 skipped (1 prior fail patch — the deprecated-API compile failure that broke 41 test files at load time).
 
 ## [2.0.1] - 2026-05-04 - Pin mcp_llm 2.1.0 (prompt caching + cache fixes)
 

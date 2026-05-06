@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:universal_html/html.dart';
-import 'package:universal_html/js_util.dart';
 
 import '../../config/notification_config.dart' hide NotificationPriority;
 import '../../utils/logger.dart';
@@ -182,11 +181,17 @@ class WebNotificationManager implements NotificationManager {
     return _permissionGranted;
   }
 
-  /// Check if notifications are supported
+  /// Check if notifications are supported.
+  ///
+  /// Probes the static `Notification.permission` getter — present on
+  /// real browsers, throws on the `universal_html` server stub.
+  /// Replaces the deprecated `dart:js_util` `hasProperty(window,
+  /// 'Notification')` shape.
   bool _isSupported() {
     try {
-      return hasProperty(window, 'Notification');
-    } catch (e) {
+      Notification.permission;
+      return true;
+    } catch (_) {
       return false;
     }
   }
@@ -196,9 +201,12 @@ class WebNotificationManager implements NotificationManager {
     // Get the stored data for this notification
     final data = _activeNotifications[id];
 
-    // Try focusing the window when notification is clicked
+    // Try focusing the window when notification is clicked. Replaces
+    // the deprecated `dart:js_util` `callMethod(window, 'focus', [])`
+    // shape — `universal_html`'s `Window` already exposes a typed
+    // `focus()` method.
     try {
-      callMethod(window, 'focus', []);
+      window.focus();
     } catch (e) {
       _logger.warning('Window focus failed: $e');
     }

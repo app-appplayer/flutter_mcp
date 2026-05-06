@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:universal_html/html.dart';
-import 'package:universal_html/js_util.dart';
 
 import '../../config/background_config.dart';
 import '../../utils/logger.dart';
@@ -440,11 +439,19 @@ class WebBackgroundService implements BackgroundService {
     return false;
   }
 
-  /// Check if the browser supports Web Workers
+  /// Check if the browser supports Web Workers.
+  ///
+  /// Probes by constructing a no-op Worker from a `data:` URL and
+  /// terminating it immediately. On real browsers this succeeds; on
+  /// the `universal_html` server stub the constructor throws and we
+  /// fall through to false. Replaces the deprecated `dart:js_util`
+  /// `hasProperty(window, 'Worker')` shape.
   bool _supportsWebWorkers() {
     try {
-      return hasProperty(window, 'Worker');
-    } catch (e) {
+      final w = Worker('data:application/javascript,');
+      w.terminate();
+      return true;
+    } catch (_) {
       return false;
     }
   }

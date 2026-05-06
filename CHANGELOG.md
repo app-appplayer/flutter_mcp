@@ -1,3 +1,20 @@
+## [2.0.2] - 2026-05-06 - Web JS interop modernization + dead code removal
+
+Restores pub.dev platform support — pana 2.0.1 reported 0/6 platforms (80 errors) because two web modules referenced the deprecated `dart:js_util` `hasProperty` / `callMethod` shape, and two unreachable lib files dragged in 70+ more violations of the same pattern.
+
+### Fixed
+- `WebBackgroundService._supportsWebWorkers` — replaces `hasProperty(window, 'Worker')` with a direct probe (`Worker('data:application/javascript,')` then `terminate()`); the constructor throws on the `universal_html` server stub, so the existing try/catch already returns `false` correctly off-web.
+- `WebNotificationManager._isSupported` — replaces `hasProperty(window, 'Notification')` with a static-getter probe (`Notification.permission`).
+- `WebNotificationManager._handleNotificationTap` — replaces `callMethod(window, 'focus', [])` with `window.focus()` (universal_html's `Window` already exposes the typed method).
+- `package:universal_html/js_util.dart` import dropped from both web modules.
+
+### Removed
+- `lib/src/platform/web/enhanced_web_platform.dart` and `lib/src/platform/web/web_platform_improvements.dart` (plus the latter's test). Neither was reachable from the package barrel or any other lib entry, but pana still scanned them and counted their `hasProperty` / `callMethod` / `getProperty` call sites toward the platform-support score. Removing them collapses the analyser report to zero errors without losing any reachable behaviour — the active `WebBackgroundService` / `WebNotificationManager` / `WebMemoryMonitor` cover the same ground.
+
+### Changed
+- `pointycastle` constraint bumped from `^3.9.1` to `^4.0.0` so the package resolves against the current stable; encryption tests pass against the new line.
+- `pubspec.yaml` `description` shortened to fit pub.dev's 180-character recommendation.
+
 ## [2.0.1] - 2026-05-04 - Pin mcp_llm 2.1.0 (prompt caching + cache fixes)
 
 - Bumps `mcp_llm` to `^2.1.0` so consumers receive the prompt-caching fixes (empty text-block guard, 4-breakpoint cap, Gemini cachedContent ↔ systemInstruction conflict strip) baked into mcp_llm 2.1.0.
